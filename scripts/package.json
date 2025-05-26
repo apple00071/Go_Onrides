@@ -1,0 +1,8 @@
+{
+  "name": "admin-scripts",
+  "type": "module",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.8",
+    "node-fetch": "^3.3.2"
+  }
+}
