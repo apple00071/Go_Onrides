@@ -1,22 +1,28 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import CustomerForm from '@/components/customers/CustomerForm'
 
-export const dynamic = 'force-dynamic'
+export default function NewCustomerPage() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const supabase = createClientComponentClient()
 
-export default async function NewCustomerPage() {
-  const cookieStore = cookies()
-  const supabase = createServerComponentClient({ 
-    cookies: () => cookieStore 
-  })
-  
-  const {
-    data: { session },
-  } = await supabase.auth.getSession()
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        router.push('/login')
+      }
+      setLoading(false)
+    }
+    checkSession()
+  }, [router, supabase])
 
-  if (!session) {
-    redirect('/login')
+  if (loading) {
+    return <div>Loading...</div>
   }
 
   return (
