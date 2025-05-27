@@ -6,6 +6,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import Sidebar from '@/components/dashboard/Sidebar';
 import Header from '@/components/dashboard/Header';
 import type { UserProfile } from '@/types/database';
+import type { AuthChangeEvent } from '@supabase/supabase-js';
 
 export default function DashboardLayout({
   children,
@@ -17,6 +18,7 @@ export default function DashboardLayout({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -87,7 +89,7 @@ export default function DashboardLayout({
     };
 
     // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
       if (event === 'SIGNED_OUT') {
         router.replace('/login');
       } else if (event === 'SIGNED_IN' && mounted) {
@@ -120,19 +122,27 @@ export default function DashboardLayout({
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900">Something went wrong</h2>
-          <p className="mt-2 text-sm text-gray-600">{error}</p>
-          <button
-            onClick={() => {
-              setRetryCount(0);
-              setError(null);
-              setLoading(true);
-            }}
-            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-          >
-            Try Again
-          </button>
+        <div className="max-w-md w-full px-6 py-8 bg-white shadow-md rounded-lg">
+          <div className="text-center">
+            <h2 className="text-xl font-semibold text-gray-900">Something went wrong</h2>
+            <p className="mt-2 text-sm text-gray-600">{error}</p>
+            <button
+              onClick={() => {
+                setRetryCount(0);
+                setError(null);
+                setLoading(true);
+              }}
+              className="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Try Again
+            </button>
+            <button
+              onClick={() => router.push('/login')}
+              className="mt-2 w-full px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+            >
+              Back to Login
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -145,10 +155,29 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Sidebar user={user} />
-      <div className="lg:pl-64">
-        <Header user={user} />
-        <main className="py-6">
+      {/* Mobile sidebar backdrop */}
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 transition-opacity lg:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div
+        className={`
+          fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out
+          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0 lg:static lg:inset-0
+        `}
+      >
+        <Sidebar user={user} />
+      </div>
+
+      {/* Main content */}
+      <div className="flex flex-1 flex-col lg:pl-64">
+        <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
+        <main className="flex-1 py-6">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             {children}
           </div>
