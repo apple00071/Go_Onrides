@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { toast } from 'react-hot-toast'
 
 interface Worker {
@@ -19,10 +19,7 @@ const WorkerManagement = ({ initialWorkers }: WorkerManagementProps) => {
   const [workers, setWorkers] = useState<Worker[]>(initialWorkers)
   const [newWorkerEmail, setNewWorkerEmail] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClientComponentClient()
 
   const handleAddWorker = async (e: React.FormEvent) => {
     e.preventDefault()

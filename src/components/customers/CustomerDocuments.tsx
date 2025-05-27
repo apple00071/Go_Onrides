@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Upload, X } from 'lucide-react';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
 
 type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
@@ -132,10 +132,7 @@ export default function CustomerDocuments({
     setError(null);
 
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const supabase = createClientComponentClient();
 
       // First get or create customer
       const { data: customers, error: customerError } = await supabase

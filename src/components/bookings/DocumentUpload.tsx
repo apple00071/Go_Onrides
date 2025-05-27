@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Upload, X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
 
 interface DocumentUploadProps {
@@ -47,10 +47,7 @@ export default function DocumentUpload({
     setError(null);
 
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const supabase = createClientComponentClient();
       const fileExt = file.name.split('.').pop();
       const fileName = `${customerId}-${documentType}-${Date.now()}.${fileExt}`;
 

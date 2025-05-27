@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Search, FileText, Download, Eye, Upload, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import DocumentViewer from './DocumentViewer';
@@ -18,10 +18,7 @@ export default function DocumentsList({ initialDocuments, error: initialError }:
   const [error, setError] = useState(initialError);
   const [selectedDocument, setSelectedDocument] = useState<Document | null>(null);
   const [uploading, setUploading] = useState(false);
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  const supabase = createClientComponentClient();
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || e.target.files.length === 0) {

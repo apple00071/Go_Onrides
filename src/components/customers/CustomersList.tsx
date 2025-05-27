@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { toast } from 'react-hot-toast'
 import Link from 'next/link'
 import { AlertCircle } from 'lucide-react'
@@ -27,10 +27,7 @@ const CustomersList = ({ initialCustomers, error: initialError }: CustomersListP
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState(initialError)
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
+  const supabase = createClientComponentClient()
 
   const filteredCustomers = customers.filter((customer) =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

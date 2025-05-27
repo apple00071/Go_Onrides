@@ -2,7 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBrowserClient } from '@supabase/ssr';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import toast from 'react-hot-toast';
 
 const LoginForm = () => {
   const router = useRouter();
@@ -19,10 +23,7 @@ const LoginForm = () => {
     setError(null);
 
     try {
-      const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
+      const supabase = createClientComponentClient();
       
       // First sign in the user
       const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({

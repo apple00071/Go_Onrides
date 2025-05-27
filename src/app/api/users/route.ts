@@ -1,4 +1,4 @@
-import { createServerClient } from '@supabase/ssr'
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { Permission } from '@/types/database'
@@ -6,23 +6,7 @@ import type { Permission } from '@/types/database'
 export async function GET() {
   try {
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            cookieStore.set(name, value, options)
-          },
-          remove(name: string, options: any) {
-            cookieStore.set(name, '', { ...options, maxAge: 0 })
-          },
-        },
-      }
-    )
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
     const { data: users, error } = await supabase
       .from('users')
@@ -45,23 +29,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            cookieStore.set(name, value, options)
-          },
-          remove(name: string, options: any) {
-            cookieStore.set(name, '', { ...options, maxAge: 0 })
-          },
-        },
-      }
-    )
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
     const body = await request.json()
 
     const { data: user, error } = await supabase
