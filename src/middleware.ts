@@ -8,7 +8,7 @@ export async function middleware(req: NextRequest) {
 
   try {
     // Refresh session if expired - required for Server Components
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
 
     // Log for debugging
     console.log('Middleware - Current path:', req.nextUrl.pathname);
@@ -20,7 +20,6 @@ export async function middleware(req: NextRequest) {
     // Define protected and auth routes
     const isProtectedRoute = 
       req.nextUrl.pathname.startsWith('/dashboard') ||
-      req.nextUrl.pathname.startsWith('/admin') ||
       req.nextUrl.pathname.startsWith('/customers');
 
     const isAuthRoute = 
@@ -46,10 +45,9 @@ export async function middleware(req: NextRequest) {
 
       console.log('Middleware - User profile:', profile);
 
-      const redirectUrl = new URL(
-        profile?.role === 'admin' ? '/admin' : '/dashboard',
-        req.url
-      );
+      // Redirect based on role - matching the login form logic
+      const redirectPath = profile?.role === 'admin' ? '/dashboard/settings' : '/dashboard';
+      const redirectUrl = new URL(redirectPath, req.url);
 
       console.log('Middleware - Redirecting to:', redirectUrl.pathname);
       return NextResponse.redirect(redirectUrl);
@@ -97,7 +95,6 @@ export const config = {
     '/login',
     '/signup',
     '/dashboard/:path*',
-    '/admin/:path*',
-    '/customers/:path*',
+    '/customers/:path*'
   ],
 }; 

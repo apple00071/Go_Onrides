@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import { 
   Home,
   Calendar,
@@ -11,8 +11,7 @@ import {
   BarChart,
   Settings,
   LogOut,
-  Users,
-  Shield
+  Users
 } from 'lucide-react';
 import type { UserProfile } from '@/types/database';
 
@@ -26,7 +25,6 @@ export default function Sidebar({ user }: SidebarProps) {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
     { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
-    { name: 'Documents', href: '/dashboard/documents', icon: FileText },
     { name: 'Payments', href: '/dashboard/payments', icon: CreditCard },
     { name: 'Reports', href: '/dashboard/reports', icon: BarChart },
     { name: 'Customers', href: '/customers', icon: Users },
@@ -36,6 +34,7 @@ export default function Sidebar({ user }: SidebarProps) {
   ];
 
   const handleSignOut = async () => {
+    const supabase = getSupabaseClient();
     await supabase.auth.signOut();
     window.location.href = '/login';
   };

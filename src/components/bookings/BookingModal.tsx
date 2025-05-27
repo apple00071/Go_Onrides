@@ -2,13 +2,24 @@
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import type { Booking } from '@/types/database';
+import { getSupabaseClient } from '@/lib/supabase';
+import CustomerDocuments from '@/components/customers/CustomerDocuments';
+import { toast } from 'react-hot-toast';
 
 interface BookingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onBookingCreated: () => void;
+}
+
+type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
+
+interface CustomerDocuments {
+  customer_photo?: string;
+  aadhar_front?: string;
+  aadhar_back?: string;
+  dl_front?: string;
+  dl_back?: string;
 }
 
 interface FormData {
@@ -36,7 +47,14 @@ interface FormData {
   payment_status: 'full' | 'partial' | 'pending';
   paid_amount: string;
   payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
-  documents: any[];
+}
+
+interface CustomerDocuments {
+  customer_photo?: string;
+  aadhar_front?: string;
+  aadhar_back?: string;
+  dl_front?: string;
+  dl_back?: string;
 }
 
 export default function BookingModal({
@@ -45,6 +63,8 @@ export default function BookingModal({
   onBookingCreated
 }: BookingModalProps) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [existingCustomerDocs, setExistingCustomerDocs] = useState<CustomerDocuments | null>(null);
   const [formData, setFormData] = useState<FormData>({
     customer_name: '',
     customer_contact: '',
@@ -70,8 +90,59 @@ export default function BookingModal({
     payment_status: 'pending',
     paid_amount: '',
     payment_mode: 'cash',
-    documents: []
+
   });
+
+  // Check for existing customer documents when phone number changes
+  useEffect(() => {
+    const checkExistingCustomer = async () => {
+      if (formData.customer_contact.length >= 10) {
+        const supabase = getSupabaseClient();
+        
+        // First find the customer
+        const { data: customers, error: customerError } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('phone', formData.customer_contact)
+          .limit(1);
+
+        if (customerError) {
+          console.error('Error checking customer:', customerError);
+          return;
+        }
+
+        if (customers && customers.length > 0) {
+          const customerId = customers[0].id;
+
+          // Then get their documents
+          const { data: documents, error: docsError } = await supabase
+            .from('customer_documents')
+            .select('type, url')
+            .eq('customer_id', customerId);
+
+          if (docsError) {
+            console.error('Error checking documents:', docsError);
+            return;
+          }
+
+          if (documents && documents.length > 0) {
+            const docs: CustomerDocuments = {};
+            documents.forEach(doc => {
+              docs[doc.type as keyof CustomerDocuments] = doc.url;
+            });
+            setExistingCustomerDocs(docs);
+            toast.success('Found existing customer documents');
+          } else {
+            setExistingCustomerDocs(null);
+          }
+        } else {
+          setExistingCustomerDocs(null);
+        }
+      }
+    };
+
+    checkExistingCustomer();
+  }, [formData.customer_contact]);
 
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split('T')[0];
@@ -105,13 +176,14 @@ export default function BookingModal({
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    setError(null);
     
     // Date validation
     if (name === 'date_of_birth') {
       const selectedDate = new Date(value);
       const today = new Date();
       if (selectedDate > today) {
-        alert('Date of birth cannot be in the future');
+        setError('Date of birth cannot be in the future');
         return;
       }
     }
@@ -122,7 +194,7 @@ export default function BookingModal({
       oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
       
       if (selectedDate < oneMonthAgo) {
-        alert('Driving license should not be expired for more than a month');
+        setError('Driving license should not be expired for more than a month');
         return;
       }
     }
@@ -146,8 +218,28 @@ export default function BookingModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
+      const supabase = getSupabaseClient();
+
+      // Validate all required fields
+      if (!formData.customer_name || !formData.customer_contact || 
+          !formData.emergency_contact_name || !formData.emergency_contact_phone ||
+          !formData.aadhar_number || !formData.date_of_birth ||
+          !formData.dl_number || !formData.dl_expiry_date ||
+          !formData.temp_address || !formData.perm_address ||
+          !formData.start_date || !formData.end_date ||
+          !formData.pickup_time || !formData.dropoff_time ||
+          !formData.vehicle_details.model || !formData.vehicle_details.registration) {
+        throw new Error('Please fill in all required fields');
+      }
+
+      // Validate that we have documents for the customer
+      if (!existingCustomerDocs && formData.customer_contact.length >= 10) {
+        throw new Error('Please upload all required documents before creating the booking');
+      }
+
       // Additional date validations before submission
       const dob = new Date(formData.date_of_birth);
       const today = new Date();
@@ -178,44 +270,112 @@ export default function BookingModal({
         throw new Error('Paid amount cannot be negative');
       }
 
-      // First, try to alter the table if the column doesn't exist
-      await supabase.rpc('add_aadhar_column');
+      // First, check if customer exists or create new customer
+      let customerId: string;
+      const { data: existingCustomers, error: customerCheckError } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('phone', formData.customer_contact)
+        .limit(1);
 
-      // Then proceed with the booking creation
-      const { error } = await supabase
+      if (customerCheckError) {
+        throw new Error(`Failed to check existing customer: ${customerCheckError.message}`);
+      }
+
+      if (existingCustomers && existingCustomers.length > 0) {
+        customerId = existingCustomers[0].id;
+      } else {
+        // Create new customer
+        const { data: newCustomer, error: customerCreateError } = await supabase
+          .from('customers')
+          .insert({
+            name: formData.customer_name,
+            phone: formData.customer_contact,
+            emergency_contact: {
+              name: formData.emergency_contact_name,
+              phone: formData.emergency_contact_phone
+            },
+            identification: {
+              aadhar_number: formData.aadhar_number,
+              dl_number: formData.dl_number,
+              dl_expiry: formData.dl_expiry_date
+            },
+            address: {
+              temporary: formData.temp_address,
+              permanent: formData.perm_address
+            }
+          })
+          .select('id')
+          .single();
+
+        if (customerCreateError || !newCustomer) {
+          throw new Error(`Failed to create customer: ${customerCreateError?.message}`);
+        }
+
+        customerId = newCustomer.id;
+      }
+
+      // Create booking
+      const { data: booking, error: bookingError } = await supabase
         .from('bookings')
         .insert({
+          customer_id: customerId,
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
           emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_phone: formData.emergency_contact_phone,
           aadhar_number: formData.aadhar_number,
-          date_of_birth: formData.date_of_birth || null,
-          dl_number: formData.dl_number || null,
-          dl_expiry_date: formData.dl_expiry_date || null,
+          date_of_birth: formData.date_of_birth,
+          dl_number: formData.dl_number,
+          dl_expiry_date: formData.dl_expiry_date,
+          temp_address: formData.temp_address,
+          perm_address: formData.perm_address,
+          vehicle_details: formData.vehicle_details,
           start_date: formData.start_date,
           end_date: formData.end_date,
           pickup_time: formData.pickup_time,
           dropoff_time: formData.dropoff_time,
-          temp_address: formData.temp_address,
-          perm_address: formData.perm_address,
-          vehicle_details: formData.vehicle_details,
           booking_amount: parseFloat(formData.booking_amount),
           security_deposit_amount: parseFloat(formData.security_deposit_amount),
-          total_amount: parseFloat(formData.total_amount),
           payment_status: formData.payment_status,
           paid_amount: parseFloat(formData.paid_amount),
           payment_mode: formData.payment_mode,
           status: 'pending'
-        });
+        })
+        .select()
+        .single();
 
-      if (error) throw error;
+      if (bookingError) {
+        console.error('Booking creation error details:', bookingError);
+        throw new Error(`Failed to create booking: ${bookingError.message}`);
+      }
+
+      if (!booking) {
+        throw new Error('No booking data returned after creation');
+      }
+
+      // Create initial payment record if amount is paid
+      if (paidAmount > 0) {
+        const { error: paymentError } = await supabase
+          .from('payments')
+          .insert({
+            booking_id: booking.id,
+            amount: paidAmount,
+            payment_mode: formData.payment_mode,
+            payment_status: 'completed'
+          });
+
+        if (paymentError) {
+          console.error('Payment record creation error:', paymentError);
+          throw new Error(`Failed to create payment record: ${paymentError.message}`);
+        }
+      }
 
       onBookingCreated();
       onClose();
     } catch (error) {
       console.error('Error creating booking:', error);
-      alert(error instanceof Error ? error.message : 'Error creating booking. Please try again.');
+      setError(error instanceof Error ? error.message : 'An unexpected error occurred while creating the booking. Please check the console for details.');
     } finally {
       setLoading(false);
     }
@@ -227,16 +387,22 @@ export default function BookingModal({
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
         <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-lg font-semibold">New Booking</h2>
+          <h2 className="text-xl font-semibold text-gray-900">Create New Booking</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-500"
           >
-            <X className="h-5 w-5" />
+            <X className="h-6 w-6" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
+              {error}
+            </div>
+          )}
+
           {/* Customer Information */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -301,11 +467,12 @@ export default function BookingModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Aadhar Number
+                Aadhar Number *
               </label>
               <input
                 type="text"
                 name="aadhar_number"
+                required
                 value={formData.aadhar_number}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -313,17 +480,17 @@ export default function BookingModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Date of Birth
+                Date of Birth *
               </label>
               <input
                 type="date"
                 name="date_of_birth"
+                required
                 max={maxDOB}
                 value={formData.date_of_birth}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
-              <p className="mt-1 text-xs text-gray-500">Cannot be a future date</p>
             </div>
           </div>
 
@@ -331,11 +498,12 @@ export default function BookingModal({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Driving License Number
+                Driving License Number *
               </label>
               <input
                 type="text"
                 name="dl_number"
+                required
                 value={formData.dl_number}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -343,17 +511,17 @@ export default function BookingModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                DL Expiry Date
+                DL Expiry Date *
               </label>
               <input
                 type="date"
                 name="dl_expiry_date"
+                required
                 min={minDLExpiryDate}
                 value={formData.dl_expiry_date}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
-              <p className="mt-1 text-xs text-gray-500">Should not be expired for more than a month</p>
             </div>
           </div>
 
@@ -404,7 +572,7 @@ export default function BookingModal({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Registration *
+                Registration Number *
               </label>
               <input
                 type="text"
@@ -618,62 +786,27 @@ export default function BookingModal({
             </div>
           </div>
 
-          {/* Document Upload */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Upload Documents
-            </label>
-            <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
-              <div className="space-y-1 text-center">
-                <svg
-                  className="mx-auto h-12 w-12 text-gray-400"
-                  stroke="currentColor"
-                  fill="none"
-                  viewBox="0 0 48 48"
-                  aria-hidden="true"
-                >
-                  <path
-                    d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <div className="flex text-sm text-gray-600">
-                  <label
-                    htmlFor="file-upload"
-                    className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
-                  >
-                    <span>Upload a file</span>
-                    <input
-                      id="file-upload"
-                      name="file-upload"
-                      type="file"
-                      className="sr-only"
-                      multiple
-                    />
-                  </label>
-                  <p className="pl-1">or drag and drop</p>
-                </div>
-                <p className="text-xs text-gray-500">
-                  PNG, JPG, PDF up to 10MB
-                </p>
-              </div>
-            </div>
-          </div>
+          {/* Document Upload Section */}
+          {formData.customer_contact.length >= 10 && (
+            <CustomerDocuments
+              customerPhone={formData.customer_contact}
+              onDocumentsFound={docs => setExistingCustomerDocs(docs)}
+              onUploadComplete={docs => setExistingCustomerDocs(docs)}
+            />
+          )}
 
-          <div className="flex justify-end space-x-3 pt-5">
+          <div className="flex justify-end space-x-4">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={loading}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              disabled={loading || (!existingCustomerDocs && formData.customer_contact.length >= 10)}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               {loading ? 'Creating...' : 'Create Booking'}
             </button>

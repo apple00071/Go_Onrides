@@ -18,27 +18,23 @@ export default function LoginForm() {
     setLoading(true);
 
     try {
-      console.log('Attempting to sign in...'); // Debug log
+      console.log('Attempting to sign in...');
       
-      // Sign in with password
       const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (signInError) {
-        console.error('Sign in error:', signInError); // Debug log
         throw signInError;
       }
-
-      console.log('Sign in successful:', data); // Debug log
 
       if (!data.session) {
         throw new Error('No session created');
       }
 
       // Fetch user profile to check role
-      console.log('Fetching user profile...'); // Debug log
+      console.log('Fetching user profile...');
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -46,12 +42,12 @@ export default function LoginForm() {
         .single();
 
       if (profileError) {
-        console.error('Profile error:', profileError); // Debug log
+        console.error('Profile error:', profileError);
         throw profileError;
       }
 
       if (!profile) {
-        console.log('Creating new profile...'); // Debug log
+        console.log('Creating new profile...');
         const defaultPermissions = {
           createBooking: false,
           viewBookings: true,
@@ -73,7 +69,7 @@ export default function LoginForm() {
           ]);
 
         if (createError) {
-          console.error('Create profile error:', createError); // Debug log
+          console.error('Create profile error:', createError);
           throw createError;
         }
 
@@ -82,17 +78,24 @@ export default function LoginForm() {
         return;
       }
 
-      console.log('Profile found:', profile); // Debug log
-
-      // Redirect based on role
+      console.log('Profile found:', profile);
       const redirectPath = profile.role === 'admin' ? '/dashboard/settings' : '/dashboard';
-      console.log('Redirecting to:', redirectPath); // Debug log
       router.push(redirectPath);
       router.refresh();
       
     } catch (err: any) {
       console.error('Login error:', err);
-      setError(err.message || 'An error occurred during login');
+      let errorMessage = 'An error occurred during login';
+      
+      if (err.message?.includes('rate limit') || err.message?.includes('Too Many Requests')) {
+        errorMessage = 'Too many login attempts. Please try again in a moment.';
+      } else if (err.message?.includes('Invalid login credentials')) {
+        errorMessage = 'Invalid email or password';
+      } else if (err.message?.includes('No session created')) {
+        errorMessage = 'Failed to create session. Please try again.';
+      }
+      
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 export default function FixAdminPage() {
   const router = useRouter();
   const [status, setStatus] = useState('Checking admin status...');
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fixAdmin = async () => {
@@ -27,8 +29,11 @@ export default function FixAdminPage() {
         setTimeout(() => {
           router.push('/admin');
         }, 2000);
-      } catch (error: any) {
-        setStatus(`Error: ${error.message}`);
+      } catch (error: unknown) {
+        console.error('Error:', error);
+        setError(error instanceof Error ? error.message : 'An error occurred');
+      } finally {
+        setLoading(false);
       }
     };
 

@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import type { UserRole, Permission } from '@/types/database';
+import type { Permission } from '@/types/database';
 
 // Initialize Supabase Admin client
 const supabaseAdmin = createClient(

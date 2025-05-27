@@ -9,14 +9,12 @@ export const revalidate = 0
 
 export default async function CustomersPage() {
   try {
-  const cookieStore = cookies()
-  const supabase = createServerComponentClient<Database>({ 
-    cookies: () => cookieStore
-  })
+    const cookieStore = cookies()
+    const supabase = createServerComponentClient<Database>({ 
+      cookies: () => cookieStore
+    })
   
-    const {
-      data: { session },
-    } = await supabase.auth.getSession()
+    const { data: { session } } = await supabase.auth.getSession()
 
     if (!session) {
       return redirect('/login')
@@ -29,13 +27,18 @@ export default async function CustomersPage() {
       .eq('id', session.user.id)
       .single()
 
-    if (profileError || !profile) {
+    if (profileError) {
       console.error('Error fetching profile:', profileError)
+      throw new Error('Failed to fetch user profile')
+    }
+
+    if (!profile) {
+      console.error('No profile found')
       return redirect('/login')
     }
 
-    // Check if user has admin role or viewBookings permission
-    if (profile.role !== 'admin' && !profile.permissions.viewBookings) {
+    // Check if user has admin role or viewCustomers permission
+    if (profile.role !== 'admin' && !profile.permissions?.viewCustomers) {
       return redirect('/dashboard')
     }
 
@@ -47,10 +50,10 @@ export default async function CustomersPage() {
 
     if (customersError) {
       console.error('Error fetching customers:', customersError)
-      // Don't redirect on customer fetch error, just show empty list
+      // Show empty list with error state
       return (
         <div className="container mx-auto px-4 py-8">
-          <CustomersList initialCustomers={[]} />
+          <CustomersList initialCustomers={[]} error={customersError.message} />
         </div>
       )
     }
@@ -62,6 +65,13 @@ export default async function CustomersPage() {
     )
   } catch (error) {
     console.error('Error in CustomersPage:', error)
-    return redirect('/login')
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <CustomersList 
+          initialCustomers={[]} 
+          error={error instanceof Error ? error.message : 'An unexpected error occurred'} 
+        />
+      </div>
+    )
   }
 } 

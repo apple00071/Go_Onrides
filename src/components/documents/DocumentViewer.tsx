@@ -1,79 +1,88 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import type { Document } from '@/types/documents';
 
 interface DocumentViewerProps {
-  document: {
-    type: string;
-    url: string;
-    booking: {
-      customer_name: string;
-    };
-  };
+  document: Document;
   onClose: () => void;
 }
 
 export default function DocumentViewer({ document, onClose }: DocumentViewerProps) {
-  const [documentUrl, setDocumentUrl] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
-    const fetchDocumentUrl = async () => {
+    async function loadDocument() {
       try {
-        const { data } = await supabase.storage
-          .from('customer-documents')
-          .getPublicUrl(document.url);
+        const { data: signedUrl, error: urlError } = await supabase.storage
+          .from('documents')
+          .createSignedUrl(document.url, 3600); // 1 hour expiry
 
-        if (data) {
-          setDocumentUrl(data.publicUrl);
-        }
+        if (urlError) throw urlError;
+        if (!signedUrl?.signedUrl) throw new Error('Failed to generate signed URL');
+
+        setUrl(signedUrl.signedUrl);
       } catch (error) {
-        console.error('Error fetching document URL:', error);
-      } finally {
-        setLoading(false);
+        console.error('Error loading document:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load document');
       }
-    };
+    }
 
-    fetchDocumentUrl();
-  }, [document.url]);
+    loadDocument();
+  }, [document.url, supabase.storage]);
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-lg font-semibold">
-            {document.type} - {document.booking.customer_name}
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b">
+          <h2 className="text-lg font-semibold text-gray-900">
+            Document Viewer
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-500"
+            className="text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-full p-1"
           >
-            <X className="h-5 w-5" />
+            <X className="h-6 w-6" />
           </button>
         </div>
 
-        <div className="p-4">
-          {loading ? (
-            <div className="flex items-center justify-center h-96">
+        <div className="flex-1 overflow-auto p-4">
+          {error ? (
+            <div className="text-center text-red-600">
+              <p>{error}</p>
+            </div>
+          ) : !url ? (
+            <div className="flex justify-center items-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
+          ) : document.type.startsWith('image/') ? (
+            <img
+              src={url}
+              alt="Document preview"
+              className="max-w-full h-auto mx-auto"
+            />
+          ) : document.type === 'application/pdf' ? (
+            <iframe
+              src={url}
+              className="w-full h-full min-h-[60vh]"
+              title="PDF preview"
+            />
           ) : (
-            <div className="h-96">
-              {document.type.toLowerCase().includes('pdf') ? (
-                <iframe
-                  src={documentUrl}
-                  className="w-full h-full"
-                  title={`${document.type} - ${document.booking.customer_name}`}
-                />
-              ) : (
-                <img
-                  src={documentUrl}
-                  alt={`${document.type} - ${document.booking.customer_name}`}
-                  className="max-w-full max-h-full mx-auto object-contain"
-                />
-              )}
+            <div className="text-center">
+              <p className="text-gray-600">
+                Preview not available for this file type.
+              </p>
+              <a
+                href={url}
+                download
+                className="mt-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                Download File
+              </a>
             </div>
           )}
         </div>

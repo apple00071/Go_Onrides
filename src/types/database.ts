@@ -54,12 +54,12 @@ export interface Booking {
 
 export interface Document {
   id: string;
-  booking_id: string;
-  name: string;
+  booking_id: string | null;
   type: string;
   url: string;
   uploaded_by: string;
   uploaded_at: string;
+  updated_at: string;
 }
 
 export interface Payment {
@@ -129,6 +129,11 @@ export interface Database {
         Row: Payment;
         Insert: Omit<Payment, 'created_at'>;
         Update: Partial<Omit<Payment, 'created_at'>>;
+      };
+      documents: {
+        Row: Document;
+        Insert: Omit<Document, 'id' | 'created_at' | 'updated_at'>;
+        Update: Partial<Omit<Document, 'id' | 'created_at' | 'updated_at'>>;
       };
     };
   };

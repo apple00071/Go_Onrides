@@ -2,9 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { getSupabaseClient } from '@/lib/supabase';
 import type { Booking } from '@/types/database';
-import { formatCurrency, formatDateTime } from '@/lib/utils';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -18,6 +17,7 @@ export default function PaymentModal({
   onPaymentCreated
 }: PaymentModalProps) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [formData, setFormData] = useState({
     booking_id: '',
@@ -32,30 +32,35 @@ export default function PaymentModal({
 
   const fetchBookings = async () => {
     try {
-      const { data, error } = await supabase
+      const supabase = getSupabaseClient();
+      const { data, error: bookingsError } = await supabase
         .from('bookings')
         .select('*')
         .in('status', ['pending', 'in_use'])
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (bookingsError) throw bookingsError;
       setBookings(data || []);
     } catch (error) {
       console.error('Error fetching bookings:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch bookings');
     }
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+    setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
-      const { error } = await supabase
+      const supabase = getSupabaseClient();
+      const { error: paymentError } = await supabase
         .from('payments')
         .insert({
           booking_id: formData.booking_id,
@@ -65,13 +70,13 @@ export default function PaymentModal({
           status: 'completed'
         });
 
-      if (error) throw error;
+      if (paymentError) throw paymentError;
 
       onPaymentCreated();
       onClose();
     } catch (error) {
       console.error('Error creating payment:', error);
-      alert('Error creating payment. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to create payment');
     } finally {
       setLoading(false);
     }
@@ -93,6 +98,12 @@ export default function PaymentModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
+              {error}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700">
               Booking
@@ -107,7 +118,7 @@ export default function PaymentModal({
               <option value="">Select a booking</option>
               {bookings.map((booking) => (
                 <option key={booking.id} value={booking.id}>
-                  {booking.customer_name} - {booking.vehicle_details.make} {booking.vehicle_details.model}
+                  {booking.customer_name} - {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                 </option>
               ))}
             </select>
