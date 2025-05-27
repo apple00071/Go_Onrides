@@ -7,7 +7,17 @@ import type { Payment } from '@/types/database';
 import PaymentModal from '@/components/payments/PaymentModal';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 
-interface PaymentWithBooking extends Payment {
+interface PaymentWithBooking {
+  id: string;
+  booking_id: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
+  payment_status: 'pending' | 'completed' | 'failed';
+  status: string;
+  created_at: string;
+  created_by?: string;
   booking: {
     customer_name: string;
     vehicle_details: {
@@ -39,18 +49,68 @@ export default function PaymentsPage() {
       const { data, error: paymentsError } = await supabase
         .from('payments')
         .select(`
-          *,
-          booking:bookings (
+          id,
+          booking_id,
+          amount,
+          payment_mode,
+          payment_status,
+          created_at,
+          bookings (
+            id,
             customer_name,
             vehicle_details
           )
         `)
-        .order('payment_date', { ascending: false });
+        .order('created_at', { ascending: false });
 
-      if (paymentsError) throw paymentsError;
-      setPayments(data || []);
+      if (paymentsError) {
+        console.error('Full query error details:', {
+          message: paymentsError.message,
+          details: paymentsError.details,
+          hint: paymentsError.hint,
+          code: paymentsError.code
+        });
+        throw new Error(`Failed to fetch payments: ${paymentsError.message}`);
+      }
+
+      if (!data) {
+        setPayments([]);
+        return;
+      }
+
+      // Transform the data to match the expected interface
+      const transformedPayments: PaymentWithBooking[] = data.map(payment => {
+        const booking = Array.isArray(payment.bookings) ? payment.bookings[0] : payment.bookings;
+        
+        return {
+          id: payment.id,
+          booking_id: payment.booking_id,
+          amount: payment.amount,
+          payment_date: payment.created_at,
+          payment_method: payment.payment_mode,
+          payment_mode: payment.payment_mode,
+          payment_status: payment.payment_status,
+          status: payment.payment_status,
+          created_at: payment.created_at,
+          created_by: 'system', // Default value since we don't track this
+          booking: {
+            customer_name: booking?.customer_name || 'Unknown Customer',
+            vehicle_details: {
+              make: booking?.vehicle_details?.make || 'Unknown',
+              model: booking?.vehicle_details?.model || 'Unknown',
+              registration: booking?.vehicle_details?.registration || 'Unknown'
+            }
+          }
+        };
+      });
+
+      setPayments(transformedPayments);
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      console.error('Error details:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       setError(error instanceof Error ? error.message : 'Failed to fetch payments');
     } finally {
       setLoading(false);

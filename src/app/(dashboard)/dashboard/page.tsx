@@ -37,37 +37,49 @@ export default function DashboardPage() {
       // Fetch total bookings
       const { count: totalBookings, error: bookingsError } = await supabase
         .from('bookings')
-        .select('*', { count: 'exact' });
+        .select('*', { count: 'exact', head: true });
 
-      if (bookingsError) throw bookingsError;
+      if (bookingsError) {
+        console.error('Error fetching total bookings:', bookingsError);
+        throw new Error(`Failed to fetch total bookings: ${bookingsError.message}`);
+      }
 
       // Fetch active bookings
       const { count: activeBookings, error: activeError } = await supabase
         .from('bookings')
-        .select('*', { count: 'exact' })
+        .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
 
-      if (activeError) throw activeError;
+      if (activeError) {
+        console.error('Error fetching active bookings:', activeError);
+        throw new Error(`Failed to fetch active bookings: ${activeError.message}`);
+      }
 
-      // Fetch total income
+      // Fetch total income from completed payments
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount')
-        .eq('status', 'completed');
+        .eq('payment_status', 'completed');
       
-      if (paymentsError) throw paymentsError;
+      if (paymentsError) {
+        console.error('Error fetching completed payments:', paymentsError);
+        throw new Error(`Failed to fetch completed payments: ${paymentsError.message}`);
+      }
       
-      const totalIncome = payments?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
+      const totalIncome = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
 
       // Fetch pending payments
       const { data: pendingPayments, error: pendingError } = await supabase
         .from('payments')
         .select('amount')
-        .eq('status', 'pending');
+        .eq('payment_status', 'pending');
 
-      if (pendingError) throw pendingError;
+      if (pendingError) {
+        console.error('Error fetching pending payments:', pendingError);
+        throw new Error(`Failed to fetch pending payments: ${pendingError.message}`);
+      }
 
-      const totalPending = pendingPayments?.reduce((sum, payment) => sum + payment.amount, 0) || 0;
+      const totalPending = pendingPayments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
 
       setMetrics({
         totalBookings: totalBookings || 0,
@@ -104,14 +116,14 @@ export default function DashboardPage() {
     },
     {
       name: 'Total Income',
-      value: `$${metrics.totalIncome.toLocaleString()}`,
+      value: `₹${metrics.totalIncome.toLocaleString()}`,
       icon: Receipt,
       color: 'text-purple-600',
       bgColor: 'bg-purple-100'
     },
     {
       name: 'Pending Payments',
-      value: `$${metrics.pendingPayments.toLocaleString()}`,
+      value: `₹${metrics.pendingPayments.toLocaleString()}`,
       icon: AlertCircle,
       color: 'text-red-600',
       bgColor: 'bg-red-100'
@@ -131,7 +143,7 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
         {error ? (
           <div className="flex items-center">
@@ -154,7 +166,8 @@ export default function DashboardPage() {
           </button>
         )}
       </div>
-      <div className="mt-4 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {stats.map((stat) => (
           <div
             key={stat.name}

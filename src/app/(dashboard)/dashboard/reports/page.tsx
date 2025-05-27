@@ -56,21 +56,24 @@ export default function ReportsPage() {
       // Fetch monthly revenue data
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount, payment_date, status')
-        .gte('payment_date', dateRange.start)
-        .lte('payment_date', dateRange.end)
-        .eq('status', 'completed');
+        .select('amount, created_at, payment_status')
+        .gte('created_at', dateRange.start)
+        .lte('created_at', dateRange.end)
+        .eq('payment_status', 'completed');
 
-      if (paymentsError) throw paymentsError;
+      if (paymentsError) {
+        console.error('Payments query error:', paymentsError);
+        throw new Error(`Failed to fetch payments: ${paymentsError.message}`);
+      }
 
-      const monthlyRevenue = payments?.reduce((acc: { [key: string]: number }, payment) => {
-        const month = new Date(payment.payment_date).toLocaleString('default', { month: 'short', year: 'numeric' });
+      const monthlyRevenue = (payments || []).reduce((acc: { [key: string]: number }, payment) => {
+        const month = new Date(payment.created_at).toLocaleString('default', { month: 'short', year: 'numeric' });
         acc[month] = (acc[month] || 0) + Number(payment.amount);
         return acc;
       }, {});
 
       setRevenueData(
-        Object.entries(monthlyRevenue || {}).map(([month, revenue]) => ({
+        Object.entries(monthlyRevenue).map(([month, revenue]) => ({
           month,
           revenue
         }))
@@ -81,9 +84,12 @@ export default function ReportsPage() {
         .from('bookings')
         .select('status');
 
-      if (bookingsError) throw bookingsError;
+      if (bookingsError) {
+        console.error('Bookings query error:', bookingsError);
+        throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
+      }
 
-      const stats = bookings?.reduce((acc: BookingStats, booking) => {
+      const stats = (bookings || []).reduce((acc: BookingStats, booking) => {
         acc.total++;
         if (booking.status === 'in_use') acc.active++;
         if (booking.status === 'completed') acc.completed++;
@@ -91,7 +97,7 @@ export default function ReportsPage() {
         return acc;
       }, { total: 0, active: 0, completed: 0, cancelled: 0 });
 
-      setBookingStats(stats || { total: 0, active: 0, completed: 0, cancelled: 0 });
+      setBookingStats(stats);
 
       // Fetch vehicle utilization data
       const { data: vehicleBookings, error: vehicleError } = await supabase
@@ -103,9 +109,12 @@ export default function ReportsPage() {
         `)
         .in('status', ['completed', 'in_use']);
 
-      if (vehicleError) throw vehicleError;
+      if (vehicleError) {
+        console.error('Vehicle bookings query error:', vehicleError);
+        throw new Error(`Failed to fetch vehicle bookings: ${vehicleError.message}`);
+      }
 
-      const vehicleStats = vehicleBookings?.reduce((acc: { [key: string]: VehicleUtilization }, booking) => {
+      const vehicleStats = (vehicleBookings || []).reduce((acc: { [key: string]: VehicleUtilization }, booking) => {
         const vehicle = `${booking.vehicle_details.make} ${booking.vehicle_details.model}`;
         if (!acc[vehicle]) {
           acc[vehicle] = {
@@ -120,9 +129,13 @@ export default function ReportsPage() {
         return acc;
       }, {});
 
-      setVehicleUtilization(Object.values(vehicleStats || {}));
+      setVehicleUtilization(Object.values(vehicleStats));
     } catch (error) {
-      console.error('Error fetching report data:', error);
+      console.error('Error details:', {
+        error,
+        message: error instanceof Error ? error.message : 'Unknown error',
+        stack: error instanceof Error ? error.stack : undefined
+      });
       setError(error instanceof Error ? error.message : 'Failed to fetch report data');
     } finally {
       setLoading(false);
