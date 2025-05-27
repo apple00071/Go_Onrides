@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { X } from 'lucide-react';
 import type { Document } from '@/types/documents';
+import Image from 'next/image';
 
 interface DocumentViewerProps {
   document: Document;
@@ -60,11 +61,15 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : document.type.startsWith('image/') ? (
-            <img
-              src={url}
-              alt="Document preview"
-              className="max-w-full h-auto mx-auto"
-            />
+            <div className="relative">
+              <Image
+                src={url}
+                alt="Document preview"
+                width={800}
+                height={600}
+                className="w-full h-auto max-h-[80vh] object-contain"
+              />
+            </div>
           ) : document.type === 'application/pdf' ? (
             <iframe
               src={url}

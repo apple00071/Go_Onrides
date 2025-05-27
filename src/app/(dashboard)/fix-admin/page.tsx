@@ -47,9 +47,24 @@ export default function FixAdminPage() {
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
             Fix Admin Profile
           </h2>
-          <p className="mt-2 text-sm text-gray-600">
-            {status}
-          </p>
+          {loading ? (
+            <div className="mt-4">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
+              <p className="mt-2 text-sm text-gray-600">{status}</p>
+            </div>
+          ) : error ? (
+            <div className="mt-4">
+              <p className="text-red-600">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              >
+                Try Again
+              </button>
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-gray-600">{status}</p>
+          )}
         </div>
       </div>
     </div>

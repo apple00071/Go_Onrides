@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -61,7 +61,7 @@ export default function BookingModal({
   const [error, setError] = useState<string | null>(null);
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
 
-  const initialFormData: FormData = {
+  const initialFormData = useMemo<FormData>(() => ({
     customer_name: '',
     customer_contact: '',
     emergency_contact_name: '',
@@ -94,7 +94,7 @@ export default function BookingModal({
       dl_front: '',
       dl_back: ''
     }
-  };
+  }), []);
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
 
@@ -186,6 +186,12 @@ export default function BookingModal({
       setFormData(prev => ({ ...prev, paid_amount: '0' }));
     }
   }, [formData.payment_status, formData.total_amount]);
+
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(initialFormData);
+    }
+  }, [isOpen, initialFormData]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>

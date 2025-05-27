@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { Upload, X } from 'lucide-react';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import Image from 'next/image';
 
 type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
 
@@ -100,26 +102,29 @@ export default function CustomerDocuments({
   }, [customerPhone, onDocumentsFound]);
 
   const handleFileChange = (type: DocumentType) => async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        toast.error('Please upload an image file');
-        return;
-      }
-      
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('File size should be less than 5MB');
-        return;
-      }
-
-      setDocuments(prev => ({
-        ...prev,
-        [type]: file
-      }));
+    const file = e.target.files?.[0];
+    if (!file) {
+      setError('No file selected');
+      return;
     }
+      
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
+    }
+      
+    // Validate file size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size should be less than 5MB');
+      return;
+    }
+
+    setDocuments(prev => ({
+      ...prev,
+      [type]: file
+    }));
+    setError(null);
   };
 
   const handleUpload = async () => {
@@ -127,7 +132,7 @@ export default function CustomerDocuments({
     setError(null);
 
     try {
-      const supabase = getSupabaseClient();
+      const supabase = createClientComponentClient();
 
       // First get or create customer
       const { data: customers, error: customerError } = await supabase
@@ -138,54 +143,38 @@ export default function CustomerDocuments({
 
       if (customerError) throw customerError;
 
-      let customerId: string;
-      if (customers && customers.length > 0) {
-        customerId = customers[0].id;
-      } else {
+      if (!customers || customers.length === 0) {
         throw new Error('Customer not found. Please create customer first.');
       }
 
-      const uploadedDocs: CustomerDocuments = {};
+      const customerId = customers[0].id;
+      const uploadedDocs: Record<string, string> = {};
 
       // Upload each document
       for (const [type, file] of Object.entries(documents)) {
         if (!file) continue;
 
         const fileExt = file.name.split('.').pop();
-        const fileName = `${customerId}/${type}.${fileExt}`;
+        const fileName = `${customerId}-${type}-${Date.now()}.${fileExt}`;
 
-        // Upload to storage
         const { error: uploadError } = await supabase.storage
           .from('customer-documents')
-          .upload(fileName, file, {
-            cacheControl: '3600',
-            upsert: true
-          });
+          .upload(fileName, file);
 
         if (uploadError) throw uploadError;
 
-        // Create document record
-        const { error: docError } = await supabase
-          .from('customer_documents')
-          .upsert({
-            customer_id: customerId,
-            type: type,
-            url: fileName
-          }, {
-            onConflict: 'customer_id,type'
-          });
+        const { data: { publicUrl } } = supabase.storage
+          .from('customer-documents')
+          .getPublicUrl(fileName);
 
-        if (docError) throw docError;
-
-        uploadedDocs[type as keyof CustomerDocuments] = fileName;
+        uploadedDocs[type] = publicUrl;
       }
 
-      onUploadComplete(uploadedDocs);
+      onUploadComplete?.(uploadedDocs);
       toast.success('Documents uploaded successfully');
-    } catch (error) {
-      console.error('Error uploading documents:', error);
-      setError(error instanceof Error ? error.message : 'Failed to upload documents');
-      toast.error('Failed to upload documents');
+    } catch (err: unknown) {
+      console.error('Upload error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to upload documents');
     } finally {
       setLoading(false);
     }
@@ -211,10 +200,12 @@ export default function CustomerDocuments({
               <div className="space-y-1 text-center">
                 {documents[type as DocumentType] ? (
                   <div className="relative">
-                    <img
+                    <Image
                       src={URL.createObjectURL(documents[type as DocumentType]!)}
                       alt={label}
-                      className="h-32 w-auto mx-auto"
+                      width={400}
+                      height={160}
+                      className="w-full h-40 object-cover rounded-lg"
                     />
                     <button
                       type="button"

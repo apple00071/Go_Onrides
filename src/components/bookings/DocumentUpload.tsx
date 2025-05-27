@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Upload, X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import Image from 'next/image';
 
 interface DocumentUploadProps {
   customerId: string;
@@ -20,84 +22,52 @@ export default function DocumentUpload({
 }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(existingUrl || null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file) {
+      setError('No file selected');
+      return;
+    }
 
     // Validate file type
     if (!file.type.startsWith('image/')) {
-      toast.error('Please upload an image file');
+      setError('Please upload an image file');
       return;
     }
 
     // Validate file size (max 5MB)
     if (file.size > 5 * 1024 * 1024) {
-      toast.error('File size should be less than 5MB');
+      setError('File size should be less than 5MB');
       return;
     }
 
     setUploading(true);
+    setError(null);
 
     try {
-      const supabase = getSupabaseClient();
-
-      // Delete existing file if any
-      if (preview) {
-        try {
-          const existingPath = new URL(preview).pathname.split('/').pop();
-          if (existingPath) {
-            await supabase.storage
-              .from(BUCKET_NAME)
-              .remove([`${customerId}/${existingPath}`]);
-          }
-        } catch (error) {
-          console.warn('Failed to delete existing file:', error);
-          // Continue with upload even if delete fails
-        }
-      }
-
-      // Create a unique file name
+      const supabase = createClientComponentClient();
       const fileExt = file.name.split('.').pop();
-      const fileName = `${customerId}/${documentType}_${Date.now()}.${fileExt}`;
+      const fileName = `${customerId}-${documentType}-${Date.now()}.${fileExt}`;
 
-      // Upload file to Supabase Storage
-      const { data, error: uploadError } = await supabase.storage
+      const { error: uploadError } = await supabase.storage
         .from(BUCKET_NAME)
-        .upload(fileName, file, {
-          cacheControl: '3600',
-          upsert: true // Changed to true to handle existing files
-        });
+        .upload(fileName, file);
 
       if (uploadError) {
         throw uploadError;
       }
 
-      if (!data) {
-        throw new Error('No data returned from upload');
-      }
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
+      const { data: { publicUrl } } = supabase.storage
         .from(BUCKET_NAME)
         .getPublicUrl(fileName);
 
-      if (!urlData.publicUrl) {
-        throw new Error('Failed to get public URL for uploaded file');
-      }
-
-      // Update preview
-      setPreview(urlData.publicUrl);
-      
-      // Notify parent component
-      onUploadComplete(urlData.publicUrl);
-      
-      toast.success('Document uploaded successfully');
-    } catch (error: any) {
-      console.error('Upload error details:', error);
-      toast.error(error.message || 'Failed to upload document. Please try again.');
-      // Reset the file input
-      e.target.value = '';
+      setPreview(publicUrl);
+      onUploadComplete?.(publicUrl);
+    } catch (err: unknown) {
+      console.error('Upload error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to upload document');
     } finally {
       setUploading(false);
     }
@@ -123,9 +93,10 @@ export default function DocumentUpload({
       setPreview(null);
       onUploadComplete('');
       toast.success('Document removed successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Remove error:', error);
-      toast.error(error.message || 'Failed to remove document');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to remove document';
+      toast.error(errorMessage);
     }
   };
 
@@ -145,9 +116,11 @@ export default function DocumentUpload({
       
       {preview ? (
         <div className="relative">
-          <img
+          <Image
             src={preview}
             alt={documentLabels[documentType]}
+            width={400}
+            height={160}
             className="w-full h-40 object-cover rounded-lg"
           />
           <button
@@ -184,6 +157,9 @@ export default function DocumentUpload({
             </div>
           </label>
         </div>
+      )}
+      {error && (
+        <p className="mt-1 text-sm text-red-600">{error}</p>
       )}
     </div>
   );

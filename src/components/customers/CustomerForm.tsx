@@ -10,7 +10,10 @@ interface Customer {
   name: string
   email: string
   phone: string
-  address: string
+  address: {
+    temporary: string;
+    permanent: string;
+  }
   created_at: string
 }
 
@@ -27,7 +30,10 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
     name: customer?.name || '',
     email: customer?.email || '',
     phone: customer?.phone || '',
-    address: customer?.address || '',
+    address: customer?.address || {
+      temporary: '',
+      permanent: ''
+    }
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -64,7 +70,17 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
-    setFormData(prev => ({ ...prev, [name]: value }))
+    if (name === 'temporary_address' || name === 'permanent_address') {
+      setFormData(prev => ({
+        ...prev,
+        address: {
+          ...prev.address,
+          [name === 'temporary_address' ? 'temporary' : 'permanent']: value
+        }
+      }))
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }))
+    }
   }
 
   return (
@@ -122,15 +138,32 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
+          </div>
 
+          <div className="space-y-4">
             <div>
-              <label htmlFor="address" className="block text-sm font-medium text-gray-700">
-                Address
+              <label htmlFor="temporary_address" className="block text-sm font-medium text-gray-700">
+                Temporary Address
               </label>
               <textarea
-                id="address"
-                name="address"
-                value={formData.address}
+                id="temporary_address"
+                name="temporary_address"
+                value={formData.address.temporary}
+                onChange={handleChange}
+                required
+                rows={3}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="permanent_address" className="block text-sm font-medium text-gray-700">
+                Permanent Address
+              </label>
+              <textarea
+                id="permanent_address"
+                name="permanent_address"
+                value={formData.address.permanent}
                 onChange={handleChange}
                 required
                 rows={3}
@@ -140,7 +173,7 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
           </div>
         </div>
 
-        <div className="bg-gray-50 px-6 py-3 flex items-center justify-end gap-4">
+        <div className="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-4">
           <button
             type="button"
             onClick={() => router.back()}

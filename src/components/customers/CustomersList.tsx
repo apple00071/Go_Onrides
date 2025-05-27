@@ -11,7 +11,10 @@ interface Customer {
   name: string
   email: string
   phone: string
-  address: string
+  address: {
+    temporary: string;
+    permanent: string;
+  }
   created_at: string
 }
 
@@ -87,7 +90,7 @@ const CustomersList = ({ initialCustomers, error: initialError }: CustomersListP
         </div>
       )}
 
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white shadow overflow-hidden rounded-lg">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -136,8 +139,11 @@ const CustomersList = ({ initialCustomers, error: initialError }: CustomersListP
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm text-gray-900">{customer.phone}</div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{customer.address}</div>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900">
+                      <div>Temp: {typeof customer.address === 'object' ? customer.address.temporary : 'N/A'}</div>
+                      <div className="text-xs text-gray-500">Perm: {typeof customer.address === 'object' ? customer.address.permanent : 'N/A'}</div>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <Link

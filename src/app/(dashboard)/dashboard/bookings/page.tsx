@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import BookingList from '@/components/bookings/BookingList';
 import BookingModal from '@/components/bookings/BookingModal';
@@ -32,7 +32,7 @@ export default function BookingsPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     try {
       const supabase = getSupabaseClient();
       let query = supabase
@@ -61,11 +61,11 @@ export default function BookingsPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, statusFilter]);
 
   useEffect(() => {
     fetchBookings();
-  }, [searchQuery, statusFilter]);
+  }, [fetchBookings]);
 
   const handleRefresh = () => {
     setLoading(true);

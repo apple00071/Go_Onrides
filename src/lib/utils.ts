@@ -1,3 +1,5 @@
+import { SupabaseClient } from '@supabase/supabase-js';
+
 export function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString('en-IN', {
     day: 'numeric',
@@ -31,7 +33,7 @@ interface BookingRecord {
   booking_id: string | null;
 }
 
-export async function generateBookingId(supabase: any): Promise<string> {
+export async function generateBookingId(supabase: SupabaseClient): Promise<string> {
   try {
     const currentYear = new Date().getFullYear().toString().slice(-2);
     

@@ -7,7 +7,10 @@ interface Customer {
   name: string
   email: string
   phone: string
-  address: string
+  address: {
+    temporary: string;
+    permanent: string;
+  }
   created_at: string
 }
 
@@ -55,7 +58,20 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
           
           <div>
             <h3 className="text-sm font-medium text-gray-500">Address</h3>
-            <p className="mt-1 text-lg text-gray-900">{customer.address}</p>
+            <div className="mt-1 space-y-2">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Temporary Address</p>
+                <p className="text-lg text-gray-900">
+                  {typeof customer.address === 'object' ? customer.address.temporary : 'N/A'}
+                </p>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-700">Permanent Address</p>
+                <p className="text-lg text-gray-900">
+                  {typeof customer.address === 'object' ? customer.address.permanent : 'N/A'}
+                </p>
+              </div>
+            </div>
           </div>
           
           <div>
@@ -68,7 +84,7 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
       </div>
 
       {/* Orders section can be added here */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-white rounded-lg shadow">
         <div className="px-6 py-4">
           <h2 className="text-xl font-semibold text-gray-900">Recent Orders</h2>
           <p className="mt-2 text-gray-600">

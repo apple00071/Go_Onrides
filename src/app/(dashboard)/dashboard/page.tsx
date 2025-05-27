@@ -17,7 +17,7 @@ interface DashboardMetrics {
   pendingPayments: number;
 }
 
-export default function DashboardPage() {
+const DashboardPage = () => {
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     totalBookings: 0,
     activeBookings: 0,
@@ -194,4 +194,6 @@ export default function DashboardPage() {
       </div>
     </div>
   );
-} 
+};
+
+export default DashboardPage; 

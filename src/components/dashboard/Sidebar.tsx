@@ -6,7 +6,6 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { 
   Home,
   Calendar,
-  FileText,
   CreditCard,
   BarChart,
   Settings,

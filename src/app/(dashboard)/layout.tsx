@@ -87,7 +87,7 @@ export default function DashboardLayout({
     };
 
     // Set up auth state change listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'SIGNED_OUT') {
         router.replace('/login');
       } else if (event === 'SIGNED_IN' && mounted) {

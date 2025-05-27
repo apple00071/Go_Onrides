@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { Search, Filter, Plus, CreditCard, RefreshCw } from 'lucide-react';
-import type { Payment } from '@/types/database';
 import PaymentModal from '@/components/payments/PaymentModal';
 import { formatCurrency, formatDateTime } from '@/lib/utils';
 

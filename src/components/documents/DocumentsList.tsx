@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Search, FileText, Download, Eye, RefreshCw, Upload, AlertCircle } from 'lucide-react';
+import { Search, FileText, Download, Eye, Upload, AlertCircle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import DocumentViewer from './DocumentViewer';
 import type { Document } from '@/types/documents';

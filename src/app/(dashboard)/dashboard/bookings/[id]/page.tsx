@@ -6,6 +6,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Calendar, Clock, MapPin, Phone, User } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
+import Image from 'next/image';
 
 interface BookingDetails {
   id: string;
@@ -329,10 +330,12 @@ export default function BookingDetailsPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Customer Photo</label>
                     <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <img
+                      <Image
                         src={booking.documents.customer_photo}
                         alt="Customer Photo"
-                        className="h-full w-full object-cover"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       />
                     </div>
                   </div>
@@ -342,10 +345,12 @@ export default function BookingDetailsPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Aadhar Card (Front)</label>
                     <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <img
+                      <Image
                         src={booking.documents.aadhar_front}
                         alt="Aadhar Front"
-                        className="h-full w-full object-cover"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       />
                     </div>
                   </div>
@@ -355,10 +360,12 @@ export default function BookingDetailsPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Aadhar Card (Back)</label>
                     <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <img
+                      <Image
                         src={booking.documents.aadhar_back}
                         alt="Aadhar Back"
-                        className="h-full w-full object-cover"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       />
                     </div>
                   </div>
@@ -368,10 +375,12 @@ export default function BookingDetailsPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Driving License (Front)</label>
                     <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <img
+                      <Image
                         src={booking.documents.dl_front}
                         alt="DL Front"
-                        className="h-full w-full object-cover"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       />
                     </div>
                   </div>
@@ -381,10 +390,12 @@ export default function BookingDetailsPage() {
                   <div className="space-y-2">
                     <label className="text-sm font-medium text-gray-700">Driving License (Back)</label>
                     <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <img
+                      <Image
                         src={booking.documents.dl_back}
                         alt="DL Back"
-                        className="h-full w-full object-cover"
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       />
                     </div>
                   </div>
