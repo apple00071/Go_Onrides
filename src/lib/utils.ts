@@ -1,4 +1,6 @@
 import { SupabaseClient } from '@supabase/supabase-js';
+import { type ClassValue, clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
 export function getISTDate(date: string | Date = new Date()) {
   return new Date(new Date(date).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
@@ -96,4 +98,8 @@ export async function generateBookingId(supabase: SupabaseClient): Promise<strin
     console.error('Error in generateBookingId:', error);
     throw new Error(`Failed to generate booking ID: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
   }
+}
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
 } 

@@ -1,6 +1,7 @@
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
+import LoginForm from '@/components/auth/LoginForm'
 import { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -9,8 +10,7 @@ export const metadata: Metadata = {
 }
 
 export default async function LoginPage() {
-  const cookieStore = cookies()
-  const supabase = createServerComponentClient({ cookies: () => cookieStore })
+  const supabase = createServerComponentClient({ cookies })
 
   const {
     data: { session },
@@ -21,18 +21,17 @@ export default async function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center py-12 sm:px-6 lg:px-8">
+    <div className="min-h-screen flex flex-col justify-center bg-gray-50">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
-        <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
-          Sign in to your account
+        <h2 className="text-center text-3xl font-bold tracking-tight text-gray-900">
+          Welcome to Goon Riders
         </h2>
+        <p className="mt-2 text-center text-sm text-gray-600">
+          Sign in to your account
+        </p>
       </div>
-
-      <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
-        <div className="bg-white px-4 py-8 shadow sm:rounded-lg sm:px-10">
-          {/* Add your login form component here */}
-          <p className="text-center">Login form will be added here</p>
-        </div>
+      <div className="mt-8">
+        <LoginForm />
       </div>
     </div>
   )
