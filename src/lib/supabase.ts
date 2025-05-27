@@ -1,12 +1,15 @@
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createBrowserClient } from '@supabase/ssr';
 import type { Database } from '@/types/database';
 
 // Use a singleton pattern to ensure only one client instance is created
-let supabase: ReturnType<typeof createClientComponentClient<Database>> | null = null;
+let supabase: ReturnType<typeof createBrowserClient<Database>> | null = null;
 
 export const getSupabaseClient = () => {
   if (!supabase) {
-    supabase = createClientComponentClient<Database>();
+    supabase = createBrowserClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
   }
   return supabase;
 }; 

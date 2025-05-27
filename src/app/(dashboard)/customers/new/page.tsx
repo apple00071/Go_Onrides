@@ -1,28 +1,40 @@
-'use client'
-
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import CustomerForm from '@/components/customers/CustomerForm'
+import { Metadata } from 'next'
 
-export default function NewCustomerPage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const supabase = createClientComponentClient()
+export const metadata: Metadata = {
+  title: 'New Customer',
+  description: 'Add a new customer'
+}
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) {
-        router.push('/login')
-      }
-      setLoading(false)
+export default async function NewCustomerPage() {
+  const cookieStore = cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options: any) {
+          cookieStore.set(name, value, options)
+        },
+        remove(name: string, options: any) {
+          cookieStore.set(name, '', { ...options, maxAge: 0 })
+        },
+      },
     }
-    checkSession()
-  }, [router, supabase])
+  )
 
-  if (loading) {
-    return <div>Loading...</div>
+  const {
+    data: { session },
+  } = await supabase.auth.getSession()
+
+  if (!session) {
+    redirect('/login')
   }
 
   return (
