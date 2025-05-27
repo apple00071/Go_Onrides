@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Phone, User } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -11,6 +11,7 @@ import Image from 'next/image';
 interface BookingDetails {
   id: string;
   booking_id: string;
+  customer_id: string;
   customer_name: string;
   customer_contact: string;
   emergency_contact_name: string;
@@ -35,13 +36,12 @@ interface BookingDetails {
   payment_mode: string;
   status: string;
   created_at: string;
-  documents?: {
-    customer_photo?: string;
-    aadhar_front?: string;
-    aadhar_back?: string;
-    dl_front?: string;
-    dl_back?: string;
-  };
+  documents: Array<{
+    id: string;
+    document_type: string;
+    document_url: string;
+    created_at: string;
+  }>;
 }
 
 export default function BookingDetailsPage() {
@@ -50,6 +50,9 @@ export default function BookingDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetails | null>(null);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [selectedImageLabel, setSelectedImageLabel] = useState<string>('');
+  const [payments, setPayments] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
@@ -61,55 +64,85 @@ export default function BookingDetailsPage() {
 
       try {
         const supabase = getSupabaseClient();
-        const bookingId = decodeURIComponent(params.id as string);
+        const bookingIdentifier = decodeURIComponent(params.id as string);
+
+        // Check if the identifier is a UUID or a booking reference number
+        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
+
+        console.log('Fetching booking with identifier:', bookingIdentifier);
         
-        // Try to fetch by booking_id first
-        let { data: bookingData, error: fetchError } = await supabase
+        // First, get the booking details
+        const { data: bookingData, error: bookingError } = await supabase
           .from('bookings')
-          .select(`
-            *,
-            customers (
-              documents
-            )
-          `)
-          .eq('booking_id', bookingId)
+          .select('*')
+          .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
           .single();
 
-        // If not found by booking_id, try to fetch by id
-        if (!bookingData && !fetchError) {
-          ({ data: bookingData, error: fetchError } = await supabase
-            .from('bookings')
-            .select(`
-              *,
-              customers (
-                documents
-              )
-            `)
-            .eq('id', bookingId)
-            .single());
-        }
-
-        if (fetchError) {
-          console.error('Database error:', fetchError);
-          throw new Error('Failed to fetch booking details');
+        if (bookingError) {
+          console.error('Booking fetch error:', bookingError);
+          throw new Error(bookingError.message || 'Failed to fetch booking details');
         }
 
         if (!bookingData) {
           throw new Error('Booking not found');
         }
 
-        // Merge customer documents with booking data
-        const bookingWithDocuments = {
-          ...bookingData,
-          documents: bookingData.customers?.documents || {}
-        };
+        console.log('Found booking:', bookingData);
 
-        setBooking(bookingWithDocuments as BookingDetails);
+        // Get customer documents
+        const { data: customerData, error: customerError } = await supabase
+          .from('customers')
+          .select('documents')
+          .eq('id', bookingData.customer_id)
+          .single();
+
+        console.log('Customer documents query result:', { customerData, customerError });
+
+        if (customerError) {
+          console.error('Customer documents fetch error:', customerError);
+          // Don't throw here, just log the error
+        }
+
+        // Get payment history
+        const { data: paymentData, error: paymentError } = await supabase
+          .from('payments')
+          .select('*')
+          .eq('booking_id', bookingData.id)
+          .order('created_at', { ascending: false });
+
+        if (paymentError) {
+          console.error('Payment history fetch error:', paymentError);
+          // Don't throw here, just log the error
+        }
+
+        // Transform the documents data to match our interface
+        const transformedDocuments = customerData?.documents ? 
+          Object.entries(customerData.documents)
+            .filter(([_, url]) => url) // Filter out empty URLs
+            .map(([type, url]) => ({
+              id: type, // Use the document type as ID
+              document_type: type,
+              document_url: url as string,
+              created_at: bookingData.created_at // Use booking creation date as we don't have document creation date
+            })) : [];
+
+        const bookingWithDocs = {
+          ...bookingData,
+          documents: transformedDocuments
+        } as BookingDetails;
+
+        console.log('Setting booking state with:', bookingWithDocs);
+
+        setBooking(bookingWithDocs);
+        if (paymentData) {
+          setPayments(paymentData);
+        }
         setError(null);
       } catch (error) {
         console.error('Error fetching booking:', error);
-        setError(error instanceof Error ? error.message : 'Failed to fetch booking details');
-        toast.error('Failed to load booking details');
+        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch booking details';
+        setError(errorMessage);
+        toast.error(errorMessage);
       } finally {
         setLoading(false);
       }
@@ -126,7 +159,6 @@ export default function BookingDetailsPage() {
       const { error: updateError } = await supabase
         .from('bookings')
         .update({ status: newStatus })
-        .eq('booking_id', booking.booking_id)
         .eq('id', booking.id);
 
       if (updateError) {
@@ -139,6 +171,11 @@ export default function BookingDetailsPage() {
       console.error('Error updating status:', error);
       toast.error('Failed to update booking status');
     }
+  };
+
+  const handleImageClick = (url: string, label: string) => {
+    setSelectedImage(url);
+    setSelectedImageLabel(label);
   };
 
   if (loading) {
@@ -175,6 +212,9 @@ export default function BookingDetailsPage() {
     completed: 'bg-gray-100 text-gray-800',
     cancelled: 'bg-red-100 text-red-800'
   };
+
+  // Add debug logging in render
+  console.log('Current booking state:', booking);
 
   return (
     <div className="min-h-screen p-6 space-y-6">
@@ -295,16 +335,47 @@ export default function BookingDetailsPage() {
               <label className="text-sm text-gray-500">Paid Amount</label>
               <p className="font-medium">{formatCurrency(booking.paid_amount)}</p>
             </div>
+            <div>
+              <label className="text-sm text-gray-500">Remaining Amount</label>
+              <p className="font-medium text-blue-600">
+                {formatCurrency((booking.booking_amount + booking.security_deposit_amount) - booking.paid_amount)}
+              </p>
+            </div>
           </div>
-          <div className="flex items-center justify-between pt-4 border-t">
-            <div>
-              <label className="text-sm text-gray-500">Payment Status</label>
-              <p className="font-medium capitalize">{booking.payment_status}</p>
-            </div>
-            <div>
-              <label className="text-sm text-gray-500">Payment Mode</label>
-              <p className="font-medium capitalize">{booking.payment_mode}</p>
-            </div>
+          <div className="pt-4 border-t">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Payment History</h3>
+            {payments.length > 0 ? (
+              <div className="space-y-3">
+                {payments.map((payment) => (
+                  <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {formatCurrency(payment.amount)}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {formatDate(payment.created_at)} at {new Date(payment.created_at).toLocaleTimeString()}
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                      <span className="text-sm capitalize text-gray-600">
+                        {payment.payment_mode}
+                      </span>
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        payment.payment_status === 'completed' 
+                          ? 'bg-green-100 text-green-800' 
+                          : 'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {payment.payment_status}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 text-center py-4">
+                No payment history available
+              </div>
+            )}
           </div>
         </div>
 
@@ -324,87 +395,69 @@ export default function BookingDetailsPage() {
               </div>
             </div>
 
-            {booking.documents && (
+            {booking.documents && booking.documents.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                {booking.documents.customer_photo && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Customer Photo</label>
-                    <div className="relative aspect-[3/4] w-full overflow-hidden rounded-lg bg-gray-100">
+                {booking.documents.map((doc) => (
+                  <div key={doc.id} className="space-y-2">
+                    <label className="text-sm font-medium text-gray-700">
+                      {doc.document_type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                    </label>
+                    <button
+                      onClick={() => handleImageClick(doc.document_url, doc.document_type)}
+                      className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100 hover:opacity-90 transition-opacity"
+                    >
                       <Image
-                        src={booking.documents.customer_photo}
-                        alt="Customer Photo"
+                        src={doc.document_url}
+                        alt={doc.document_type}
                         fill
                         className="object-cover"
                         sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                       />
-                    </div>
+                    </button>
                   </div>
-                )}
-
-                {booking.documents.aadhar_front && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Aadhar Card (Front)</label>
-                    <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <Image
-                        src={booking.documents.aadhar_front}
-                        alt="Aadhar Front"
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {booking.documents.aadhar_back && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Aadhar Card (Back)</label>
-                    <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <Image
-                        src={booking.documents.aadhar_back}
-                        alt="Aadhar Back"
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {booking.documents.dl_front && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Driving License (Front)</label>
-                    <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <Image
-                        src={booking.documents.dl_front}
-                        alt="DL Front"
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {booking.documents.dl_back && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">Driving License (Back)</label>
-                    <div className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100">
-                      <Image
-                        src={booking.documents.dl_back}
-                        alt="DL Back"
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                    </div>
-                  </div>
-                )}
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-gray-500 mt-4">
+                No documents available
+                {booking.documents ? ` (${booking.documents.length} documents found)` : ' (documents array is undefined)'}
               </div>
             )}
           </div>
         </div>
       </div>
+
+      {/* Image Modal */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" 
+          onClick={() => setSelectedImage(null)}
+        >
+          <div 
+            className="relative max-w-4xl w-full bg-white rounded-lg overflow-hidden" 
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-medium text-gray-900">{selectedImageLabel}</h3>
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+            <div className="relative h-[80vh] w-full">
+              <Image
+                src={selectedImage}
+                alt={selectedImageLabel}
+                fill
+                className="object-contain"
+                sizes="(max-width: 1024px) 100vw, 80vw"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

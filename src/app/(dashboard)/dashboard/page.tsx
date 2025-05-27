@@ -2,198 +2,159 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import {
-  Users,
-  CalendarCheck,
-  Receipt,
-  AlertCircle,
-  RefreshCw
-} from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
+import { RefreshCw } from 'lucide-react';
+import VehicleReturns from '@/components/dashboard/VehicleReturns';
+import PendingPayments from '@/components/dashboard/PendingPayments';
 
-interface DashboardMetrics {
+interface DashboardStats {
   totalBookings: number;
-  activeBookings: number;
+  activeRentals: number;
   totalIncome: number;
   pendingPayments: number;
 }
 
-const DashboardPage = () => {
-  const [metrics, setMetrics] = useState<DashboardMetrics>({
+export default function DashboardPage() {
+  const [stats, setStats] = useState<DashboardStats>({
     totalBookings: 0,
-    activeBookings: 0,
+    activeRentals: 0,
     totalIncome: 0,
     pendingPayments: 0
   });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const fetchMetrics = async () => {
-    setLoading(true);
-    setError(null);
+  useEffect(() => {
+    fetchDashboardStats();
+  }, []);
 
+  const fetchDashboardStats = async () => {
     try {
       const supabase = getSupabaseClient();
 
-      // Fetch total bookings
-      const { count: totalBookings, error: bookingsError } = await supabase
+      // Get total bookings
+      const { count: totalBookings } = await supabase
         .from('bookings')
         .select('*', { count: 'exact', head: true });
 
-      if (bookingsError) {
-        console.error('Error fetching total bookings:', bookingsError);
-        throw new Error(`Failed to fetch total bookings: ${bookingsError.message}`);
-      }
-
-      // Fetch active bookings
-      const { count: activeBookings, error: activeError } = await supabase
+      // Get active rentals
+      const { count: activeRentals } = await supabase
         .from('bookings')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
 
-      if (activeError) {
-        console.error('Error fetching active bookings:', activeError);
-        throw new Error(`Failed to fetch active bookings: ${activeError.message}`);
-      }
-
-      // Fetch total income from completed payments
-      const { data: payments, error: paymentsError } = await supabase
+      // Get total income from completed payments
+      const { data: payments } = await supabase
         .from('payments')
         .select('amount')
         .eq('payment_status', 'completed');
-      
-      if (paymentsError) {
-        console.error('Error fetching completed payments:', paymentsError);
-        throw new Error(`Failed to fetch completed payments: ${paymentsError.message}`);
-      }
-      
+
       const totalIncome = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
 
-      // Fetch pending payments
-      const { data: pendingPayments, error: pendingError } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('payment_status', 'pending');
+      // Get pending payments total
+      const { data: pendingBookings } = await supabase
+        .from('bookings')
+        .select('booking_amount, security_deposit_amount, paid_amount')
+        .in('payment_status', ['pending', 'partial']);
 
-      if (pendingError) {
-        console.error('Error fetching pending payments:', pendingError);
-        throw new Error(`Failed to fetch pending payments: ${pendingError.message}`);
-      }
+      const pendingPayments = pendingBookings?.reduce((sum, booking) => {
+        const total = booking.booking_amount + booking.security_deposit_amount;
+        return sum + (total - booking.paid_amount);
+      }, 0) || 0;
 
-      const totalPending = pendingPayments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
-
-      setMetrics({
+      setStats({
         totalBookings: totalBookings || 0,
-        activeBookings: activeBookings || 0,
+        activeRentals: activeRentals || 0,
         totalIncome,
-        pendingPayments: totalPending
+        pendingPayments
       });
     } catch (error) {
-      console.error('Error fetching metrics:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch dashboard metrics');
+      console.error('Error fetching dashboard stats:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchMetrics();
-  }, []);
+  return (
+    <div className="min-h-screen p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
+        <button
+          onClick={fetchDashboardStats}
+          disabled={loading}
+          className="inline-flex items-center px-3 py-2 border rounded-md text-sm font-medium border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+          Refresh
+        </button>
+      </div>
 
-  const stats = [
-    {
-      name: 'Total Bookings',
-      value: metrics.totalBookings,
-      icon: CalendarCheck,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100'
-    },
-    {
-      name: 'Active Rentals',
-      value: metrics.activeBookings,
-      icon: Users,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100'
-    },
-    {
-      name: 'Total Income',
-      value: `₹${metrics.totalIncome.toLocaleString()}`,
-      icon: Receipt,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100'
-    },
-    {
-      name: 'Pending Payments',
-      value: `₹${metrics.pendingPayments.toLocaleString()}`,
-      icon: AlertCircle,
-      color: 'text-red-600',
-      bgColor: 'bg-red-100'
-    }
-  ];
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {/* Total Bookings */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-blue-100 rounded">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M19 4H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zM16 2v4M8 2v4M3 10h18" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <h2 className="text-sm font-medium text-gray-600">Total Bookings</h2>
+              <p className="text-2xl font-semibold text-gray-900">{stats.totalBookings}</p>
+            </div>
+          </div>
+        </div>
 
-  if (loading) {
-    return (
-      <div className="min-h-[400px] flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-sm text-gray-600">Loading dashboard data...</p>
+        {/* Active Rentals */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-green-100 rounded">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M16 3h5v5M8 3H3v5M3 16v5h5m13-5v5h-5" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <h2 className="text-sm font-medium text-gray-600">Active Rentals</h2>
+              <p className="text-2xl font-semibold text-gray-900">{stats.activeRentals}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Total Income */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-purple-100 rounded">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm-1-13v2h2v1h-2v1h2v1h-2v3h-1v-3H9v-1h1v-1H9v-1h1V7h1zm3 0v2h1v5h-1V7z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <h2 className="text-sm font-medium text-gray-600">Total Income</h2>
+              <p className="text-2xl font-semibold text-gray-900">₹{formatCurrency(stats.totalIncome)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Pending Payments */}
+        <div className="bg-white rounded-lg shadow p-6">
+          <div className="flex items-center">
+            <div className="p-2 bg-red-100 rounded">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="ml-4">
+              <h2 className="text-sm font-medium text-gray-600">Pending Payments</h2>
+              <p className="text-2xl font-semibold text-gray-900">₹{formatCurrency(stats.pendingPayments)}</p>
+            </div>
+          </div>
         </div>
       </div>
-    );
-  }
 
-  return (
-    <div>
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-        {error ? (
-          <div className="flex items-center">
-            <span className="text-sm text-red-600 mr-2">{error}</span>
-            <button
-              onClick={fetchMetrics}
-              className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
-            >
-              <RefreshCw className="h-4 w-4 mr-1" />
-              Retry
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={fetchMetrics}
-            className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <RefreshCw className="h-4 w-4 mr-1" />
-            Refresh
-          </button>
-        )}
-      </div>
-      
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-        {stats.map((stat) => (
-          <div
-            key={stat.name}
-            className="relative overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:px-6"
-          >
-            <dt>
-              <div className={`absolute rounded-md ${stat.bgColor} p-3`}>
-                <stat.icon
-                  className={`h-6 w-6 ${stat.color}`}
-                  aria-hidden="true"
-                />
-              </div>
-              <p className="ml-16 truncate text-sm font-medium text-gray-500">
-                {stat.name}
-              </p>
-            </dt>
-            <dd className="ml-16 flex items-baseline">
-              <p className="text-2xl font-semibold text-gray-900">
-                {stat.value}
-              </p>
-            </dd>
-          </div>
-        ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <VehicleReturns />
+        <PendingPayments />
       </div>
     </div>
   );
-};
-
-export default DashboardPage; 
+} 

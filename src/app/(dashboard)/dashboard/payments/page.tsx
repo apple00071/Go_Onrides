@@ -10,20 +10,21 @@ interface PaymentWithBooking {
   id: string;
   booking_id: string;
   amount: number;
-  payment_date: string;
-  payment_method: string;
   payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
   payment_status: 'pending' | 'completed' | 'failed';
-  status: string;
   created_at: string;
   created_by?: string;
   booking: {
+    id: string;
+    booking_id: string;
     customer_name: string;
     vehicle_details: {
-      make: string;
       model: string;
       registration: string;
     };
+    booking_amount: number;
+    security_deposit_amount: number;
+    paid_amount: number;
   };
 }
 
@@ -56,19 +57,17 @@ export default function PaymentsPage() {
           created_at,
           bookings (
             id,
+            booking_id,
             customer_name,
-            vehicle_details
+            vehicle_details,
+            booking_amount,
+            security_deposit_amount,
+            paid_amount
           )
         `)
         .order('created_at', { ascending: false });
 
       if (paymentsError) {
-        console.error('Full query error details:', {
-          message: paymentsError.message,
-          details: paymentsError.details,
-          hint: paymentsError.hint,
-          code: paymentsError.code
-        });
         throw new Error(`Failed to fetch payments: ${paymentsError.message}`);
       }
 
@@ -85,31 +84,28 @@ export default function PaymentsPage() {
           id: payment.id,
           booking_id: payment.booking_id,
           amount: payment.amount,
-          payment_date: payment.created_at,
-          payment_method: payment.payment_mode,
           payment_mode: payment.payment_mode,
           payment_status: payment.payment_status,
-          status: payment.payment_status,
           created_at: payment.created_at,
-          created_by: 'system', // Default value since we don't track this
+          created_by: 'system',
           booking: {
+            id: booking?.id || '',
+            booking_id: booking?.booking_id || '',
             customer_name: booking?.customer_name || 'Unknown Customer',
             vehicle_details: {
-              make: booking?.vehicle_details?.make || 'Unknown',
               model: booking?.vehicle_details?.model || 'Unknown',
               registration: booking?.vehicle_details?.registration || 'Unknown'
-            }
+            },
+            booking_amount: booking?.booking_amount || 0,
+            security_deposit_amount: booking?.security_deposit_amount || 0,
+            paid_amount: booking?.paid_amount || 0
           }
         };
       });
 
       setPayments(transformedPayments);
     } catch (error) {
-      console.error('Error details:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
+      console.error('Error fetching payments:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch payments');
     } finally {
       setLoading(false);
@@ -125,18 +121,37 @@ export default function PaymentsPage() {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
+  const getPaymentModeIcon = (mode: string) => {
+    switch (mode) {
+      case 'cash':
+        return '💵';
+      case 'upi':
+        return '📱';
+      case 'card':
+        return '💳';
+      case 'bank_transfer':
+        return '🏦';
+      default:
+        return '💰';
+    }
+  };
+
   const filteredPayments = payments.filter(payment => {
-    const matchesSearch = payment.booking.customer_name.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || payment.status === statusFilter;
+    const matchesSearch = (
+      payment.booking.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.booking.booking_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      payment.booking.vehicle_details.registration.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+    const matchesStatus = statusFilter === 'all' || payment.payment_status === statusFilter;
     return matchesSearch && matchesStatus;
   });
 
   const totalAmount = filteredPayments.reduce((sum, payment) => {
-    return payment.status === 'completed' ? sum + Number(payment.amount) : sum;
+    return payment.payment_status === 'completed' ? sum + Number(payment.amount) : sum;
   }, 0);
 
   return (
-    <div>
+    <div className="min-h-screen p-6">
       <div className="sm:flex sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-gray-900">Payments</h1>
@@ -148,14 +163,10 @@ export default function PaymentsPage() {
           <button
             onClick={fetchPayments}
             disabled={loading}
-            className={`inline-flex items-center px-3 py-2 border rounded-md text-sm font-medium ${
-              error
-                ? 'border-transparent text-white bg-red-600 hover:bg-red-700'
-                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
+            className="inline-flex items-center px-3 py-2 border rounded-md text-sm font-medium border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
           >
             <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Loading...' : error ? 'Retry' : 'Refresh'}
+            {loading ? 'Loading...' : 'Refresh'}
           </button>
           <button
             onClick={() => setIsModalOpen(true)}
@@ -194,32 +205,31 @@ export default function PaymentsPage() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              placeholder="Search payments..."
+              placeholder="Search by customer, booking ID or vehicle..."
             />
           </div>
           <div className="mt-4 sm:mt-0 sm:ml-4">
-            <div className="flex items-center">
-              <Filter className="h-5 w-5 text-gray-400 mr-2" />
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-              >
-                <option value="all">All Status</option>
-                <option value="pending">Pending</option>
-                <option value="completed">Completed</option>
-                <option value="failed">Failed</option>
-              </select>
-            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+            >
+              <option value="all">All Status</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+            </select>
           </div>
         </div>
 
-        <div className="bg-gray-50 p-4 border-b border-gray-200">
-          <div className="text-sm text-gray-700">
-            Total Revenue (Completed Payments): 
-            <span className="ml-2 font-semibold text-gray-900">
-              {formatCurrency(totalAmount)}
+        <div className="bg-gray-50 p-4 border-b">
+          <div className="text-sm text-gray-700 flex items-center">
+            <span className="mr-2">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5 text-gray-500">
+                <path fillRule="evenodd" d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm-1-13v2h2v1h-2v1h2v1h-2v3h-1v-3H9v-1h1v-1H9v-1h1V7h1zm3 0v2h1v5h-1V7z" clipRule="evenodd" />
+              </svg>
             </span>
+            Total Revenue (Completed Payments): <span className="font-semibold">{formatCurrency(totalAmount)}</span>
           </div>
         </div>
 
@@ -227,92 +237,81 @@ export default function PaymentsPage() {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Customer
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Booking Details
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Vehicle
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Payment Info
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Amount
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Payment Date
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Method
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Status
+                </th>
+                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Date & Time
                 </th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {loading ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4">
-                    <div className="flex justify-center items-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                      <span className="ml-2 text-sm text-gray-500">Loading payments...</span>
+              {filteredPayments.map((payment) => (
+                <tr key={payment.id} className="hover:bg-gray-50">
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-gray-900">
+                      {payment.booking.booking_id}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {payment.booking.customer_name}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {payment.booking.vehicle_details.model} ({payment.booking.vehicle_details.registration})
                     </div>
                   </td>
-                </tr>
-              ) : filteredPayments.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
-                    {searchTerm || statusFilter !== 'all' ? 'No payments found matching your filters' : 'No payments found'}
+                  <td className="px-6 py-4">
+                    <div className="flex items-center text-sm text-gray-900">
+                      <span className="mr-2">{getPaymentModeIcon(payment.payment_mode)}</span>
+                      <span className="capitalize">{payment.payment_mode}</span>
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Total: {formatCurrency(payment.booking.booking_amount + payment.booking.security_deposit_amount)}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Paid: {formatCurrency(payment.booking.paid_amount)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="text-sm font-medium text-gray-900">
+                      <span className="font-mono">₹</span>{formatCurrency(payment.amount).replace('₹', '')}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(payment.payment_status)}`}>
+                      {payment.payment_status}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {formatDateTime(payment.created_at)}
                   </td>
                 </tr>
-              ) : (
-                filteredPayments.map((payment) => (
-                  <tr key={payment.id} className="hover:bg-gray-50">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
-                        {payment.booking.customer_name}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {payment.booking.vehicle_details.registration}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {payment.booking.vehicle_details.make} {payment.booking.vehicle_details.model}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {formatCurrency(payment.amount)}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {formatDateTime(payment.payment_date)}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <CreditCard className="h-4 w-4 mr-2 text-gray-400" />
-                        {payment.payment_method}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(payment.status)}`}>
-                        {payment.status.replace('_', ' ').charAt(0).toUpperCase() + payment.status.slice(1)}
-                      </span>
-                    </td>
-                  </tr>
-                ))
+              ))}
+              {filteredPayments.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
+                    No payments found
+                  </td>
+                </tr>
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {isModalOpen && (
-        <PaymentModal
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onPaymentCreated={fetchPayments}
-        />
-      )}
+      <PaymentModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        onPaymentCreated={fetchPayments}
+      />
     </div>
   );
 } 

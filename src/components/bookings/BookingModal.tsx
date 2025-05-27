@@ -61,6 +61,7 @@ export default function BookingModal({
   const [error, setError] = useState<string | null>(null);
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
 
+  // Memoize the initial form data
   const initialFormData = useMemo<FormData>(() => ({
     customer_name: '',
     customer_contact: '',
@@ -83,20 +84,44 @@ export default function BookingModal({
     booking_amount: '',
     security_deposit_amount: '',
     total_amount: '',
-    payment_status: 'pending',
+    payment_status: 'pending' as 'full' | 'partial' | 'pending',
     paid_amount: '',
     payment_mode: 'cash',
     status: 'confirmed',
     documents: {
-      customer_photo: '',
-      aadhar_front: '',
-      aadhar_back: '',
-      dl_front: '',
-      dl_back: ''
+      aadhar_card: '',
+      driving_license: '',
+      customer_photo: ''
     }
-  }), []);
+  }), []); // Empty dependency array since this never changes
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
+
+  // Calculate total amount when booking amount or security deposit changes
+  useEffect(() => {
+    const bookingAmt = parseFloat(formData.booking_amount) || 0;
+    const securityAmt = parseFloat(formData.security_deposit_amount) || 0;
+    const total = bookingAmt + securityAmt;
+    setFormData(prev => ({ ...prev, total_amount: total.toString() }));
+  }, [formData.booking_amount, formData.security_deposit_amount]);
+
+  // Update paid amount when payment status changes to full
+  useEffect(() => {
+    if (formData.payment_status === 'full') {
+      setFormData(prev => ({ ...prev, paid_amount: formData.total_amount }));
+    } else if (formData.payment_status === 'pending') {
+      setFormData(prev => ({ ...prev, paid_amount: '0' }));
+    }
+  }, [formData.payment_status, formData.total_amount]);
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(initialFormData);
+      setError(null);
+      setIsExistingCustomer(false);
+    }
+  }, [isOpen, initialFormData]);
 
   // Check for existing customer documents when phone number changes
   useEffect(() => {
@@ -135,24 +160,27 @@ export default function BookingModal({
         } else {
           setIsExistingCustomer(false);
           // Reset form data except phone number
-          setFormData(prev => ({
+          const { customer_contact } = formData;
+          setFormData({
             ...initialFormData,
-            customer_contact: prev.customer_contact
-          }));
+            customer_contact
+          });
         }
       }
     };
 
     checkExistingCustomer();
-  }, [formData.customer_contact]);
+  }, [formData.customer_contact, initialFormData]);
 
   // Get today's date in YYYY-MM-DD format for date inputs
-  const today = new Date().toISOString().split('T')[0];
+  const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   
   // Calculate maximum date for DOB (18 years ago)
-  const maxDOB = new Date();
-  maxDOB.setFullYear(maxDOB.getFullYear() - 18);
-  const maxDOBString = maxDOB.toISOString().split('T')[0];
+  const maxDOB = useMemo(() => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() - 18);
+    return date.toISOString().split('T')[0];
+  }, []);
   
   // Calculate minimum date for DL expiry (today)
   const minDLExpiry = today;
@@ -161,37 +189,24 @@ export default function BookingModal({
   const minEndDate = formData.start_date || today;
 
   // Calculate maximum start date (1 year from today)
-  const maxStartDate = new Date();
-  maxStartDate.setFullYear(maxStartDate.getFullYear() + 1);
-  const maxStartDateString = maxStartDate.toISOString().split('T')[0];
+  const maxStartDate = useMemo(() => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() + 1);
+    return date.toISOString().split('T')[0];
+  }, []);
 
   // Calculate maximum end date (30 days from start date)
-  const maxEndDate = formData.start_date ? new Date(formData.start_date) : new Date();
-  maxEndDate.setDate(maxEndDate.getDate() + 30);
-  const maxEndDateString = maxEndDate.toISOString().split('T')[0];
-
-  // Calculate total amount when booking amount or security deposit changes
-  useEffect(() => {
-    const bookingAmt = parseFloat(formData.booking_amount) || 0;
-    const securityAmt = parseFloat(formData.security_deposit_amount) || 0;
-    const total = bookingAmt + securityAmt;
-    setFormData(prev => ({ ...prev, total_amount: total.toString() }));
-  }, [formData.booking_amount, formData.security_deposit_amount]);
-
-  // Update paid amount when payment status changes to full
-  useEffect(() => {
-    if (formData.payment_status === 'full') {
-      setFormData(prev => ({ ...prev, paid_amount: prev.total_amount }));
-    } else if (formData.payment_status === 'pending') {
-      setFormData(prev => ({ ...prev, paid_amount: '0' }));
-    }
-  }, [formData.payment_status, formData.total_amount]);
+  const maxEndDate = useMemo(() => {
+    const date = formData.start_date ? new Date(formData.start_date) : new Date();
+    date.setDate(date.getDate() + 30);
+    return date.toISOString().split('T')[0];
+  }, [formData.start_date]);
 
   useEffect(() => {
     if (isOpen) {
       setFormData(initialFormData);
     }
-  }, [isOpen, initialFormData]);
+  }, [isOpen]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -669,7 +684,7 @@ export default function BookingModal({
                     type="date"
                     name="date_of_birth"
                     required
-                    max={maxDOBString}
+                    max={maxDOB}
                     value={formData.date_of_birth}
                     onChange={handleInputChange}
                     className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -781,7 +796,7 @@ export default function BookingModal({
                 name="start_date"
                 required
                 min={today}
-                max={maxStartDateString}
+                max={maxStartDate}
                 value={formData.start_date}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -796,7 +811,7 @@ export default function BookingModal({
                 name="end_date"
                 required
                 min={minEndDate}
-                max={maxEndDateString}
+                max={maxEndDate}
                 value={formData.end_date}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"

@@ -1,7 +1,12 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 
+export function getISTDate(date: string | Date = new Date()) {
+  return new Date(new Date(date).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+}
+
 export function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString('en-IN', {
+  return new Date(dateString).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
     day: 'numeric',
     month: 'short',
     year: 'numeric'
@@ -10,8 +15,7 @@ export function formatDate(dateString: string) {
 
 export function formatCurrency(amount: number) {
   return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
+    style: 'decimal',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(amount);

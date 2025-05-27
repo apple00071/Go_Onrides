@@ -8,14 +8,19 @@ export async function middleware(req: NextRequest) {
 
   try {
     // Refresh session if expired - required for Server Components
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    // Get authenticated user data
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
 
     // Log for debugging
     console.log('Middleware - Current path:', req.nextUrl.pathname);
     console.log('Middleware - Session:', session ? 'Present' : 'None');
-    if (session) {
-      console.log('Middleware - User ID:', session.user.id);
-    }
+    console.log('Middleware - User:', user ? 'Authenticated' : 'Not authenticated');
 
     // Define protected and auth routes
     const isProtectedRoute = 
@@ -26,21 +31,21 @@ export async function middleware(req: NextRequest) {
       req.nextUrl.pathname === '/login' ||
       req.nextUrl.pathname === '/signup';
 
-    // Handle protected routes
-    if (!session && isProtectedRoute) {
-      console.log('Middleware - Redirecting to login (no session)');
+    // Handle protected routes - require both session and authenticated user
+    if ((!session || !user) && isProtectedRoute) {
+      console.log('Middleware - Redirecting to login (no session or user)');
       const redirectUrl = new URL('/login', req.url);
       return NextResponse.redirect(redirectUrl);
     }
 
     // Handle auth routes (login/signup)
-    if (session && isAuthRoute) {
-      console.log('Middleware - Has session, checking profile');
+    if (session && user && isAuthRoute) {
+      console.log('Middleware - Has authenticated session, checking profile');
       // Fetch user profile to determine redirect
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', session.user.id)
+        .eq('id', user.id)
         .single();
 
       console.log('Middleware - User profile:', profile);
@@ -53,38 +58,14 @@ export async function middleware(req: NextRequest) {
       return NextResponse.redirect(redirectUrl);
     }
 
-    // Set auth cookies in response
-    if (session) {
-      res.cookies.set(
-        'sb-access-token',
-        session.access_token,
-        {
-          path: '/',
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: 60 * 60 * 24 * 7 // 1 week
-        }
-      );
-
-      if (session.refresh_token) {
-        res.cookies.set(
-          'sb-refresh-token',
-          session.refresh_token,
-          {
-            path: '/',
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: 60 * 60 * 24 * 7 // 1 week
-          }
-        );
-      }
-    }
-
     return res;
   } catch (error) {
     console.error('Middleware error:', error);
+    // On error, redirect to login for safety
+    if (req.nextUrl.pathname !== '/login') {
+      const redirectUrl = new URL('/login', req.url);
+      return NextResponse.redirect(redirectUrl);
+    }
     return res;
   }
 }

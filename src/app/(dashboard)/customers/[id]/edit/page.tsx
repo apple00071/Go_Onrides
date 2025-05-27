@@ -2,16 +2,24 @@ import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import CustomerForm from '@/components/customers/CustomerForm'
-
-interface Props {
-  params: {
-    id: string
-  }
-}
+import { Metadata } from 'next'
 
 export const dynamic = 'force-dynamic'
 
-export default async function EditCustomerPage({ params }: Props) {
+export const metadata: Metadata = {
+  title: 'Edit Customer',
+  description: 'Edit customer details'
+}
+
+interface PageProps {
+  params: {
+    id: string
+  }
+  searchParams: Record<string, string | string[] | undefined>
+}
+
+export default async function EditCustomerPage(props: PageProps) {
+  const { params } = props;
   const cookieStore = cookies()
   const supabase = createServerComponentClient({ cookies: () => cookieStore })
   

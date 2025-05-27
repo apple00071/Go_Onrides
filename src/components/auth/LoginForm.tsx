@@ -21,30 +21,32 @@ const LoginForm = () => {
     try {
       const supabase = createClientComponentClient();
       
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      // First sign in the user
+      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password
       });
 
-      if (signInError) {
-        throw signInError;
-      }
+      if (signInError) throw signInError;
+      if (!authData?.session) throw new Error('No session created');
 
-      if (!data?.session) {
-        throw new Error('No session created');
-      }
+      // Then get the authenticated user data
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) throw userError;
+      if (!user) throw new Error('No authenticated user found');
 
+      // Get the user's profile
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
-        .eq('id', data.session.user.id)
+        .eq('id', user.id)
         .single();
 
-      if (profileError) {
-        throw profileError;
-      }
+      if (profileError) throw profileError;
 
       if (!profile) {
+        // Create default profile for new users
         const defaultPermissions = {
           createBooking: false,
           viewBookings: true,
@@ -57,21 +59,20 @@ const LoginForm = () => {
         const { error: createError } = await supabase
           .from('profiles')
           .insert([{
-            id: data.session.user.id,
-            email: data.session.user.email,
+            id: user.id,
+            email: user.email,
             role: 'worker',
             permissions: defaultPermissions
           }]);
 
-        if (createError) {
-          throw createError;
-        }
+        if (createError) throw createError;
 
         router.push('/dashboard');
         router.refresh();
         return;
       }
 
+      // Redirect based on role
       const redirectPath = profile.role === 'admin' ? '/dashboard/settings' : '/dashboard';
       router.push(redirectPath);
       router.refresh();
@@ -86,6 +87,8 @@ const LoginForm = () => {
           errorMessage = 'Invalid email or password';
         } else if (err.message?.includes('No session created')) {
           errorMessage = 'Failed to create session. Please try again.';
+        } else if (err.message?.includes('No authenticated user found')) {
+          errorMessage = 'Authentication failed. Please try again.';
         }
       }
       
