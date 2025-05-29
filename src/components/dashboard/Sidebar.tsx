@@ -39,51 +39,53 @@ export default function Sidebar({ user }: SidebarProps) {
   };
 
   return (
-    <div className="fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-0">
-      <div className="flex h-full flex-col border-r border-gray-200 bg-white">
-        <div className="flex h-16 flex-shrink-0 items-center px-6">
-          <h1 className="text-xl font-bold text-gray-900">Goon Riders</h1>
+    <div className="flex h-full flex-col bg-card-white">
+      <div className="flex h-16 items-center gap-2 border-b border-gray-100 px-6">
+        <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-blue text-white">
+          GR
         </div>
-        <div className="flex flex-1 flex-col overflow-y-auto">
-          <nav className="flex-1 space-y-1 px-4 py-4">
-            {navigation.map((item) => {
-              const isActive = pathname.startsWith(item.href);
-              return (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`
-                    group flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors
-                    ${isActive
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-700 hover:bg-gray-50 hover:text-gray-900'
-                    }
+        <h1 className="text-lg font-semibold text-primary-text">Goon Riders</h1>
+      </div>
+      
+      <div className="flex flex-1 flex-col gap-1 p-4">
+        <nav className="flex-1 space-y-1">
+          {navigation.map((item) => {
+            const isActive = pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`
+                  group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors
+                  ${isActive
+                    ? 'bg-primary-blue/10 text-primary-blue'
+                    : 'text-secondary-text hover:bg-gray-50 hover:text-primary-text'
+                  }
+                `}
+              >
+                <item.icon
+                  className={`h-5 w-5 flex-shrink-0 transition-colors
+                    ${isActive ? 'text-primary-blue' : 'text-gray-400 group-hover:text-primary-text'}
                   `}
-                >
-                  <item.icon
-                    className={`
-                      mr-3 h-5 w-5 flex-shrink-0 transition-colors
-                      ${isActive ? 'text-blue-500' : 'text-gray-400 group-hover:text-gray-500'}
-                    `}
-                    aria-hidden="true"
-                  />
-                  {item.name}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="flex flex-shrink-0 border-t border-gray-200 p-4">
-            <button
-              onClick={handleSignOut}
-              className="group flex w-full items-center px-3 py-2 text-sm font-medium text-gray-700 rounded-md hover:bg-gray-50 hover:text-gray-900 transition-colors"
-            >
-              <LogOut
-                className="mr-3 h-5 w-5 text-gray-400 group-hover:text-gray-500 transition-colors"
-                aria-hidden="true"
-              />
-              Sign Out
-            </button>
-          </div>
+                  aria-hidden="true"
+                />
+                {item.name}
+              </Link>
+            );
+          })}
+        </nav>
+        
+        <div className="mt-auto pt-4 border-t border-gray-100">
+          <button
+            onClick={handleSignOut}
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-secondary-text hover:bg-gray-50 hover:text-primary-text transition-colors"
+          >
+            <LogOut
+              className="h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-primary-text transition-colors"
+              aria-hidden="true"
+            />
+            Sign Out
+          </button>
         </div>
       </div>
     </div>

@@ -1,28 +1,31 @@
 'use client';
 
+import React from 'react';
 import { useEffect, useState, useCallback } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import BookingList from '@/components/bookings/BookingList';
+import BookingsTable from '@/components/bookings/BookingsTable';
+import BookingsControls from '@/components/bookings/BookingsControls';
 import BookingModal from '@/components/bookings/BookingModal';
-import { Search, Filter } from 'lucide-react';
+import { Search, Filter, Plus, RefreshCw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface Booking {
   id: string;
-  booking_id: string;
-  customer_name: string;
-  customer_contact: string;
-  vehicle_details: {
-    model: string;
-    registration: string;
+  customer: {
+    name: string;
+    phone: string;
   };
-  start_date: string;
-  end_date: string;
-  booking_amount: number;
-  security_deposit_amount: number;
-  payment_status: string;
-  status: string;
-  created_at: string;
+  vehicle: {
+    model: string;
+    number: string;
+  };
+  duration: {
+    start: string;
+    end: string;
+  };
+  amount: number;
+  payment: 'full' | 'partial' | 'pending';
+  status: 'confirmed' | 'pending' | 'cancelled';
 }
 
 export default function BookingsPage() {
@@ -31,150 +34,223 @@ export default function BookingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const supabase = getSupabaseClient();
 
   const fetchBookings = useCallback(async () => {
     try {
-      const supabase = getSupabaseClient();
-      let query = supabase
+      setLoading(true);
+      console.log('Fetching bookings...');
+      
+      // First, check if we're authenticated
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      if (authError) {
+        console.error('Auth error:', authError);
+        throw new Error('Authentication error');
+      }
+      
+      if (!session) {
+        console.error('No session found');
+        throw new Error('No active session');
+      }
+
+      // Fetch bookings
+      const { data, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          id,
+          booking_id,
+          customer_name,
+          customer_contact,
+          vehicle_details,
+          start_date,
+          end_date,
+          booking_amount,
+          security_deposit_amount,
+          payment_status,
+          status,
+          total_amount,
+          paid_amount
+        `)
         .order('created_at', { ascending: false });
 
-      if (statusFilter !== 'all') {
-        query = query.eq('status', statusFilter);
-      }
-
-      if (searchQuery) {
-        query = query.or(`customer_name.ilike.%${searchQuery}%,customer_contact.ilike.%${searchQuery}%,booking_id.ilike.%${searchQuery}%`);
-      }
-
-      const { data, error } = await query;
-
       if (error) {
+        console.error('Error fetching bookings:', error);
         throw error;
       }
 
-      setBookings(data || []);
+      console.log('Raw bookings data:', data);
+
+      if (!data || data.length === 0) {
+        console.log('No bookings found');
+        setBookings([]);
+        return;
+      }
+
+      // Transform the data to match our Booking interface
+      const transformedBookings: Booking[] = data.map((booking: any) => {
+        console.log('Processing booking:', booking);
+        
+        // Parse vehicle details from JSONB
+        const vehicleDetails = booking.vehicle_details || {};
+        
+        const transformed = {
+          id: booking.booking_id || booking.id,
+          customer: {
+            name: booking.customer_name || 'N/A',
+            phone: booking.customer_contact || 'N/A',
+          },
+          vehicle: {
+            model: vehicleDetails.model || 'N/A',
+            number: vehicleDetails.registration || 'N/A',
+          },
+          duration: {
+            start: booking.start_date ? new Date(booking.start_date).toLocaleDateString('en-IN') : 'N/A',
+            end: booking.end_date ? new Date(booking.end_date).toLocaleDateString('en-IN') : 'N/A',
+          },
+          amount: booking.total_amount || booking.booking_amount + (booking.security_deposit_amount || 0),
+          payment: booking.payment_status || 'pending',
+          status: booking.status || 'pending',
+        };
+        
+        console.log('Transformed booking:', transformed);
+        return transformed;
+      });
+
+      console.log('Final transformed bookings:', transformedBookings);
+      setBookings(transformedBookings);
     } catch (error) {
-      console.error('Error fetching bookings:', error);
-      toast.error('Failed to load bookings');
+      console.error('Error in fetchBookings:', error);
+      toast.error('Failed to fetch bookings');
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, statusFilter]);
+  }, [supabase]);
 
   useEffect(() => {
+    // Simple test query to check if there's any data
+    const testQuery = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          console.error('No session found in test query');
+          return;
+        }
+
+        console.log('Running test query...');
+        const { data, error } = await supabase
+          .from('bookings')
+          .select('*')
+          .limit(1);
+
+        console.log('Test query result:', {
+          hasData: !!data && data.length > 0,
+          firstRecord: data?.[0],
+          error
+        });
+      } catch (error) {
+        console.error('Error in test query:', error);
+      }
+    };
+
+    testQuery();
     fetchBookings();
-  }, [fetchBookings]);
+  }, [fetchBookings, supabase]);
 
   const handleRefresh = () => {
-    setLoading(true);
     fetchBookings();
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-      </div>
-    );
-  }
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+  };
+
+  const handleStatusFilter = (status: string) => {
+    setStatusFilter(status);
+  };
+
+  const handleNewBooking = () => {
+    setIsModalOpen(true);
+  };
+
+  // Filter bookings based on search query and status
+  const filteredBookings = bookings.filter((booking) => {
+    console.log('Filtering booking:', booking);
+    
+    const matchesSearch =
+      searchQuery === '' ||
+      booking.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      booking.customer.phone.includes(searchQuery) ||
+      booking.vehicle.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      booking.id.toLowerCase().includes(searchQuery.toLowerCase());
+
+    const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
+
+    console.log('Search match:', matchesSearch, 'Status match:', matchesStatus);
+    return matchesSearch && matchesStatus;
+  });
+
+  console.log('Filtered bookings:', filteredBookings);
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Bookings</h1>
-          <p className="mt-1 text-sm text-gray-500">
-            Manage all vehicle bookings and their status
-          </p>
-        </div>
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={handleRefresh}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <svg
-              className="h-4 w-4 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
-              />
-            </svg>
-            Refresh
-          </button>
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-          >
-            <svg
-              className="h-4 w-4 mr-2"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 4v16m8-8H4"
-              />
-            </svg>
-            New Booking
-          </button>
-        </div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
+        <p className="mt-1 text-sm text-gray-500">
+          Manage all vehicle bookings and their status
+        </p>
       </div>
 
-      <div className="flex items-center justify-between space-x-4">
-        <div className="flex-1 max-w-md relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
+      <BookingsControls
+        onSearch={handleSearch}
+        onStatusFilter={handleStatusFilter}
+        onRefresh={handleRefresh}
+        onNewBooking={handleNewBooking}
+      />
+
+      {/* Content */}
+      <div className="mt-6">
+        {loading ? (
+          <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-gray-200 bg-white">
+            <div className="flex flex-col items-center space-y-4">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
+              <p className="text-sm text-gray-500">Loading bookings...</p>
+            </div>
           </div>
-          <input
-            type="text"
-            placeholder="Search bookings..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-          />
-        </div>
-        <div className="flex items-center space-x-2">
-          <Filter className="h-5 w-5 text-gray-400" />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-          >
-            <option value="all">All Status</option>
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="in_use">In Use</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
+        ) : filteredBookings.length === 0 ? (
+          <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-12 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
+              <Search className="h-6 w-6 text-gray-400" />
+            </div>
+            <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings found</h3>
+            <p className="mt-1 text-sm text-gray-500">
+              {searchQuery || statusFilter !== 'all'
+                ? "Try adjusting your search or filter to find what you're looking for."
+                : 'Get started by creating a new booking.'}
+            </p>
+            {!searchQuery && statusFilter === 'all' && (
+              <div className="mt-6">
+                <button
+                  onClick={() => setIsModalOpen(true)}
+                  className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Booking
+                </button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <BookingsTable bookings={filteredBookings} />
+        )}
       </div>
-
-      {bookings.length === 0 ? (
-        <div className="text-center py-12">
-          <p className="text-sm text-gray-500">No bookings found</p>
-        </div>
-      ) : (
-        <BookingList bookings={bookings} />
-      )}
 
       <BookingModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onBookingCreated={() => {
           setIsModalOpen(false);
-          handleRefresh();
+          fetchBookings();
+          toast.success('Booking created successfully');
         }}
       />
     </div>

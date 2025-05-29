@@ -154,7 +154,7 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-50">
       {/* Mobile sidebar backdrop */}
       {isSidebarOpen && (
         <div
@@ -163,25 +163,23 @@ export default function DashboardLayout({
         />
       )}
 
-      {/* Sidebar */}
-      <div
-        className={`
-          fixed inset-y-0 left-0 z-50 w-64 transform transition-transform duration-300 ease-in-out
-          ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:static lg:inset-0
-        `}
-      >
-        <Sidebar user={user} />
-      </div>
+      <div className="flex h-screen">
+        {/* Sidebar */}
+        <div
+          className={`
+            fixed inset-y-0 left-0 z-50 w-64 transform bg-white transition-transform duration-300 ease-in-out
+            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
+            lg:translate-x-0 lg:static lg:inset-0
+          `}
+        >
+          <Sidebar user={user} />
+        </div>
 
-      {/* Main content */}
-      <div className="flex flex-1 flex-col lg:pl-64">
-        <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
-        <main className="flex-1 py-6">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-            {children}
-          </div>
-        </main>
+        {/* Main content */}
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
+          {children}
+        </div>
       </div>
     </div>
   );
