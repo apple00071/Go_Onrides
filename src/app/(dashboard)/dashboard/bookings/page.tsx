@@ -41,19 +41,26 @@ export default function BookingsPage() {
       setLoading(true);
       console.log('Fetching bookings...');
       
-      // First, check if we're authenticated
-      const { data: { session }, error: authError } = await supabase.auth.getSession();
-      if (authError) {
-        console.error('Auth error:', authError);
-        throw new Error('Authentication error');
-      }
+      const supabase = getSupabaseClient();
       
-      if (!session) {
-        console.error('No session found');
-        throw new Error('No active session');
+      // Check authentication status
+      const { data: { session }, error: authError } = await supabase.auth.getSession();
+      
+      if (authError) {
+        console.error('Authentication error:', authError);
+        toast.error('Authentication error: Please try logging in again');
+        return;
       }
 
-      // Fetch bookings
+      if (!session) {
+        console.error('No active session');
+        toast.error('Please log in to view bookings');
+        return;
+      }
+
+      console.log('Session found, fetching bookings...');
+      
+      // Fetch bookings with only existing columns
       const { data, error } = await supabase
         .from('bookings')
         .select(`
@@ -68,20 +75,33 @@ export default function BookingsPage() {
           security_deposit_amount,
           payment_status,
           status,
-          total_amount,
-          paid_amount
+          paid_amount,
+          created_at
         `)
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching bookings:', error);
-        throw error;
+        console.log('Detailed error:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
+        toast.error(`Failed to fetch bookings: ${error.message}`);
+        return;
+      }
+
+      if (!data) {
+        console.log('No data returned');
+        setBookings([]);
+        return;
       }
 
       console.log('Raw bookings data:', data);
 
-      if (!data || data.length === 0) {
-        console.log('No bookings found');
+      if (data.length === 0) {
+        console.log('No bookings found in the data');
         setBookings([]);
         return;
       }
@@ -91,9 +111,23 @@ export default function BookingsPage() {
         console.log('Processing booking:', booking);
         
         // Parse vehicle details from JSONB
-        const vehicleDetails = booking.vehicle_details || {};
+        const vehicleDetails = typeof booking.vehicle_details === 'string' 
+          ? JSON.parse(booking.vehicle_details) 
+          : (booking.vehicle_details || {});
         
-        const transformed = {
+        // Calculate total amount from booking_amount and security_deposit_amount
+        const totalAmount = (booking.booking_amount || 0) + (booking.security_deposit_amount || 0);
+        const paidAmount = booking.paid_amount || 0;
+
+        // Determine payment status based on paid amount vs total amount
+        let paymentStatus: 'full' | 'partial' | 'pending' = 'pending';
+        if (paidAmount >= totalAmount) {
+          paymentStatus = 'full';
+        } else if (paidAmount > 0) {
+          paymentStatus = 'partial';
+        }
+
+        return {
           id: booking.booking_id || booking.id,
           customer: {
             name: booking.customer_name || 'N/A',
@@ -107,54 +141,25 @@ export default function BookingsPage() {
             start: booking.start_date ? new Date(booking.start_date).toLocaleDateString('en-IN') : 'N/A',
             end: booking.end_date ? new Date(booking.end_date).toLocaleDateString('en-IN') : 'N/A',
           },
-          amount: booking.total_amount || booking.booking_amount + (booking.security_deposit_amount || 0),
-          payment: booking.payment_status || 'pending',
+          amount: totalAmount,
+          payment: paymentStatus,
           status: booking.status || 'pending',
         };
-        
-        console.log('Transformed booking:', transformed);
-        return transformed;
       });
 
       console.log('Final transformed bookings:', transformedBookings);
       setBookings(transformedBookings);
     } catch (error) {
       console.error('Error in fetchBookings:', error);
-      toast.error('Failed to fetch bookings');
+      toast.error('Failed to fetch bookings: Unexpected error occurred');
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, []);
 
   useEffect(() => {
-    // Simple test query to check if there's any data
-    const testQuery = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          console.error('No session found in test query');
-          return;
-        }
-
-        console.log('Running test query...');
-        const { data, error } = await supabase
-          .from('bookings')
-          .select('*')
-          .limit(1);
-
-        console.log('Test query result:', {
-          hasData: !!data && data.length > 0,
-          firstRecord: data?.[0],
-          error
-        });
-      } catch (error) {
-        console.error('Error in test query:', error);
-      }
-    };
-
-    testQuery();
     fetchBookings();
-  }, [fetchBookings, supabase]);
+  }, [fetchBookings]);
 
   const handleRefresh = () => {
     fetchBookings();
