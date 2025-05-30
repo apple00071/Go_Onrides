@@ -26,6 +26,7 @@ interface CustomerDocuments {
 interface FormData {
   customer_name: string;
   customer_contact: string;
+  customer_email: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   aadhar_number: string;
@@ -65,6 +66,7 @@ export default function BookingModal({
   const initialFormData = useMemo<FormData>(() => ({
     customer_name: '',
     customer_contact: '',
+    customer_email: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
     aadhar_number: '',
@@ -148,13 +150,15 @@ export default function BookingModal({
           setFormData(prev => ({
             ...prev,
             customer_name: customer.name,
-            emergency_contact_name: customer.emergency_contact.name,
-            emergency_contact_phone: customer.emergency_contact.phone,
-            aadhar_number: customer.identification.aadhar_number,
-            dl_number: customer.identification.dl_number,
-            dl_expiry_date: customer.identification.dl_expiry,
-            temp_address: customer.address.temporary,
-            perm_address: customer.address.permanent,
+            customer_email: customer.email,
+            emergency_contact_name: customer.emergency_contact?.name || '',
+            emergency_contact_phone: customer.emergency_contact?.phone || '',
+            aadhar_number: customer.identification?.aadhar_number || '',
+            date_of_birth: customer.date_of_birth || '',
+            dl_number: customer.identification?.dl_number || '',
+            dl_expiry_date: customer.identification?.dl_expiry || '',
+            temp_address: customer.address?.temporary || '',
+            perm_address: customer.address?.permanent || '',
           }));
           toast.success('Found existing customer - form pre-filled');
         } else {
@@ -364,7 +368,7 @@ export default function BookingModal({
       // Validate required fields based on customer type
       if (!isExistingCustomer) {
         // Validate all fields for new customers
-        if (!formData.customer_name || !formData.customer_contact || 
+        if (!formData.customer_name || !formData.customer_contact || !formData.customer_email ||
             !formData.emergency_contact_name || !formData.emergency_contact_phone ||
             !formData.aadhar_number || !formData.date_of_birth ||
             !formData.dl_number || !formData.dl_expiry_date ||
@@ -444,6 +448,7 @@ export default function BookingModal({
             .from('customers')
             .update({
               name: formData.customer_name,
+              email: formData.customer_email,
               emergency_contact: {
                 name: formData.emergency_contact_name,
                 phone: formData.emergency_contact_phone
@@ -472,6 +477,7 @@ export default function BookingModal({
           .from('customers')
           .insert({
             name: formData.customer_name,
+            email: formData.customer_email,
             phone: formData.customer_contact,
             emergency_contact: {
               name: formData.emergency_contact_name,
@@ -509,11 +515,10 @@ export default function BookingModal({
           customer_id: customerId,
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
+          customer_email: formData.customer_email,
           emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_phone: formData.emergency_contact_phone,
-          aadhar_number: formData.aadhar_number,
           date_of_birth: formData.date_of_birth,
-          dl_number: formData.dl_number,
           dl_expiry_date: formData.dl_expiry_date,
           temp_address: formData.temp_address,
           perm_address: formData.perm_address,
@@ -528,7 +533,12 @@ export default function BookingModal({
           paid_amount: parseFloat(formData.paid_amount),
           payment_mode: formData.payment_mode,
           status: 'confirmed',
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          identification: {
+            aadhar_number: formData.aadhar_number,
+            dl_number: formData.dl_number,
+            dl_expiry: formData.dl_expiry_date
+          }
         })
         .select()
         .single();
@@ -606,6 +616,19 @@ export default function BookingModal({
                 name="customer_contact"
                 required
                 value={formData.customer_contact}
+                onChange={handleInputChange}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Customer Email *
+              </label>
+              <input
+                type="email"
+                name="customer_email"
+                required
+                value={formData.customer_email}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />

@@ -12,6 +12,7 @@ interface CustomerModalProps {
 interface CustomerFormData {
   name: string;
   phone: string;
+  email: string;
   address: {
     permanent?: string;
     temporary?: string;
@@ -26,6 +27,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
   const [formData, setFormData] = useState<CustomerFormData>({
     name: '',
     phone: '',
+    email: '',
     address: {},
   });
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
         {
           name: formData.name,
           phone: formData.phone,
+          email: formData.email,
           address: formData.address,
         },
       ]);
@@ -47,7 +50,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
       if (error) throw error;
 
       onCustomerCreated();
-      setFormData({ name: '', phone: '', address: {} });
+      setFormData({ name: '', phone: '', email: '', address: {} });
     } catch (error) {
       console.error('Error creating customer:', error);
       toast.error('Failed to create customer');
@@ -115,6 +118,24 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                       value={formData.phone}
                       onChange={(e) =>
                         setFormData((prev) => ({ ...prev, phone: e.target.value }))
+                      }
+                      className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
+                    />
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="email"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      Email
+                    </label>
+                    <input
+                      type="email"
+                      id="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData((prev) => ({ ...prev, email: e.target.value }))
                       }
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
                     />

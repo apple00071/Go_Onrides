@@ -154,31 +154,24 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Mobile sidebar backdrop */}
-      {isSidebarOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-gray-600 bg-opacity-75 transition-opacity lg:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
-
-      <div className="flex h-screen">
+    <div className="min-h-screen bg-gray-100">
+      <div className="flex">
         {/* Sidebar */}
-        <div
-          className={`
-            fixed inset-y-0 left-0 z-50 w-64 transform bg-white transition-transform duration-300 ease-in-out
-            ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
-            lg:translate-x-0 lg:static lg:inset-0
-          `}
-        >
+        <div className="fixed inset-y-0 left-0 w-64 bg-white border-r">
           <Sidebar user={user} />
         </div>
 
         {/* Main content */}
-        <div className="flex flex-1 flex-col overflow-hidden">
-          <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
-          {children}
+        <div className="flex-1 ml-64">
+          {/* Header */}
+          <header className="fixed top-0 right-0 left-64 h-16 bg-white border-b z-10">
+            <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
+          </header>
+
+          {/* Main content area with proper scrolling */}
+          <main className="pt-16 min-w-[1024px] overflow-x-auto">
+            {children}
+          </main>
         </div>
       </div>
     </div>

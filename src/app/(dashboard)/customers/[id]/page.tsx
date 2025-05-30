@@ -3,25 +3,30 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, User, Phone, MapPin, Calendar } from 'lucide-react';
+import { ArrowLeft, User, Phone, MapPin, Calendar, Mail } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 
 interface CustomerDetails {
   id: string;
   name: string;
+  email: string;
   phone: string;
   address: {
     permanent?: string;
     temporary?: string;
   };
-  emergency_details: {
+  emergency_contact: {
     name?: string;
     phone?: string;
   };
-  aadhar_number: string;
-  dl_number: string;
-  dl_expiry_date: string;
+  identification: {
+    aadhar_number?: string;
+    dl_number?: string;
+    dl_expiry?: string;
+  };
+  date_of_birth?: string;
+  signature?: string;
   created_at: string;
   documents: Array<{
     id: string;
@@ -67,12 +72,13 @@ export default function CustomerDetailsPage() {
           .select(`
             id,
             name,
+            email,
             phone,
             address,
-            emergency_details,
-            aadhar_number,
-            dl_number,
-            dl_expiry_date,
+            emergency_contact,
+            identification,
+            date_of_birth,
+            signature,
             created_at,
             documents
           `)
@@ -218,9 +224,23 @@ export default function CustomerDetailsPage() {
                   </div>
                 </div>
                 <div className="flex items-start">
+                  <Mail className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-gray-900">{customer.email || 'Email not provided'}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
                   <Phone className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
                   <div>
                     <p className="font-medium text-gray-900">{customer.phone}</p>
+                  </div>
+                </div>
+                <div className="flex items-start">
+                  <Calendar className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
+                  <div>
+                    <p className="font-medium text-gray-900">
+                      {customer.date_of_birth ? formatDate(customer.date_of_birth) : 'DOB not provided'}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-start">
@@ -252,11 +272,11 @@ export default function CustomerDetailsPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Name</p>
-                  <p className="mt-1 text-gray-900">{customer.emergency_details?.name || 'Not provided'}</p>
+                  <p className="mt-1 text-gray-900">{customer.emergency_contact?.name || 'Not provided'}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Phone</p>
-                  <p className="mt-1 text-gray-900">{customer.emergency_details?.phone || 'Not provided'}</p>
+                  <p className="mt-1 text-gray-900">{customer.emergency_contact?.phone || 'Not provided'}</p>
                 </div>
               </div>
             </div>
@@ -267,14 +287,14 @@ export default function CustomerDetailsPage() {
               <div className="space-y-4">
                 <div>
                   <p className="text-sm font-medium text-gray-500">Aadhar Number</p>
-                  <p className="mt-1 text-gray-900">{customer.aadhar_number || 'Not provided'}</p>
+                  <p className="mt-1 text-gray-900">{customer.identification.aadhar_number || 'Not provided'}</p>
                 </div>
                 <div>
                   <p className="text-sm font-medium text-gray-500">Driving License</p>
-                  <p className="mt-1 text-gray-900">{customer.dl_number || 'Not provided'}</p>
-                  {customer.dl_expiry_date && (
+                  <p className="mt-1 text-gray-900">{customer.identification.dl_number || 'Not provided'}</p>
+                  {customer.identification.dl_expiry && (
                     <p className="mt-1 text-sm text-gray-500">
-                      Expires on {formatDate(customer.dl_expiry_date)}
+                      Expires on {formatDate(customer.identification.dl_expiry)}
                     </p>
                   )}
                 </div>
@@ -308,6 +328,20 @@ export default function CustomerDetailsPage() {
                 )}
               </div>
             </div>
+
+            {/* Signature Card */}
+            {customer.signature && (
+              <div className="bg-white rounded-lg shadow p-6 space-y-4">
+                <h2 className="text-xl font-semibold text-gray-900">Signature</h2>
+                <div className="border rounded-lg overflow-hidden">
+                  <img
+                    src={customer.signature}
+                    alt="Customer Signature"
+                    className="w-full object-contain max-h-48"
+                  />
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Right Column */}

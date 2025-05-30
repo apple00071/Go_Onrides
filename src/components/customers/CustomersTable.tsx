@@ -74,9 +74,9 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers }) => {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                  <span className="text-sm font-medium text-gray-900">
-                    {customer.phone}
-                  </span>
+                    <span className="text-sm font-medium text-gray-900">
+                      {customer.phone}
+                    </span>
                 </td>
                 <td className="px-6 py-4">
                   <div className="space-y-1">

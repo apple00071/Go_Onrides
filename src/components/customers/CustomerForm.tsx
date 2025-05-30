@@ -14,6 +14,11 @@ interface Customer {
     temporary: string;
     permanent: string;
   }
+  identification: {
+    aadhar_number: string;
+    dl_number: string;
+    dl_expiry: string;
+  }
   created_at: string
 }
 
@@ -33,6 +38,11 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
     address: customer?.address || {
       temporary: '',
       permanent: ''
+    },
+    identification: customer?.identification || {
+      aadhar_number: '',
+      dl_number: '',
+      dl_expiry: ''
     }
   })
 
@@ -76,6 +86,14 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
         address: {
           ...prev.address,
           [name === 'temporary_address' ? 'temporary' : 'permanent']: value
+        }
+      }))
+    } else if (name === 'aadhar_number' || name === 'dl_number' || name === 'dl_expiry') {
+      setFormData(prev => ({
+        ...prev,
+        identification: {
+          ...prev.identification,
+          [name]: value
         }
       }))
     } else {
@@ -133,6 +151,51 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
                 id="phone"
                 name="phone"
                 value={formData.phone}
+                onChange={handleChange}
+                required
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="aadhar_number" className="block text-sm font-medium text-gray-700">
+                Aadhar Number
+              </label>
+              <input
+                type="text"
+                id="aadhar_number"
+                name="aadhar_number"
+                value={formData.identification.aadhar_number}
+                onChange={handleChange}
+                required
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="dl_number" className="block text-sm font-medium text-gray-700">
+                Driving License Number
+              </label>
+              <input
+                type="text"
+                id="dl_number"
+                name="dl_number"
+                value={formData.identification.dl_number}
+                onChange={handleChange}
+                required
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="dl_expiry" className="block text-sm font-medium text-gray-700">
+                DL Expiry Date
+              </label>
+              <input
+                type="date"
+                id="dl_expiry"
+                name="dl_expiry"
+                value={formData.identification.dl_expiry}
                 onChange={handleChange}
                 required
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"

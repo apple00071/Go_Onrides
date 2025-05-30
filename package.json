@@ -20,6 +20,7 @@
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/ssr": "^0.1.0",
     "@supabase/supabase-js": "^2.49.8",
+    "@types/react-signature-canvas": "^1.0.7",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
     "date-fns": "^3.3.1",
@@ -31,6 +32,7 @@
     "react-day-picker": "^8.10.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.4.1",
+    "react-signature-canvas": "^1.1.0-alpha.2",
     "rimraf": "^5.0.5",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7"

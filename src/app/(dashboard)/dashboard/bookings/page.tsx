@@ -1,263 +1,134 @@
 'use client';
 
 import React from 'react';
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import BookingsTable from '@/components/bookings/BookingsTable';
-import BookingsControls from '@/components/bookings/BookingsControls';
-import BookingModal from '@/components/bookings/BookingModal';
-import { Search, Filter, Plus, RefreshCw } from 'lucide-react';
+import { Search, Filter, Plus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 interface Booking {
   id: string;
-  customer: {
-    name: string;
-    phone: string;
-  };
-  vehicle: {
+  booking_id: string;
+  customer_name: string;
+  customer_contact: string;
+  vehicle_details: {
     model: string;
-    number: string;
+    registration: string;
   };
-  duration: {
-    start: string;
-    end: string;
-  };
-  amount: number;
-  payment: 'full' | 'partial' | 'pending';
-  status: 'confirmed' | 'pending' | 'cancelled';
+  start_date: string;
+  end_date: string;
+  booking_amount: number;
+  security_deposit_amount: number;
+  payment_status: 'full' | 'partial' | 'pending';
+  status: 'confirmed' | 'pending' | 'cancelled' | 'in_use' | 'completed';
+  created_at: string;
 }
 
 export default function BookingsPage() {
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const router = useRouter();
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const supabase = getSupabaseClient();
-
-  const fetchBookings = useCallback(async () => {
-    try {
-      setLoading(true);
-      console.log('Fetching bookings...');
-      
-      const supabase = getSupabaseClient();
-      
-      // Check authentication status
-      const { data: { session }, error: authError } = await supabase.auth.getSession();
-      
-      if (authError) {
-        console.error('Authentication error:', authError);
-        toast.error('Authentication error: Please try logging in again');
-        return;
-      }
-
-      if (!session) {
-        console.error('No active session');
-        toast.error('Please log in to view bookings');
-        return;
-      }
-
-      console.log('Session found, fetching bookings...');
-      
-      // Fetch bookings with only existing columns
-      const { data, error } = await supabase
-        .from('bookings')
-        .select(`
-          id,
-          booking_id,
-          customer_name,
-          customer_contact,
-          vehicle_details,
-          start_date,
-          end_date,
-          booking_amount,
-          security_deposit_amount,
-          payment_status,
-          status,
-          paid_amount,
-          created_at
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error fetching bookings:', error);
-        console.log('Detailed error:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        toast.error(`Failed to fetch bookings: ${error.message}`);
-        return;
-      }
-
-      if (!data) {
-        console.log('No data returned');
-        setBookings([]);
-        return;
-      }
-
-      console.log('Raw bookings data:', data);
-
-      if (data.length === 0) {
-        console.log('No bookings found in the data');
-        setBookings([]);
-        return;
-      }
-
-      // Transform the data to match our Booking interface
-      const transformedBookings: Booking[] = data.map((booking: any) => {
-        console.log('Processing booking:', booking);
-        
-        // Parse vehicle details from JSONB
-        const vehicleDetails = typeof booking.vehicle_details === 'string' 
-          ? JSON.parse(booking.vehicle_details) 
-          : (booking.vehicle_details || {});
-        
-        // Calculate total amount from booking_amount and security_deposit_amount
-        const totalAmount = (booking.booking_amount || 0) + (booking.security_deposit_amount || 0);
-        const paidAmount = booking.paid_amount || 0;
-
-        // Determine payment status based on paid amount vs total amount
-        let paymentStatus: 'full' | 'partial' | 'pending' = 'pending';
-        if (paidAmount >= totalAmount) {
-          paymentStatus = 'full';
-        } else if (paidAmount > 0) {
-          paymentStatus = 'partial';
-        }
-
-        return {
-          id: booking.booking_id || booking.id,
-          customer: {
-            name: booking.customer_name || 'N/A',
-            phone: booking.customer_contact || 'N/A',
-          },
-          vehicle: {
-            model: vehicleDetails.model || 'N/A',
-            number: vehicleDetails.registration || 'N/A',
-          },
-          duration: {
-            start: booking.start_date ? new Date(booking.start_date).toLocaleDateString('en-IN') : 'N/A',
-            end: booking.end_date ? new Date(booking.end_date).toLocaleDateString('en-IN') : 'N/A',
-          },
-          amount: totalAmount,
-          payment: paymentStatus,
-          status: booking.status || 'pending',
-        };
-      });
-
-      console.log('Final transformed bookings:', transformedBookings);
-      setBookings(transformedBookings);
-    } catch (error) {
-      console.error('Error in fetchBookings:', error);
-      toast.error('Failed to fetch bookings: Unexpected error occurred');
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('all');
 
   useEffect(() => {
     fetchBookings();
-  }, [fetchBookings]);
+  }, []);
 
-  const handleRefresh = () => {
-    fetchBookings();
+  const fetchBookings = async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setBookings(data || []);
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+      toast.error('Failed to fetch bookings');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSearch = (query: string) => {
-    setSearchQuery(query);
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
   };
 
-  const handleStatusFilter = (status: string) => {
-    setStatusFilter(status);
+  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setFilterStatus(e.target.value);
   };
 
-  const handleNewBooking = () => {
-    setIsModalOpen(true);
-  };
-
-  // Filter bookings based on search query and status
   const filteredBookings = bookings.filter((booking) => {
-    console.log('Filtering booking:', booking);
+    const matchesSearch = booking.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         booking.customer_contact?.includes(searchTerm) ||
+                         booking.booking_id?.toLowerCase().includes(searchTerm.toLowerCase());
     
-    const matchesSearch =
-      searchQuery === '' ||
-      booking.customer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      booking.customer.phone.includes(searchQuery) ||
-      booking.vehicle.number.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      booking.id.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = filterStatus === 'all' || booking.status === filterStatus;
 
-    const matchesStatus = statusFilter === 'all' || booking.status === statusFilter;
-
-    console.log('Search match:', matchesSearch, 'Status match:', matchesStatus);
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesFilter;
   });
 
-  console.log('Filtered bookings:', filteredBookings);
-
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-gray-900">Bookings</h1>
-        <p className="mt-1 text-sm text-gray-500">
-          Manage all vehicle bookings and their status
-        </p>
+    <div className="p-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <h1 className="text-2xl font-semibold text-gray-900">Bookings</h1>
+        <button
+          onClick={() => router.push('/dashboard/bookings/new')}
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          New Booking
+        </button>
       </div>
 
-      <BookingsControls
-        onSearch={handleSearch}
-        onStatusFilter={handleStatusFilter}
-        onRefresh={handleRefresh}
-        onNewBooking={handleNewBooking}
-      />
-
-      {/* Content */}
-      <div className="mt-6">
-        {loading ? (
-          <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-gray-200 bg-white">
-            <div className="flex flex-col items-center space-y-4">
-              <div className="h-8 w-8 animate-spin rounded-full border-4 border-blue-600 border-t-transparent" />
-              <p className="text-sm text-gray-500">Loading bookings...</p>
-            </div>
-          </div>
-        ) : filteredBookings.length === 0 ? (
-          <div className="flex min-h-[400px] flex-col items-center justify-center rounded-lg border border-gray-200 bg-white px-4 py-12 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gray-100">
-              <Search className="h-6 w-6 text-gray-400" />
-            </div>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">No bookings found</h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {searchQuery || statusFilter !== 'all'
-                ? "Try adjusting your search or filter to find what you're looking for."
-                : 'Get started by creating a new booking.'}
-            </p>
-            {!searchQuery && statusFilter === 'all' && (
-              <div className="mt-6">
-                <button
-                  onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Booking
-                </button>
+      <div className="bg-white rounded-lg shadow">
+        <div className="p-4 border-b border-gray-200">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Search className="h-5 w-5 text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  placeholder="Search bookings..."
+                  value={searchTerm}
+                  onChange={handleSearch}
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
               </div>
-            )}
+            </div>
+            <div className="sm:w-48">
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <Filter className="h-5 w-5 text-gray-400" />
+                </div>
+                <select
+                  value={filterStatus}
+                  onChange={handleFilterChange}
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  <option value="all">All Status</option>
+                  <option value="pending">Pending</option>
+                  <option value="confirmed">Confirmed</option>
+                  <option value="in_use">In Use</option>
+                  <option value="completed">Completed</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            </div>
           </div>
-        ) : (
-          <BookingsTable bookings={filteredBookings} />
-        )}
-      </div>
+        </div>
 
-      <BookingModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onBookingCreated={() => {
-          setIsModalOpen(false);
-          fetchBookings();
-          toast.success('Booking created successfully');
-        }}
-      />
+        <BookingsTable 
+          bookings={filteredBookings}
+        />
+      </div>
     </div>
   );
 } 

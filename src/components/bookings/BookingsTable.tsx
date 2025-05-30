@@ -4,21 +4,20 @@ import { useRouter } from 'next/navigation';
 
 interface Booking {
   id: string;
-  customer: {
-    name: string;
-    phone: string;
-  };
-  vehicle: {
+  booking_id: string;
+  customer_name: string;
+  customer_contact: string;
+  vehicle_details: {
     model: string;
-    number: string;
+    registration: string;
   };
-  duration: {
-    start: string;
-    end: string;
-  };
-  amount: number;
-  payment: 'full' | 'partial' | 'pending';
+  start_date: string;
+  end_date: string;
+  booking_amount: number;
+  security_deposit_amount: number;
+  payment_status: 'full' | 'partial' | 'pending';
   status: 'confirmed' | 'pending' | 'cancelled' | 'in_use' | 'completed';
+  created_at: string;
 }
 
 interface BookingsTableProps {
@@ -108,56 +107,56 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
               <tr 
                 key={booking.id} 
                 className="hover:bg-gray-50 cursor-pointer transition-colors"
-                onClick={() => handleRowClick(booking.id)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRowClick(booking.id)}
+                onClick={() => handleRowClick(booking.booking_id || booking.id)}
+                onKeyDown={(e) => e.key === 'Enter' && handleRowClick(booking.booking_id || booking.id)}
                 tabIndex={0}
                 role="button"
               >
                 <td className="whitespace-nowrap px-6 py-4">
                   <span className="text-sm font-medium text-gray-900">
-                    {booking.id}
+                    {booking.booking_id || booking.id}
                   </span>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-gray-900">
-                      {booking.customer.name}
+                      {booking.customer_name}
                     </span>
                     <span className="text-sm text-gray-500">
-                      {booking.customer.phone}
+                      {booking.customer_contact}
                     </span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-gray-900">
-                      {booking.vehicle.model}
+                      {booking.vehicle_details.model}
                     </span>
                     <span className="text-sm text-gray-500">
-                      {booking.vehicle.number}
+                      {booking.vehicle_details.registration}
                     </span>
                   </div>
                 </td>
                 <td className="px-6 py-4">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-gray-900">
-                      {booking.duration.start}
+                      {new Date(booking.start_date).toLocaleDateString('en-IN')}
                     </span>
                     <span className="text-sm text-gray-500">
-                      to {booking.duration.end}
+                      to {new Date(booking.end_date).toLocaleDateString('en-IN')}
                     </span>
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
                   <span className="text-sm font-medium text-gray-900">
-                    ₹{formatCurrency(booking.amount)}
+                    ₹{formatCurrency(booking.booking_amount + booking.security_deposit_amount)}
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
                   <span
-                    className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(booking.payment)}`}
+                    className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(booking.payment_status)}`}
                   >
-                    {booking.payment}
+                    {booking.payment_status}
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
