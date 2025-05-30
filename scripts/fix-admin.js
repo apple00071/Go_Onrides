@@ -1,14 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = 'https://dohiiawnnantusgsddzw.supabase.co';
-const supabaseServiceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRvaGlpYXdubmFudHVzZ3NkZHp3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0ODIzNDYyNCwiZXhwIjoyMDYzODEwNjI0fQ.Ow1KJgGjxpXBkJJxFJPGkwFxP_6Hs0YlAXgJNXXNYGE';
-const adminEmail = 'applegraphicshyd@gmail.com';
-const adminId = '4cc2784a-a397-47de-8197-1544ac2f471a'; // The ID from your error message
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY;
 
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+if (!supabaseServiceKey) {
+  console.error('Error: SUPABASE_SERVICE_KEY environment variable is required');
+  process.exit(1);
+}
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
+
+const adminEmail = 'applegraphicshyd@gmail.com';
+const adminId = '4cc2784a-a397-47de-8197-1544ac2f471a';
 
 async function fixAdminProfile() {
   try {
+    console.log('Starting admin profile fix...');
+    
     const adminPermissions = {
       createBooking: true,
       viewBookings: true,
@@ -18,41 +31,72 @@ async function fixAdminProfile() {
       accessReports: true
     };
 
-    // Try to insert the profile
-    const { error: insertError } = await supabase
+    // First check if profile exists
+    console.log('Checking if profile exists...');
+    const { data: existingProfile, error: checkError } = await supabase
       .from('profiles')
-      .insert([
-        {
-          id: adminId,
-          email: adminEmail,
-          role: 'admin',
-          permissions: adminPermissions
-        }
-      ]);
+      .select('*')
+      .eq('id', adminId)
+      .single();
 
-    if (insertError) {
-      console.log('Insert failed, trying update:', insertError.message);
+    if (checkError) {
+      console.log('Error checking profile:', checkError.message);
       
-      // If insert fails, try update
+      // Try to insert new profile
+      console.log('Attempting to insert new profile...');
+      const { error: insertError } = await supabase
+        .from('profiles')
+        .insert([
+          {
+            id: adminId,
+            email: adminEmail,
+            role: 'admin',
+            permissions: adminPermissions
+          }
+        ]);
+
+      if (insertError) {
+        console.log('Insert failed:', insertError.message);
+        
+        // If insert fails, try update
+        console.log('Attempting to update existing profile...');
+        const { error: updateError } = await supabase
+          .from('profiles')
+          .update({
+            email: adminEmail,
+            role: 'admin',
+            permissions: adminPermissions
+          })
+          .eq('id', adminId);
+
+        if (updateError) {
+          throw new Error(`Failed to update profile: ${updateError.message}`);
+        }
+
+        console.log('Successfully updated admin profile');
+      } else {
+        console.log('Successfully created new admin profile');
+      }
+    } else {
+      console.log('Existing profile found, updating...');
       const { error: updateError } = await supabase
         .from('profiles')
         .update({
+          email: adminEmail,
           role: 'admin',
           permissions: adminPermissions
         })
         .eq('id', adminId);
 
       if (updateError) {
-        console.error('Error updating profile:', updateError);
-        return;
+        throw new Error(`Failed to update profile: ${updateError.message}`);
       }
 
-      console.log('Updated existing admin profile');
-    } else {
-      console.log('Created new admin profile');
+      console.log('Successfully updated admin profile');
     }
 
     // Verify the profile
+    console.log('Verifying profile...');
     const { data: profile, error: verifyError } = await supabase
       .from('profiles')
       .select('*')
@@ -60,14 +104,14 @@ async function fixAdminProfile() {
       .single();
 
     if (verifyError) {
-      console.error('Error verifying profile:', verifyError);
-      return;
+      throw new Error(`Failed to verify profile: ${verifyError.message}`);
     }
 
-    console.log('Admin profile verified:', profile);
-    console.log('Admin profile fixed successfully!');
+    console.log('Profile verification successful:', profile);
+    console.log('Admin profile fix completed successfully!');
   } catch (error) {
     console.error('Error fixing admin profile:', error);
+    process.exit(1);
   }
 }
 

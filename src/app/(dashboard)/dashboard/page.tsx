@@ -42,13 +42,52 @@ export default function DashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
 
-      // Get total income from completed payments
-      const { data: payments } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('payment_status', 'completed');
+      // Get total income from completed bookings and their payments
+      const { data: completedBookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select(`
+          id,
+          total_amount,
+          status,
+          payment_status,
+          created_at,
+          payments (
+            id,
+            amount,
+            payment_status
+          )
+        `)
+        .eq('status', 'completed')
+        .eq('payment_status', 'full');
 
-      const totalIncome = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+      if (bookingsError) {
+        console.error('Error fetching completed bookings:', bookingsError);
+        throw bookingsError;
+      }
+
+      console.log('Raw completed bookings with payments:', completedBookings);
+
+      // Calculate total income from booking amounts
+      let totalIncomeFromBookings = 0;
+      completedBookings?.forEach(booking => {
+        const amount = typeof booking.total_amount === 'string' 
+          ? parseFloat(booking.total_amount) 
+          : booking.total_amount;
+        
+        if (!isNaN(amount)) {
+          console.log(`Booking ${booking.id} amount: ${amount}`);
+          totalIncomeFromBookings += amount;
+        }
+
+        // Also log payments for verification
+        if (booking.payments?.length > 0) {
+          console.log(`Payments for booking ${booking.id}:`, booking.payments);
+        }
+      });
+
+      console.log('Total income from bookings:', totalIncomeFromBookings);
+      
+      const totalIncome = totalIncomeFromBookings;
 
       // Get pending payments total
       const { data: pendingBookings } = await supabase

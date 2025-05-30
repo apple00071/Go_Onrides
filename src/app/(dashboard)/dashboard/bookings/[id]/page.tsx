@@ -8,6 +8,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import CompleteBookingModal from '@/components/bookings/CompleteBookingModal';
+import VehicleDamageHistory from '@/components/bookings/VehicleDamageHistory';
 
 interface BookingDetails {
   id: string;
@@ -180,8 +181,41 @@ export default function BookingDetailsPage() {
     }
   };
 
-  const handleCompleteSuccess = () => {
-    router.refresh(); // Refresh the page to show updated data
+  const handleCompleteSuccess = async () => {
+    // Refresh the data
+    setLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      const bookingIdentifier = Array.isArray(params.id) ? params.id[0] : params.id;
+      
+      // Fetch updated booking data
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq('id', bookingIdentifier)
+        .single();
+
+      if (bookingError) throw bookingError;
+
+      // Fetch updated payment data
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('booking_id', bookingIdentifier)
+        .order('created_at', { ascending: false });
+
+      if (paymentError) throw paymentError;
+
+      // Update state with new data
+      setBooking(bookingData);
+      setPayments(paymentData || []);
+      toast.success('Booking completed and data refreshed');
+    } catch (error) {
+      console.error('Error refreshing data:', error);
+      toast.error('Failed to refresh booking data');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleImageClick = (url: string, label: string) => {
@@ -444,6 +478,11 @@ export default function BookingDetailsPage() {
               )}
             </div>
           </div>
+        </div>
+
+        {/* Add Vehicle Damage History section */}
+        <div className="mt-6">
+          <VehicleDamageHistory bookingId={Array.isArray(params.id) ? params.id[0] : params.id} />
         </div>
       </div>
 

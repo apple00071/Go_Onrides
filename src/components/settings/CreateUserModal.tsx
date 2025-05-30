@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import type { Permission } from '@/types/database';
+import { toast } from 'react-hot-toast';
 
 interface CreateUserModalProps {
   isOpen: boolean;
@@ -69,39 +70,41 @@ export default function CreateUserModal({
     setError(null);
 
     try {
-      const supabase = getSupabaseClient();
-
-      // Create the user in Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: {
-            role: formData.role
-          }
-        }
+      const response = await fetch('/api/users/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       });
 
-      if (authError) throw authError;
+      const data = await response.json();
 
-      // Update the user's profile with permissions
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            role: formData.role,
-            permissions: formData.permissions
-          })
-          .eq('id', authData.user.id);
-
-        if (profileError) throw profileError;
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create user');
       }
 
+      toast.success('User created successfully');
       onUserCreated();
       onClose();
     } catch (error) {
       console.error('Error creating user:', error);
-      setError(error instanceof Error ? error.message : 'Error creating user. Please try again.');
+      let errorMessage = 'Failed to create user';
+      
+      if (error instanceof Error) {
+        if (error.message === 'Not authenticated') {
+          errorMessage = 'Please log in again to create users';
+        } else if (error.message === 'Not authorized') {
+          errorMessage = 'Only admins can create new users';
+        } else if (error.message.includes('duplicate key')) {
+          errorMessage = 'A user with this email already exists';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

@@ -81,8 +81,41 @@ export default function CompleteBookingModal({
     try {
       const supabase = getSupabaseClient();
 
-      // Validate remaining amount payment if any
+      // Start a transaction by getting the current booking
+      const { data: currentBooking, error: fetchError } = await supabase
+        .from('bookings')
+        .select('paid_amount, total_amount, status')
+        .eq('id', bookingId)
+        .single();
+
+      if (fetchError) {
+        throw new Error(`Failed to fetch current booking: ${fetchError.message}`);
+      }
+
+      // Calculate the total amount including any damage charges
+      const damageCharges = parseFloat(formData.damageCharges) || 0;
+      const finalTotalAmount = totalAmount + damageCharges;
       const remainingAmount = parseFloat(formData.remainingAmount);
+
+      // First, update the booking to mark it as completed and update amounts
+      const { error: bookingUpdateError } = await supabase
+        .from('bookings')
+        .update({
+          status: 'completed',
+          vehicle_remarks: formData.vehicleRemarks,
+          completed_at: new Date().toISOString(),
+          refund_amount: parseFloat(formData.refundAmount),
+          total_amount: finalTotalAmount, // Update total amount to include damage charges
+          paid_amount: finalTotalAmount, // Set paid amount to match total amount
+          payment_status: 'full' // Force payment status to full
+        })
+        .eq('id', bookingId);
+
+      if (bookingUpdateError) {
+        throw new Error(`Failed to update booking: ${bookingUpdateError.message}`);
+      }
+
+      // Record the final payment if there was a remaining amount
       if (remainingAmount > 0) {
         const { error: paymentError } = await supabase
           .from('payments')
@@ -100,13 +133,13 @@ export default function CompleteBookingModal({
       }
 
       // Record damage details if any
-      if (formData.damageDescription || parseFloat(formData.damageCharges) > 0) {
+      if (formData.damageDescription || damageCharges > 0) {
         const { error: damageError } = await supabase
           .from('vehicle_damages')
           .insert({
             booking_id: bookingId,
             description: formData.damageDescription,
-            charges: parseFloat(formData.damageCharges),
+            charges: damageCharges,
             created_at: new Date().toISOString()
           });
 
@@ -115,19 +148,17 @@ export default function CompleteBookingModal({
         }
       }
 
-      // Update booking status and add remarks
-      const { error: bookingError } = await supabase
+      // Double-check the payment status is set to full
+      const { error: finalUpdateError } = await supabase
         .from('bookings')
         .update({
-          status: 'completed',
-          vehicle_remarks: formData.vehicleRemarks,
-          completed_at: new Date().toISOString(),
-          refund_amount: parseFloat(formData.refundAmount)
+          payment_status: 'full',
+          paid_amount: finalTotalAmount
         })
         .eq('id', bookingId);
 
-      if (bookingError) {
-        throw new Error(`Failed to update booking: ${bookingError.message}`);
+      if (finalUpdateError) {
+        throw new Error(`Failed to finalize payment status: ${finalUpdateError.message}`);
       }
 
       toast.success('Booking completed successfully');

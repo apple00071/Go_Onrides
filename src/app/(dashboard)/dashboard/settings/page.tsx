@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Trash2 } from 'lucide-react';
 import type { UserProfile } from '@/types/database';
 import CreateUserModal from '@/components/settings/CreateUserModal';
+import { toast } from 'react-hot-toast';
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -13,6 +14,27 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const fetchUsers = async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data: usersData, error: usersError } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (usersError) {
+        throw usersError;
+      }
+
+      setUsers(usersData || []);
+    } catch (error) {
+      console.error('Error:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -54,23 +76,7 @@ export default function SettingsPage() {
         // Only proceed if component is still mounted
         if (!mounted) return;
 
-        // If we get here, user is authenticated and is an admin
-        // Now fetch all users
-        console.log('Fetching users...');
-        const { data: usersData, error: usersError } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (usersError) {
-          throw usersError;
-        }
-
-        // Only update state if component is still mounted
-        if (mounted) {
-          console.log('Users fetched:', usersData);
-          setUsers(usersData || []);
-        }
+        await fetchUsers();
       } catch (error) {
         console.error('Error:', error);
         if (mounted) {
@@ -91,6 +97,31 @@ export default function SettingsPage() {
     };
   }, [router]);
 
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`Are you sure you want to remove user ${userEmail}? This action cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to remove user');
+      }
+
+      // Update local state
+      setUsers(users.filter(user => user.id !== userId));
+      toast.success('User removed successfully');
+    } catch (error) {
+      console.error('Error removing user:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to remove user');
+    }
+  };
+
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -110,11 +141,11 @@ export default function SettingsPage() {
 
   if (error) {
     return (
-      <div className="min-h-[400px] flex items-center justify-center">
+      <div className="min-h-[400px] flex items-center justify-center p-4">
         <div className="bg-red-50 p-6 rounded-lg max-w-md w-full">
           <h3 className="text-lg font-medium text-red-800">Error loading users</h3>
           <div className="mt-2 text-sm text-red-700">{error}</div>
-          <div className="mt-4 flex gap-4">
+          <div className="mt-4 flex flex-wrap gap-4">
             <button
               onClick={() => {
                 setError(null);
@@ -138,75 +169,89 @@ export default function SettingsPage() {
   }
 
   return (
-    <div>
-      <div className="sm:flex sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900">User Management</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            Manage users, roles, and permissions
-          </p>
-        </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="mt-4 sm:mt-0 inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <UserPlus className="h-4 w-4 mr-2" />
-          Create User
-        </button>
-      </div>
-
-      <div className="mt-6 bg-white shadow rounded-lg overflow-hidden">
-        <div className="bg-gray-50">
-          <div className="grid grid-cols-12 gap-4 py-3 px-6 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-            <div className="col-span-3">USER</div>
-            <div className="col-span-2">ROLE</div>
-            <div className="col-span-5">PERMISSIONS</div>
-            <div className="col-span-2">JOINED</div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="w-full max-w-[100vw] overflow-x-hidden">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-semibold text-gray-900">User Management</h1>
+            <p className="mt-2 text-sm text-gray-700">
+              Manage users, roles, and permissions
+            </p>
           </div>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 whitespace-nowrap"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Create User
+          </button>
         </div>
 
-        <div className="divide-y divide-gray-200 bg-white">
-          {users.length === 0 ? (
-            <div className="px-6 py-8 text-center text-sm text-gray-500">
-              <p>No users found</p>
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="mt-2 text-blue-600 hover:text-blue-500"
-              >
-                Create your first user
-              </button>
-            </div>
-          ) : (
-            users.map((user) => (
-              <div key={user.id} className="grid grid-cols-12 gap-4 px-6 py-4 text-sm">
-                <div className="col-span-3">
-                  <div className="text-gray-900">{user.email}</div>
-                </div>
-                <div className="col-span-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize bg-gray-100 text-gray-800">
-                    {user.role}
-                  </span>
-                </div>
-                <div className="col-span-5">
-                  <div className="flex flex-wrap gap-1">
-                    {Object.entries(user.permissions || {}).map(([key, value]) => (
-                      value && (
-                        <span
-                          key={key}
-                          className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800"
-                        >
-                          {key.replace(/([A-Z])/g, ' $1').trim()}
-                        </span>
-                      )
-                    ))}
-                  </div>
-                </div>
-                <div className="col-span-2 text-gray-500">
-                  {formatDate(user.created_at)}
-                </div>
+        <div className="mt-6 bg-white shadow rounded-lg overflow-hidden">
+          <div className="min-w-full overflow-x-auto">
+            <div className="bg-gray-50">
+              <div className="grid grid-cols-12 gap-2 py-3 px-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <div className="col-span-12 sm:col-span-3 md:col-span-3">USER</div>
+                <div className="col-span-6 sm:col-span-2 md:col-span-2">ROLE</div>
+                <div className="hidden sm:block sm:col-span-5 md:col-span-5">PERMISSIONS</div>
+                <div className="col-span-5 sm:col-span-1 md:col-span-1">JOINED</div>
+                <div className="col-span-1">ACTIONS</div>
               </div>
-            ))
-          )}
+            </div>
+
+            <div className="divide-y divide-gray-200">
+              {users.length === 0 ? (
+                <div className="px-4 py-8 text-center text-sm text-gray-500">
+                  <p>No users found</p>
+                  <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="mt-2 text-blue-600 hover:text-blue-500"
+                  >
+                    Create your first user
+                  </button>
+                </div>
+              ) : (
+                users.map((user) => (
+                  <div key={user.id} className="grid grid-cols-12 gap-2 px-4 py-3 text-sm items-center">
+                    <div className="col-span-12 sm:col-span-3 md:col-span-3 truncate">
+                      <div className="text-gray-900">{user.email}</div>
+                    </div>
+                    <div className="col-span-6 sm:col-span-2 md:col-span-2">
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize bg-gray-100 text-gray-800">
+                        {user.role}
+                      </span>
+                    </div>
+                    <div className="hidden sm:block sm:col-span-5 md:col-span-5">
+                      <div className="flex flex-wrap gap-1">
+                        {Object.entries(user.permissions || {}).map(([key, value]) => (
+                          value && (
+                            <span
+                              key={key}
+                              className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 whitespace-nowrap"
+                            >
+                              {key.replace(/([A-Z])/g, ' $1').trim()}
+                            </span>
+                          )
+                        ))}
+                      </div>
+                    </div>
+                    <div className="col-span-5 sm:col-span-1 md:col-span-1 text-gray-500 whitespace-nowrap">
+                      {formatDate(user.created_at)}
+                    </div>
+                    <div className="col-span-1 flex justify-end">
+                      <button
+                        onClick={() => handleDeleteUser(user.id, user.email)}
+                        className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
+                        title="Delete user"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -214,8 +259,8 @@ export default function SettingsPage() {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onUserCreated={() => {
-          setLoading(true);
-          router.refresh();
+          setIsModalOpen(false);
+          fetchUsers();
         }}
       />
     </div>
