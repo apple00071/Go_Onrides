@@ -6,25 +6,23 @@ import { toast } from 'react-hot-toast'
 import Link from 'next/link'
 import { AlertCircle } from 'lucide-react'
 
-interface Customer {
+interface CustomerListItem {
   id: string
   name: string
   email: string
   phone: string
-  address: {
-    temporary: string;
-    permanent: string;
-  }
+  temp_address_street: string | null
+  perm_address_street: string | null
   created_at: string
 }
 
 interface CustomersListProps {
-  initialCustomers: Customer[]
+  initialCustomers: CustomerListItem[]
   error?: string
 }
 
 const CustomersList = ({ initialCustomers, error: initialError }: CustomersListProps) => {
-  const [customers, setCustomers] = useState<Customer[]>(initialCustomers)
+  const [customers, setCustomers] = useState<CustomerListItem[]>(initialCustomers)
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState(initialError)
   const supabase = createClientComponentClient()
@@ -141,8 +139,8 @@ const CustomersList = ({ initialCustomers, error: initialError }: CustomersListP
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm text-gray-900">
-                      <div>Temp: {typeof customer.address === 'object' ? customer.address.temporary : 'N/A'}</div>
-                      <div className="text-xs text-gray-500">Perm: {typeof customer.address === 'object' ? customer.address.permanent : 'N/A'}</div>
+                      <div>Temp: {customer.temp_address_street || 'N/A'}</div>
+                      <div className="text-xs text-gray-500">Perm: {customer.perm_address_street || 'N/A'}</div>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">

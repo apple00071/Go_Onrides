@@ -22,6 +22,7 @@ export interface Booking {
   id: string;
   customer_name: string;
   customer_contact: string;
+  customer_email: string | null;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   aadhar_number: string | null;
@@ -78,36 +79,28 @@ export interface Customer {
   name: string;
   email: string;
   phone: string;
-  emergency_contact: {
-    name: string;
-    phone: string;
-    relationship: string;
-  };
-  dob: string;
-  identification: {
-    aadhar_number: string;
-    dl_number: string;
-    dl_expiry: string;
-  };
-  address: {
-    temporary: {
-      street: string;
-      city: string;
-      state: string;
-      pincode: string;
-    };
-    permanent: {
-      street: string;
-      city: string;
-      state: string;
-      pincode: string;
-    };
-  };
+  dob: string | null;
+  aadhar_number: string | null;
+  dl_number: string | null;
+  dl_expiry_date: string | null;
+  temp_address_street: string | null;
+  temp_address_city: string | null;
+  temp_address_state: string | null;
+  temp_address_pincode: string | null;
+  perm_address_street: string | null;
+  perm_address_city: string | null;
+  perm_address_state: string | null;
+  perm_address_pincode: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  emergency_contact_relationship: string | null;
   documents: {
-    type: string;
-    url: string;
-    uploaded_at: string;
-  }[];
+    customer_photo?: string;
+    aadhar_front?: string;
+    aadhar_back?: string;
+    dl_front?: string;
+    dl_back?: string;
+  };
   created_at: string;
   updated_at: string;
 }

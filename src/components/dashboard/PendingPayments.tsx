@@ -87,12 +87,12 @@ export default function PendingPayments() {
                     {booking.customer_name} • {booking.booking_id}
                   </div>
                   <div className="text-xs text-gray-500 mt-1">
-                    Paid: <span className="font-medium">₹{formatCurrency(booking.paid_amount)}</span> of <span className="font-medium">₹{formatCurrency(totalAmount)}</span>
+                    Paid: <span className="font-medium">{formatCurrency(booking.paid_amount)}</span> of <span className="font-medium">{formatCurrency(totalAmount)}</span>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-medium text-yellow-600">
-                    ₹{formatCurrency(remainingAmount)}
+                    {formatCurrency(remainingAmount)}
                   </div>
                   <div className="text-xs text-gray-500">
                     remaining

@@ -94,6 +94,7 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                   width={200}
                   height={150}
                   className="rounded-lg object-cover"
+                  style={{ width: 'auto', height: '150px' }}
                 />
                 <button
                   onClick={() => removeDocument(type)}

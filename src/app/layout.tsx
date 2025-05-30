@@ -24,7 +24,7 @@ export default function RootLayout({
     <html lang="en" className="h-full bg-gray-100">
       <body className={cn('h-full antialiased', inter.className)}>
         <div className="min-h-screen overflow-x-auto">
-          {children}
+        {children}
         </div>
       </body>
     </html>

@@ -32,6 +32,13 @@ export default function Sidebar({ user }: SidebarProps) {
     ] : [])
   ];
 
+  const isActive = (href: string) => {
+    if (href === '/dashboard') {
+      return pathname === href || pathname === '/dashboard/';
+    }
+    return pathname.startsWith(href + '/') || pathname === href;
+  };
+
   const handleSignOut = async () => {
     const supabase = getSupabaseClient();
     await supabase.auth.signOut();
@@ -50,14 +57,14 @@ export default function Sidebar({ user }: SidebarProps) {
       <div className="flex flex-1 flex-col gap-1 p-4">
         <nav className="flex-1 space-y-1">
           {navigation.map((item) => {
-            const isActive = pathname.startsWith(item.href);
+            const active = isActive(item.href);
             return (
               <Link
                 key={item.name}
                 href={item.href}
                 className={`
                   group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors
-                  ${isActive
+                  ${active
                     ? 'bg-primary-blue/10 text-primary-blue'
                     : 'text-secondary-text hover:bg-gray-50 hover:text-primary-text'
                   }
@@ -65,7 +72,7 @@ export default function Sidebar({ user }: SidebarProps) {
               >
                 <item.icon
                   className={`h-5 w-5 flex-shrink-0 transition-colors
-                    ${isActive ? 'text-primary-blue' : 'text-gray-400 group-hover:text-primary-text'}
+                    ${active ? 'text-primary-blue' : 'text-gray-400 group-hover:text-primary-text'}
                   `}
                   aria-hidden="true"
                 />

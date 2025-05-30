@@ -6,18 +6,19 @@ export function getISTDate(date: string | Date = new Date()) {
   return new Date(new Date(date).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
 }
 
-export function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
+export function formatDate(date: string | Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
     day: 'numeric',
-    month: 'short',
-    year: 'numeric'
-  });
+    timeZone: 'Asia/Kolkata'
+  }).format(new Date(date));
 }
 
-export function formatCurrency(amount: number) {
+export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-IN', {
-    style: 'decimal',
+    style: 'currency',
+    currency: 'INR',
     minimumFractionDigits: 0,
     maximumFractionDigits: 0
   }).format(amount);
@@ -96,10 +97,29 @@ export async function generateBookingId(supabase: SupabaseClient): Promise<strin
     return bookingId;
   } catch (error) {
     console.error('Error in generateBookingId:', error);
-    throw new Error(`Failed to generate booking ID: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
+    throw new Error(`Failed to generate booking ID: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);    
   }
 }
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+export function formatDateShort(date: string | Date): string {
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+  }).format(new Date(date));
+}
+
+export function formatNumber(number: number): string {
+  return new Intl.NumberFormat('en-US').format(number);
+}
+
+export function formatPercentage(number: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(number / 100);
 } 

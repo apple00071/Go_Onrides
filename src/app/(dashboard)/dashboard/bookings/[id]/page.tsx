@@ -7,6 +7,7 @@ import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X } from 'lucide-react
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
+import CompleteBookingModal from '@/components/bookings/CompleteBookingModal';
 
 interface BookingDetails {
   id: string;
@@ -53,6 +54,7 @@ export default function BookingDetailsPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageLabel, setSelectedImageLabel] = useState<string>('');
   const [payments, setPayments] = useState<any[]>([]);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
@@ -154,6 +156,11 @@ export default function BookingDetailsPage() {
   const handleStatusChange = async (newStatus: string) => {
     if (!booking) return;
 
+    if (newStatus === 'completed') {
+      setShowCompleteModal(true);
+      return;
+    }
+
     try {
       const supabase = getSupabaseClient();
       const { error: updateError } = await supabase
@@ -171,6 +178,10 @@ export default function BookingDetailsPage() {
       console.error('Error updating status:', error);
       toast.error('Failed to update booking status');
     }
+  };
+
+  const handleCompleteSuccess = () => {
+    router.refresh(); // Refresh the page to show updated data
   };
 
   const handleImageClick = (url: string, label: string) => {
@@ -223,251 +234,257 @@ export default function BookingDetailsPage() {
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Header - Fixed at top */}
       <div className="sticky top-0 bg-gray-50 z-10 p-6 border-b">
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => router.back()}
-          className="flex items-center text-gray-600 hover:text-gray-900"
-        >
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Back to Bookings
-        </button>
-        <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-500">
-            Created on {formatDate(booking.created_at)}
-          </span>
-          <select
-            value={booking.status}
-            onChange={(e) => handleStatusChange(e.target.value)}
-            className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[booking.status as keyof typeof statusColors]}`}
+        <div className="flex items-center justify-between">
+          <button
+            onClick={() => router.back()}
+            className="flex items-center text-gray-600 hover:text-gray-900"
           >
-            <option value="pending">Pending</option>
-            <option value="confirmed">Confirmed</option>
-            <option value="in_use">In Use</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Bookings
+          </button>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-500">
+              Created on {formatDate(booking.created_at)}
+            </span>
+            <select
+              value={booking.status}
+              onChange={(e) => handleStatusChange(e.target.value)}
+              className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[booking.status as keyof typeof statusColors]}`}
+            >
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="in_use">In Use</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
           </div>
         </div>
       </div>
 
       {/* Main Content - Scrollable */}
       <div className="flex-1 p-6 overflow-y-auto">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Booking Information */}
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900">Booking Information</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm text-gray-500">Booking ID</label>
-              <p className="font-medium">{booking.booking_id || booking.id}</p>
-            </div>
-            <div>
-              <label className="text-sm text-gray-500">Vehicle</label>
-              <p className="font-medium">{booking.vehicle_details.model}</p>
-              <p className="text-sm text-gray-500">{booking.vehicle_details.registration}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm text-gray-500">Start Date</label>
-              <div className="flex items-center">
-                <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                <p className="font-medium">{formatDate(booking.start_date)}</p>
-              </div>
-              <div className="flex items-center mt-1">
-                <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                <p className="text-sm">{booking.pickup_time}</p>
-              </div>
-            </div>
-            <div>
-              <label className="text-sm text-gray-500">End Date</label>
-              <div className="flex items-center">
-                <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                <p className="font-medium">{formatDate(booking.end_date)}</p>
-              </div>
-              <div className="flex items-center mt-1">
-                <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                <p className="text-sm">{booking.dropoff_time}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Customer Information */}
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900">Customer Information</h2>
-          <div className="space-y-3">
-            <div className="flex items-start">
-              <User className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Booking Information */}
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <h2 className="text-xl font-semibold text-gray-900">Booking Information</h2>
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="font-medium">{booking.customer_name}</p>
-                <p className="text-sm text-gray-500">{booking.customer_contact}</p>
+                <label className="text-sm text-gray-500">Booking ID</label>
+                <p className="font-medium">{booking.booking_id || booking.id}</p>
               </div>
-            </div>
-            <div className="flex items-start">
-              <Phone className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
               <div>
-                <p className="font-medium">Emergency Contact</p>
-                <p className="text-sm">{booking.emergency_contact_name}</p>
-                <p className="text-sm text-gray-500">{booking.emergency_contact_phone}</p>
+                <label className="text-sm text-gray-500">Vehicle</label>
+                <p className="font-medium">{booking.vehicle_details.model}</p>
+                <p className="text-sm text-gray-500">{booking.vehicle_details.registration}</p>
               </div>
             </div>
-            <div className="flex items-start">
-              <MapPin className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <p className="font-medium">Address</p>
-                <p className="text-sm">Temporary: {booking.temp_address}</p>
-                <p className="text-sm text-gray-500">Permanent: {booking.perm_address}</p>
+                <label className="text-sm text-gray-500">Start Date</label>
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                  <p className="font-medium">{formatDate(booking.start_date)}</p>
+                </div>
+                <div className="flex items-center mt-1">
+                  <Clock className="h-4 w-4 mr-2 text-gray-400" />
+                  <p className="text-sm">{booking.pickup_time}</p>
+                </div>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500">End Date</label>
+                <div className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-2 text-gray-400" />
+                  <p className="font-medium">{formatDate(booking.end_date)}</p>
+                </div>
+                <div className="flex items-center mt-1">
+                  <Clock className="h-4 w-4 mr-2 text-gray-400" />
+                  <p className="text-sm">{booking.dropoff_time}</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Payment Information */}
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
-          <h2 className="text-xl font-semibold text-gray-900">Payment Information</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm text-gray-500">Booking Amount</label>
-              <p className="font-medium">{formatCurrency(booking.booking_amount)}</p>
-            </div>
-            <div>
-              <label className="text-sm text-gray-500">Security Deposit</label>
-              <p className="font-medium">{formatCurrency(booking.security_deposit_amount)}</p>
-            </div>
-            <div>
-              <label className="text-sm text-gray-500">Total Amount</label>
-                <p className="font-medium">{formatCurrency(totalAmount)}</p>
-            </div>
-            <div>
-              <label className="text-sm text-gray-500">Paid Amount</label>
-              <p className="font-medium">{formatCurrency(booking.paid_amount)}</p>
-            </div>
-            <div>
-              <label className="text-sm text-gray-500">Remaining Amount</label>
-              <p className="font-medium text-blue-600">
-                  {formatCurrency(remainingAmount)}
-              </p>
-            </div>
-          </div>
-          <div className="pt-4 border-t">
-            <h3 className="text-lg font-medium text-gray-900 mb-4">Payment History</h3>
-            {payments.length > 0 ? (
-              <div className="space-y-3">
-                {payments.map((payment) => (
-                  <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="text-sm font-medium text-gray-900">
-                        {formatCurrency(payment.amount)}
-                      </div>
-                      <div className="text-xs text-gray-500">
-                        {formatDate(payment.created_at)} at {new Date(payment.created_at).toLocaleTimeString()}
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className="text-sm capitalize text-gray-600">
-                        {payment.payment_mode}
-                      </span>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        payment.payment_status === 'completed' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-yellow-100 text-yellow-800'
-                      }`}>
-                        {payment.payment_status}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-gray-500 text-center py-4">
-                No payment history available
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Documents Information */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Documents</h2>
-          <div className="space-y-6">
+          {/* Customer Information */}
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <h2 className="text-xl font-semibold text-gray-900">Customer Information</h2>
             <div className="space-y-3">
-              <div>
-                <label className="text-sm text-gray-500">Aadhar Number</label>
-                <p className="font-medium">{booking.aadhar_number}</p>
+              <div className="flex items-start">
+                <User className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
+                <div>
+                  <p className="font-medium">{booking.customer_name}</p>
+                  <p className="text-sm text-gray-500">{booking.customer_contact}</p>
+                </div>
               </div>
-              <div>
-                <label className="text-sm text-gray-500">Driving License</label>
-                <p className="font-medium">{booking.dl_number}</p>
-                <p className="text-sm text-gray-500">Expires on {formatDate(booking.dl_expiry_date)}</p>
+              <div className="flex items-start">
+                <Phone className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
+                <div>
+                  <p className="font-medium">Emergency Contact</p>
+                  <p className="text-sm">{booking.emergency_contact_name}</p>
+                  <p className="text-sm text-gray-500">{booking.emergency_contact_phone}</p>
+                </div>
+              </div>
+              <div className="flex items-start">
+                <MapPin className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
+                <div>
+                  <p className="font-medium">Address</p>
+                  <p className="text-sm">Temporary: {booking.temp_address}</p>
+                  <p className="text-sm text-gray-500">Permanent: {booking.perm_address}</p>
+                </div>
               </div>
             </div>
+          </div>
 
-            {booking.documents && booking.documents.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                {booking.documents.map((doc) => (
-                  <div key={doc.id} className="space-y-2">
-                    <label className="text-sm font-medium text-gray-700">
-                      {doc.document_type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                    </label>
-                    <button
-                      onClick={() => handleImageClick(doc.document_url, doc.document_type)}
-                      className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100 hover:opacity-90 transition-opacity"
-                    >
-                      <Image
-                        src={doc.document_url}
-                        alt={doc.document_type}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                      />
-                    </button>
-                  </div>
-                ))}
+          {/* Payment Information */}
+          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+            <h2 className="text-xl font-semibold text-gray-900">Payment Information</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-500">Booking Amount</label>
+                <p className="font-medium">{formatCurrency(booking.booking_amount)}</p>
               </div>
-            ) : (
-              <div className="text-sm text-gray-500 mt-4">
-                No documents available
-                {booking.documents ? ` (${booking.documents.length} documents found)` : ' (documents array is undefined)'}
+              <div>
+                <label className="text-sm text-gray-500">Security Deposit</label>
+                <p className="font-medium">{formatCurrency(booking.security_deposit_amount)}</p>
               </div>
-            )}
+              <div>
+                <label className="text-sm text-gray-500">Total Amount</label>
+                <p className="font-medium">{formatCurrency(totalAmount)}</p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500">Paid Amount</label>
+                <p className="font-medium">{formatCurrency(booking.paid_amount)}</p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500">Remaining Amount</label>
+                <p className="font-medium text-blue-600">
+                  {formatCurrency(remainingAmount)}
+                </p>
+              </div>
+            </div>
+            <div className="pt-4 border-t">
+              <h3 className="text-lg font-medium text-gray-900 mb-4">Payment History</h3>
+              {payments.length > 0 ? (
+                <div className="space-y-3">
+                  {payments.map((payment) => (
+                    <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {formatCurrency(payment.amount)}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {formatDate(payment.created_at)} at {new Date(payment.created_at).toLocaleTimeString()}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className="text-sm capitalize text-gray-600">
+                          {payment.payment_mode}
+                        </span>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          payment.payment_status === 'completed' 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {payment.payment_status}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 text-center py-4">
+                  No payment history available
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Documents Information */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Documents</h2>
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <div>
+                  <label className="text-sm text-gray-500">Aadhar Number</label>
+                  <p className="font-medium">{booking.aadhar_number}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-gray-500">Driving License</label>
+                  <p className="font-medium">{booking.dl_number}</p>
+                  <p className="text-sm text-gray-500">Expires on {formatDate(booking.dl_expiry_date)}</p>
+                </div>
+              </div>
+
+              {booking.documents && booking.documents.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                  {booking.documents.map((doc) => (
+                    <div key={doc.id} className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        {doc.document_type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                      </label>
+                      <button
+                        onClick={() => handleImageClick(doc.document_url, doc.document_type)}
+                        className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100 hover:opacity-90 transition-opacity"
+                      >
+                        <Image
+                          src={doc.document_url}
+                          alt={doc.document_type}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-sm text-gray-500 mt-4">
+                  No documents available
+                  {booking.documents ? ` (${booking.documents.length} documents found)` : ' (documents array is undefined)'}
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Image Modal */}
+      {/* Image Preview Modal */}
       {selectedImage && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" 
-          onClick={() => setSelectedImage(null)}
-        >
-          <div 
-            className="relative max-w-4xl w-full bg-white rounded-lg overflow-hidden" 
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="p-4 border-b flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">
-                {selectedImageLabel.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-              </h3>
-              <button
-                onClick={() => setSelectedImage(null)}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-            <div className="relative h-[80vh] w-full">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
+          <div className="relative max-w-4xl w-full mx-4">
+            <button
+              onClick={() => setSelectedImage(null)}
+              className="absolute -top-10 right-0 text-white hover:text-gray-300"
+            >
+              <X className="h-6 w-6" />
+            </button>
+            <div className="relative aspect-[3/2] w-full">
               <Image
                 src={selectedImage}
                 alt={selectedImageLabel}
                 fill
                 className="object-contain"
-                sizes="(max-width: 1024px) 100vw, 80vw"
+                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
               />
             </div>
           </div>
         </div>
+      )}
+
+      {/* Complete Booking Modal */}
+      {showCompleteModal && booking && (
+        <CompleteBookingModal
+          isOpen={showCompleteModal}
+          onClose={() => {
+            setShowCompleteModal(false);
+            // Reset status back to previous if modal is closed
+            setBooking(prev => prev ? { ...prev, status: prev.status } : null);
+          }}
+          onComplete={handleCompleteSuccess}
+          bookingId={booking.id}
+          totalAmount={booking.booking_amount + booking.security_deposit_amount}
+          paidAmount={booking.paid_amount}
+          securityDeposit={booking.security_deposit_amount}
+        />
       )}
     </div>
   );

@@ -6,20 +6,34 @@ import { useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 
 interface Customer {
-  id: string
-  name: string
-  email: string
-  phone: string
-  address: {
-    temporary: string;
-    permanent: string;
-  }
-  identification: {
-    aadhar_number: string;
-    dl_number: string;
-    dl_expiry: string;
-  }
-  created_at: string
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  dob: string | null;
+  aadhar_number: string | null;
+  dl_number: string | null;
+  dl_expiry_date: string | null;
+  temp_address_street: string | null;
+  temp_address_city: string | null;
+  temp_address_state: string | null;
+  temp_address_pincode: string | null;
+  perm_address_street: string | null;
+  perm_address_city: string | null;
+  perm_address_state: string | null;
+  perm_address_pincode: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  emergency_contact_relationship: string | null;
+  documents: {
+    customer_photo?: string;
+    aadhar_front?: string;
+    aadhar_back?: string;
+    dl_front?: string;
+    dl_back?: string;
+  };
+  created_at: string;
+  updated_at: string;
 }
 
 interface CustomerFormProps {
@@ -27,23 +41,58 @@ interface CustomerFormProps {
   mode: 'create' | 'edit'
 }
 
+interface FormData {
+  name: string;
+  email: string;
+  phone: string;
+  dob: string;
+  aadhar_number: string;
+  dl_number: string;
+  dl_expiry_date: string;
+  temp_address_street: string;
+  temp_address_city: string;
+  temp_address_state: string;
+  temp_address_pincode: string;
+  perm_address_street: string;
+  perm_address_city: string;
+  perm_address_state: string;
+  perm_address_pincode: string;
+  emergency_contact_name: string;
+  emergency_contact_phone: string;
+  emergency_contact_relationship: string;
+  documents: {
+    customer_photo?: string;
+    aadhar_front?: string;
+    aadhar_back?: string;
+    dl_front?: string;
+    dl_back?: string;
+  };
+}
+
 const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
   const router = useRouter()
   const supabase = createClientComponentClient()
   const [isLoading, setIsLoading] = useState(false)
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<FormData>({
     name: customer?.name || '',
     email: customer?.email || '',
     phone: customer?.phone || '',
-    address: customer?.address || {
-      temporary: '',
-      permanent: ''
-    },
-    identification: customer?.identification || {
-      aadhar_number: '',
-      dl_number: '',
-      dl_expiry: ''
-    }
+    dob: customer?.dob || '',
+    aadhar_number: customer?.aadhar_number || '',
+    dl_number: customer?.dl_number || '',
+    dl_expiry_date: customer?.dl_expiry_date || '',
+    temp_address_street: customer?.temp_address_street || '',
+    temp_address_city: customer?.temp_address_city || '',
+    temp_address_state: customer?.temp_address_state || '',
+    temp_address_pincode: customer?.temp_address_pincode || '',
+    perm_address_street: customer?.perm_address_street || '',
+    perm_address_city: customer?.perm_address_city || '',
+    perm_address_state: customer?.perm_address_state || '',
+    perm_address_pincode: customer?.perm_address_pincode || '',
+    emergency_contact_name: customer?.emergency_contact_name || '',
+    emergency_contact_phone: customer?.emergency_contact_phone || '',
+    emergency_contact_relationship: customer?.emergency_contact_relationship || '',
+    documents: customer?.documents || {}
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -79,27 +128,9 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    if (name === 'temporary_address' || name === 'permanent_address') {
-      setFormData(prev => ({
-        ...prev,
-        address: {
-          ...prev.address,
-          [name === 'temporary_address' ? 'temporary' : 'permanent']: value
-        }
-      }))
-    } else if (name === 'aadhar_number' || name === 'dl_number' || name === 'dl_expiry') {
-      setFormData(prev => ({
-        ...prev,
-        identification: {
-          ...prev.identification,
-          [name]: value
-        }
-      }))
-    } else {
-      setFormData(prev => ({ ...prev, [name]: value }))
-    }
-  }
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
   return (
     <div className="space-y-6">
@@ -158,6 +189,21 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
             </div>
 
             <div>
+              <label htmlFor="dob" className="block text-sm font-medium text-gray-700">
+                Date of Birth
+              </label>
+              <input
+                type="date"
+                id="dob"
+                name="dob"
+                value={formData.dob}
+                onChange={handleChange}
+                required
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
               <label htmlFor="aadhar_number" className="block text-sm font-medium text-gray-700">
                 Aadhar Number
               </label>
@@ -165,7 +211,7 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
                 type="text"
                 id="aadhar_number"
                 name="aadhar_number"
-                value={formData.identification.aadhar_number}
+                value={formData.aadhar_number}
                 onChange={handleChange}
                 required
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -180,7 +226,7 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
                 type="text"
                 id="dl_number"
                 name="dl_number"
-                value={formData.identification.dl_number}
+                value={formData.dl_number}
                 onChange={handleChange}
                 required
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -188,14 +234,44 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
             </div>
 
             <div>
-              <label htmlFor="dl_expiry" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="dl_expiry_date" className="block text-sm font-medium text-gray-700">
                 DL Expiry Date
               </label>
               <input
                 type="date"
-                id="dl_expiry"
-                name="dl_expiry"
-                value={formData.identification.dl_expiry}
+                id="dl_expiry_date"
+                name="dl_expiry_date"
+                value={formData.dl_expiry_date}
+                onChange={handleChange}
+                required
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="emergency_contact_name" className="block text-sm font-medium text-gray-700">
+                Emergency Contact Name
+              </label>
+              <input
+                type="text"
+                id="emergency_contact_name"
+                name="emergency_contact_name"
+                value={formData.emergency_contact_name}
+                onChange={handleChange}
+                required
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700">
+                Emergency Contact Phone
+              </label>
+              <input
+                type="tel"
+                id="emergency_contact_phone"
+                name="emergency_contact_phone"
+                value={formData.emergency_contact_phone}
                 onChange={handleChange}
                 required
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -205,13 +281,13 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
 
           <div className="space-y-4">
             <div>
-              <label htmlFor="temporary_address" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="temp_address_street" className="block text-sm font-medium text-gray-700">
                 Temporary Address
               </label>
               <textarea
-                id="temporary_address"
-                name="temporary_address"
-                value={formData.address.temporary}
+                id="temp_address_street"
+                name="temp_address_street"
+                value={formData.temp_address_street}
                 onChange={handleChange}
                 required
                 rows={3}
@@ -220,13 +296,13 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
             </div>
 
             <div>
-              <label htmlFor="permanent_address" className="block text-sm font-medium text-gray-700">
+              <label htmlFor="perm_address_street" className="block text-sm font-medium text-gray-700">
                 Permanent Address
               </label>
               <textarea
-                id="permanent_address"
-                name="permanent_address"
-                value={formData.address.permanent}
+                id="perm_address_street"
+                name="perm_address_street"
+                value={formData.perm_address_street}
                 onChange={handleChange}
                 required
                 rows={3}

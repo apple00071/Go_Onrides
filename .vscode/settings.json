@@ -1,16 +1,38 @@
 {
+  "[typescript]": {
+    "editor.defaultFormatter": "denoland.vscode-deno"
+  },
   "css.validate": false,
-  "tailwindCSS.emmetCompletions": true,
+  "deno.enablePaths": [
+    "supabase/functions"
+  ],
+  "deno.lint": true,
+  "deno.unstable": [
+    "bare-node-builtins",
+    "byonm",
+    "sloppy-imports",
+    "unsafe-proto",
+    "webgpu",
+    "broadcast-channel",
+    "worker-options",
+    "cron",
+    "kv",
+    "ffi",
+    "fs",
+    "http",
+    "net"
+  ],
+  "editor.inlineSuggest.enabled": true,
   "editor.quickSuggestions": {
     "strings": true
   },
+  "editor.suggest.insertMode": "replace",
   "files.associations": {
     "*.css": "tailwindcss"
   },
-  "editor.inlineSuggest.enabled": true,
-  "editor.suggest.insertMode": "replace",
+  "tailwindCSS.emmetCompletions": true,
   "tailwindCSS.includeLanguages": {
     "typescript": "javascript",
     "typescriptreact": "javascript"
   }
-} 
+}

@@ -12,10 +12,8 @@ interface Customer {
   name: string
   email: string
   phone: string
-  address: {
-    temporary: string;
-    permanent: string;
-  }
+  temp_address_street: string
+  perm_address_street: string
   created_at: string
   documents: {
     customer_photo?: string;
@@ -172,28 +170,20 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
           </div>
           
           <div>
-            <h3 className="text-sm font-medium text-gray-500">Address</h3>
-            <div className="mt-1 space-y-2">
-              <div>
-                <p className="text-sm font-medium text-gray-700">Temporary Address</p>
-                <p className="text-lg text-gray-900">
-                  {typeof customer.address === 'object' ? customer.address.temporary : 'N/A'}
-                </p>
-              </div>
-              <div>
-                <p className="text-sm font-medium text-gray-700">Permanent Address</p>
-                <p className="text-lg text-gray-900">
-                  {typeof customer.address === 'object' ? customer.address.permanent : 'N/A'}
-                </p>
-              </div>
-            </div>
-          </div>
-          
-          <div>
             <h3 className="text-sm font-medium text-gray-500">Customer Since</h3>
             <p className="mt-1 text-lg text-gray-900">
               {new Date(customer.created_at).toLocaleDateString()}
             </p>
+          </div>
+
+          <div className="mt-4">
+            <h4 className="text-sm font-medium text-gray-500">Temporary Address</h4>
+            <p className="mt-1 text-sm text-gray-900">{customer.temp_address_street || 'N/A'}</p>
+          </div>
+
+          <div className="mt-4">
+            <h4 className="text-sm font-medium text-gray-500">Permanent Address</h4>
+            <p className="mt-1 text-sm text-gray-900">{customer.perm_address_street || 'N/A'}</p>
           </div>
         </div>
       </div>

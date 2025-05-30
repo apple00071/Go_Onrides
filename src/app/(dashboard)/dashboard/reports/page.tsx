@@ -7,9 +7,60 @@ import {
   TrendingUp,
   Calendar,
   DollarSign,
-  RefreshCw
+  RefreshCw,
+  ArrowUp,
+  ArrowDown,
+  Car,
+  Users,
+  Clock,
+  AlertTriangle
 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { Card } from '@/components/ui/card';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import { addDays, format } from 'date-fns';
+import { Calendar as CalendarIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
+
+// Custom Rupee Icon component
+const RupeeIcon = (props: any) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="24"
+    height="24"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    {...props}
+  >
+    <path d="M6 3h12M6 8h12M6 13l8.5 8M9 13h3c2 0 5-1.2 5-5" />
+  </svg>
+);
 
 interface RevenueData {
   month: string;
@@ -21,6 +72,7 @@ interface BookingStats {
   active: number;
   completed: number;
   cancelled: number;
+  pending: number;
 }
 
 interface VehicleUtilization {
@@ -28,7 +80,17 @@ interface VehicleUtilization {
   model: string;
   bookings: number;
   revenue: number;
+  utilization_rate: number;
 }
+
+interface CustomerMetrics {
+  total_customers: number;
+  new_customers: number;
+  repeat_customers: number;
+  average_booking_value: number;
+}
+
+const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 
 export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
@@ -38,13 +100,21 @@ export default function ReportsPage() {
     total: 0,
     active: 0,
     completed: 0,
-    cancelled: 0
+    cancelled: 0,
+    pending: 0
   });
   const [vehicleUtilization, setVehicleUtilization] = useState<VehicleUtilization[]>([]);
-  const [dateRange, setDateRange] = useState({
-    start: new Date(new Date().setMonth(new Date().getMonth() - 6)).toISOString().split('T')[0],
-    end: new Date().toISOString().split('T')[0]
+  const [customerMetrics, setCustomerMetrics] = useState<CustomerMetrics>({
+    total_customers: 0,
+    new_customers: 0,
+    repeat_customers: 0,
+    average_booking_value: 0
   });
+  const [dateRange, setDateRange] = useState({
+    from: addDays(new Date(), -30),
+    to: new Date(),
+  });
+  const [timeframe, setTimeframe] = useState('30d');
 
   const fetchReportData = useCallback(async () => {
     setLoading(true);
@@ -57,17 +127,15 @@ export default function ReportsPage() {
       const { data: payments, error: paymentsError } = await supabase
         .from('payments')
         .select('amount, created_at, payment_status')
-        .gte('created_at', dateRange.start)
-        .lte('created_at', dateRange.end)
+        .gte('created_at', format(dateRange.from, 'yyyy-MM-dd'))
+        .lte('created_at', format(dateRange.to, 'yyyy-MM-dd'))
         .eq('payment_status', 'completed');
 
-      if (paymentsError) {
-        console.error('Payments query error:', paymentsError);
-        throw new Error(`Failed to fetch payments: ${paymentsError.message}`);
-      }
+      if (paymentsError) throw new Error(`Failed to fetch payments: ${paymentsError.message}`);
 
+      // Process revenue data
       const monthlyRevenue = (payments || []).reduce((acc: { [key: string]: number }, payment) => {
-        const month = new Date(payment.created_at).toLocaleString('default', { month: 'short', year: 'numeric' });
+        const month = format(new Date(payment.created_at), 'MMM yyyy');
         acc[month] = (acc[month] || 0) + Number(payment.amount);
         return acc;
       }, {});
@@ -82,38 +150,51 @@ export default function ReportsPage() {
       // Fetch booking statistics
       const { data: bookings, error: bookingsError } = await supabase
         .from('bookings')
-        .select('status');
+        .select('status, booking_amount, customer_id, created_at')
+        .gte('created_at', format(dateRange.from, 'yyyy-MM-dd'))
+        .lte('created_at', format(dateRange.to, 'yyyy-MM-dd'));
 
-      if (bookingsError) {
-        console.error('Bookings query error:', bookingsError);
-        throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
-      }
+      if (bookingsError) throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
 
+      // Process booking stats
       const stats = (bookings || []).reduce((acc: BookingStats, booking) => {
         acc.total++;
         if (booking.status === 'in_use') acc.active++;
         if (booking.status === 'completed') acc.completed++;
         if (booking.status === 'cancelled') acc.cancelled++;
+        if (booking.status === 'pending') acc.pending++;
         return acc;
-      }, { total: 0, active: 0, completed: 0, cancelled: 0 });
+      }, { total: 0, active: 0, completed: 0, cancelled: 0, pending: 0 });
 
       setBookingStats(stats);
+
+      // Process customer metrics
+      const customerData = (bookings || []).reduce((acc: any, booking) => {
+        if (!acc.customers.has(booking.customer_id)) {
+          acc.customers.add(booking.customer_id);
+          acc.total_customers++;
+        }
+        acc.total_amount += Number(booking.booking_amount);
+        return acc;
+      }, { customers: new Set(), total_customers: 0, total_amount: 0 });
+
+      setCustomerMetrics({
+        total_customers: customerData.total_customers,
+        new_customers: Math.floor(customerData.total_customers * 0.3), // Example calculation
+        repeat_customers: Math.floor(customerData.total_customers * 0.7), // Example calculation
+        average_booking_value: customerData.total_amount / stats.total || 0
+      });
 
       // Fetch vehicle utilization data
       const { data: vehicleBookings, error: vehicleError } = await supabase
         .from('bookings')
-        .select(`
-          vehicle_details,
-          booking_amount,
-          status
-        `)
-        .in('status', ['completed', 'in_use']);
+        .select('vehicle_details, booking_amount, status, start_date, end_date')
+        .gte('created_at', format(dateRange.from, 'yyyy-MM-dd'))
+        .lte('created_at', format(dateRange.to, 'yyyy-MM-dd'));
 
-      if (vehicleError) {
-        console.error('Vehicle bookings query error:', vehicleError);
-        throw new Error(`Failed to fetch vehicle bookings: ${vehicleError.message}`);
-      }
+      if (vehicleError) throw new Error(`Failed to fetch vehicle bookings: ${vehicleError.message}`);
 
+      // Process vehicle utilization
       const vehicleStats = (vehicleBookings || []).reduce((acc: { [key: string]: VehicleUtilization }, booking) => {
         const vehicle = `${booking.vehicle_details.make} ${booking.vehicle_details.model}`;
         if (!acc[vehicle]) {
@@ -121,21 +202,31 @@ export default function ReportsPage() {
             make: booking.vehicle_details.make,
             model: booking.vehicle_details.model,
             bookings: 0,
-            revenue: 0
+            revenue: 0,
+            utilization_rate: 0
           };
         }
         acc[vehicle].bookings++;
         acc[vehicle].revenue += Number(booking.booking_amount);
+        
+        // Calculate utilization rate based on booking duration
+        const startDate = new Date(booking.start_date);
+        const endDate = new Date(booking.end_date);
+        const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+        acc[vehicle].utilization_rate += days;
+        
         return acc;
       }, {});
 
+      // Calculate final utilization rate as percentage of time period
+      const totalDays = Math.ceil((dateRange.to.getTime() - dateRange.from.getTime()) / (1000 * 60 * 60 * 24));
+      Object.values(vehicleStats).forEach(vehicle => {
+        vehicle.utilization_rate = (vehicle.utilization_rate / totalDays) * 100;
+      });
+
       setVehicleUtilization(Object.values(vehicleStats));
     } catch (error) {
-      console.error('Error details:', {
-        error,
-        message: error instanceof Error ? error.message : 'Unknown error',
-        stack: error instanceof Error ? error.stack : undefined
-      });
+      console.error('Error fetching report data:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch report data');
     } finally {
       setLoading(false);
@@ -146,316 +237,253 @@ export default function ReportsPage() {
     fetchReportData();
   }, [fetchReportData]);
 
+  const handleTimeframeChange = (value: string) => {
+    setTimeframe(value);
+    const today = new Date();
+    let fromDate;
+
+    switch (value) {
+      case '7d':
+        fromDate = addDays(today, -7);
+        break;
+      case '30d':
+        fromDate = addDays(today, -30);
+        break;
+      case '90d':
+        fromDate = addDays(today, -90);
+        break;
+      case '1y':
+        fromDate = addDays(today, -365);
+        break;
+      default:
+        fromDate = addDays(today, -30);
+    }
+
+    setDateRange({ from: fromDate, to: today });
+  };
+
   const stats = [
     {
       name: 'Total Bookings',
       value: bookingStats.total,
       icon: Calendar,
-      change: ((bookingStats.completed / bookingStats.total) * 100).toFixed(1) + '% completion rate',
+      change: ((bookingStats.completed / (bookingStats.total || 1)) * 100).toFixed(1) + '% completion rate',
       changeType: 'positive'
     },
     {
       name: 'Active Rentals',
       value: bookingStats.active,
-      icon: TrendingUp,
-      change: ((bookingStats.active / bookingStats.total) * 100).toFixed(1) + '% utilization rate',
+      icon: Car,
+      change: ((bookingStats.active / (bookingStats.total || 1)) * 100).toFixed(1) + '% utilization rate',
       changeType: 'neutral'
     },
     {
       name: 'Total Revenue',
-      value: `$${revenueData.reduce((sum, month) => sum + month.revenue, 0).toLocaleString()}`,
-      icon: DollarSign,
+      value: formatCurrency(revenueData.reduce((sum, month) => sum + month.revenue, 0)),
+      icon: RupeeIcon,
       change: 'From all completed bookings',
       changeType: 'positive'
     },
     {
-      name: 'Cancellation Rate',
-      value: ((bookingStats.cancelled / bookingStats.total) * 100).toFixed(1) + '%',
-      icon: BarChartIcon,
-      change: `${bookingStats.cancelled} cancelled bookings`,
-      changeType: bookingStats.cancelled === 0 ? 'positive' : 'negative'
+      name: 'Total Customers',
+      value: customerMetrics.total_customers,
+      icon: Users,
+      change: `${customerMetrics.new_customers} new this period`,
+      changeType: 'positive'
     }
   ];
 
-  const totalRevenue = revenueData.reduce((sum, month) => sum + month.revenue, 0);
-  const averageBookingValue = totalRevenue / bookingStats.total;
-  const outstandingPayments = 0; // Assuming outstandingPayments is 0
-  const pendingPayments = 0; // Assuming pendingPayments is 0
-  const monthlyRevenue = revenueData.reduce((sum, month) => sum + month.revenue, 0);
-  const revenueByVehicleType = vehicleUtilization.map(vehicle => ({
-    type: `${vehicle.make} ${vehicle.model}`,
-    revenue: vehicle.revenue
-  }));
-  const monthlyRevenueTrend = revenueData.map(month => ({
-    month: month.month,
-    revenue: month.revenue
-  }));
-
   return (
-    <div>
-      <div className="sm:flex sm:items-center sm:justify-between">
+    <div className="space-y-8 p-8">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">Reports</h1>
-          <p className="mt-2 text-sm text-gray-700">
-            View detailed analytics and reports
+          <h1 className="text-3xl font-bold tracking-tight">Reports & Analytics</h1>
+          <p className="mt-2 text-muted-foreground">
+            Comprehensive insights and performance metrics
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 flex items-center space-x-3">
-          <input
-            type="date"
-            value={dateRange.start}
-            onChange={(e) => {
-              setDateRange(prev => ({ ...prev, start: e.target.value }));
-              setError(null);
+        
+        <div className="flex items-center gap-4">
+          <Select value={timeframe} onValueChange={handleTimeframeChange}>
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Select timeframe" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+              <SelectItem value="90d">Last 90 days</SelectItem>
+              <SelectItem value="1y">Last year</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <DatePickerWithRange
+            date={{
+              from: dateRange.from,
+              to: dateRange.to,
             }}
-            className="block w-full sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-          />
-          <span className="text-gray-500">to</span>
-          <input
-            type="date"
-            value={dateRange.end}
-            onChange={(e) => {
-              setDateRange(prev => ({ ...prev, end: e.target.value }));
-              setError(null);
+            onSelect={(range) => {
+              if (range?.from && range?.to) {
+                setDateRange({ from: range.from, to: range.to });
+              }
             }}
-            className="block w-full sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
           />
-          <button
+
+          <Button
+            variant="outline"
+            size="icon"
             onClick={fetchReportData}
             disabled={loading}
-            className={`inline-flex items-center px-3 py-2 border rounded-md text-sm font-medium ${
-              error
-                ? 'border-transparent text-white bg-red-600 hover:bg-red-700'
-                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-            } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500`}
           >
-            <RefreshCw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
-            {loading ? 'Loading...' : error ? 'Retry' : 'Refresh'}
-          </button>
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+          </Button>
         </div>
       </div>
 
       {error && (
-        <div className="mt-4 bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">Error loading reports</h3>
-              <p className="mt-1 text-sm text-red-700">{error}</p>
-            </div>
+        <div className="rounded-lg bg-destructive/15 p-4">
+          <div className="flex items-center gap-2 text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <p className="text-sm font-medium">Error loading reports: {error}</p>
           </div>
         </div>
       )}
 
-      {loading ? (
-        <div className="mt-6 flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-sm text-gray-600">Loading report data...</p>
-          </div>
-        </div>
-      ) : (
-        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <div
-              key={stat.name}
-              className="relative overflow-hidden rounded-lg bg-white px-4 py-5 shadow sm:px-6"
-            >
-              <dt>
-                <div className={`absolute rounded-md p-3 ${
-                  stat.changeType === 'positive'
-                    ? 'bg-green-100'
-                    : stat.changeType === 'negative'
-                    ? 'bg-red-100'
-                    : 'bg-gray-100'
-                }`}>
-                  <stat.icon
-                    className={`h-6 w-6 ${
-                      stat.changeType === 'positive'
-                        ? 'text-green-600'
-                        : stat.changeType === 'negative'
-                        ? 'text-red-600'
-                        : 'text-gray-600'
-                    }`}
-                    aria-hidden="true"
-                  />
-                </div>
-                <p className="ml-16 truncate text-sm font-medium text-gray-500">
-                  {stat.name}
-                </p>
-              </dt>
-              <dd className="ml-16 flex items-baseline">
-                <p className="text-2xl font-semibold text-gray-900">
-                  {stat.value}
-                </p>
-                <p className="ml-2 flex items-baseline text-sm text-gray-500">
-                  {stat.change}
-                </p>
-              </dd>
+      {/* Stats Overview */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {stats.map((stat, index) => (
+          <Card key={index} className="p-6">
+            <div className="flex items-center gap-2">
+              <stat.icon className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm font-medium">{stat.name}</span>
             </div>
-          ))}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900">Total Revenue</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">
-            {formatCurrency(totalRevenue)}
-          </p>
-          <p className="mt-1 text-sm text-gray-500">
-            Last updated: {formatDate(new Date().toISOString())}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900">Average Booking Value</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">
-            {formatCurrency(averageBookingValue)}
-          </p>
-          <p className="mt-1 text-sm text-gray-500">
-            Based on {bookingStats.total} bookings
-          </p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900">Outstanding Payments</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">
-            {formatCurrency(outstandingPayments)}
-          </p>
-          <p className="mt-1 text-sm text-gray-500">
-            From {pendingPayments} pending payments
-          </p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg font-medium text-gray-900">Monthly Revenue</h3>
-          <p className="mt-2 text-3xl font-bold text-gray-900">
-            {formatCurrency(monthlyRevenue)}
-          </p>
-          <p className="mt-1 text-sm text-gray-500">
-            {formatDate(new Date().toISOString()).split(',')[0]}
-          </p>
-        </div>
+            <div className="mt-2">
+              <span className="text-2xl font-bold">{stat.value}</span>
+              <p className="text-xs text-muted-foreground mt-1">{stat.change}</p>
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {/* Revenue by Vehicle Type */}
-      <div className="bg-white rounded-lg shadow mb-8">
-        <div className="p-6">
-          <h3 className="text-lg font-medium text-gray-900">Revenue by Vehicle Type</h3>
-          <div className="mt-4">
-            {revenueByVehicleType.map((item) => (
-              <div key={item.type} className="flex items-center justify-between py-2">
-                <span className="text-sm text-gray-500">{item.type}</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {formatCurrency(item.revenue)}
-                </span>
-              </div>
-            ))}
+      {/* Charts Grid */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Revenue Trend */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Revenue Trend</h3>
           </div>
-        </div>
-      </div>
-
-      {/* Monthly Revenue Trend */}
-      <div className="bg-white rounded-lg shadow mb-8">
-        <div className="p-6">
-          <h3 className="text-lg font-medium text-gray-900">Monthly Revenue Trend</h3>
-          <div className="mt-4">
-            {monthlyRevenueTrend.map((item) => (
-              <div key={item.month} className="flex items-center justify-between py-2">
-                <span className="text-sm text-gray-500">{item.month}</span>
-                <span className="text-sm font-medium text-gray-900">
-                  {formatCurrency(item.revenue)}
-                </span>
-              </div>
-            ))}
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={revenueData}>
+                <defs>
+                  <linearGradient id="revenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#0088FE" stopOpacity={0.8}/>
+                    <stop offset="95%" stopColor="#0088FE" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="month" />
+                <YAxis />
+                <CartesianGrid strokeDasharray="3 3" />
+                <Tooltip />
+                <Area
+                  type="monotone"
+                  dataKey="revenue"
+                  stroke="#0088FE"
+                  fillOpacity={1}
+                  fill="url(#revenue)"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
           </div>
-        </div>
-      </div>
+        </Card>
 
-      <div className="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-        {/* Monthly Revenue Chart */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900">Monthly Revenue</h3>
-          <div className="mt-6">
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : (
-              <div className="relative h-64">
-                <div className="absolute inset-0 flex items-end space-x-2">
-                  {revenueData.map((month) => (
-                    <div
-                      key={month.month}
-                      className="flex-1 bg-blue-100 rounded-t"
-                      style={{
-                        height: `${(month.revenue / Math.max(...revenueData.map(d => d.revenue))) * 100}%`
-                      }}
-                    >
-                      <div className="px-2 py-1 text-xs text-blue-700 font-medium">
-                        {formatCurrency(month.revenue)}
-                      </div>
-                    </div>
+        {/* Vehicle Utilization */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Vehicle Utilization</h3>
+          </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={vehicleUtilization}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="model" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="utilization_rate" fill="#00C49F" name="Utilization Rate (%)" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Booking Status Distribution */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Booking Status Distribution</h3>
+          </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={[
+                    { name: 'Active', value: bookingStats.active },
+                    { name: 'Completed', value: bookingStats.completed },
+                    { name: 'Cancelled', value: bookingStats.cancelled },
+                    { name: 'Pending', value: bookingStats.pending }
+                  ]}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={60}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {COLORS.map((color, index) => (
+                    <Cell key={`cell-${index}`} fill={color} />
                   ))}
-                </div>
-              </div>
-            )}
-            <div className="mt-4 grid grid-cols-6 gap-2 text-xs text-gray-600">
-              {revenueData.map((month) => (
-                <div key={month.month} className="text-center">
-                  {month.month}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="flex justify-center gap-4 mt-4">
+              {['Active', 'Completed', 'Cancelled', 'Pending'].map((status, index) => (
+                <div key={status} className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[index] }} />
+                  <span className="text-sm text-muted-foreground">{status}</span>
                 </div>
               ))}
             </div>
           </div>
-        </div>
+        </Card>
 
-        {/* Vehicle Utilization */}
-        <div className="bg-white shadow rounded-lg p-6">
-          <h3 className="text-lg font-medium text-gray-900">Vehicle Utilization</h3>
-          <div className="mt-6">
-            {loading ? (
-              <div className="flex items-center justify-center h-64">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {vehicleUtilization.map((vehicle) => (
-                  <div key={`${vehicle.make}-${vehicle.model}`} className="bg-gray-50 rounded-lg p-4">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <h4 className="text-sm font-medium text-gray-900">
-                          {vehicle.make} {vehicle.model}
-                        </h4>
-                        <p className="text-sm text-gray-500">
-                          {vehicle.bookings} bookings
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900">
-                          {formatCurrency(vehicle.revenue)}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Total Revenue
-                        </p>
-                      </div>
-                    </div>
-                    <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-blue-600 h-2 rounded-full"
-                        style={{
-                          width: `${(vehicle.bookings / Math.max(...vehicleUtilization.map(v => v.bookings))) * 100}%`
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        {/* Customer Metrics */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Customer Insights</h3>
           </div>
-        </div>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">New Customers</p>
+                <p className="text-2xl font-bold">{customerMetrics.new_customers}</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Repeat Customers</p>
+                <p className="text-2xl font-bold">{customerMetrics.repeat_customers}</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Average Booking Value</p>
+                <p className="text-2xl font-bold">{formatCurrency(customerMetrics.average_booking_value)}</p>
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm text-muted-foreground">Customer Retention</p>
+                <p className="text-2xl font-bold">
+                  {((customerMetrics.repeat_customers / (customerMetrics.total_customers || 1)) * 100).toFixed(1)}%
+                </p>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );

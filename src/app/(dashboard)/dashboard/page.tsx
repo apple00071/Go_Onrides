@@ -130,7 +130,7 @@ export default function DashboardPage() {
             </div>
             <div className="ml-4">
               <h2 className="text-sm font-medium text-gray-600">Total Income</h2>
-              <p className="text-2xl font-semibold text-gray-900">₹{formatCurrency(stats.totalIncome)}</p>
+              <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.totalIncome)}</p>
             </div>
           </div>
         </div>
@@ -145,7 +145,7 @@ export default function DashboardPage() {
             </div>
             <div className="ml-4">
               <h2 className="text-sm font-medium text-gray-600">Pending Payments</h2>
-              <p className="text-2xl font-semibold text-gray-900">₹{formatCurrency(stats.pendingPayments)}</p>
+              <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.pendingPayments)}</p>
             </div>
           </div>
         </div>

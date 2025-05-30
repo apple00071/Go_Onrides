@@ -4,6 +4,16 @@ import { redirect } from 'next/navigation'
 import CustomersList from '@/components/customers/CustomersList'
 import type { Database } from '@/types/database'
 
+interface CustomerListItem {
+  id: string
+  name: string
+  email: string
+  phone: string
+  temp_address_street: string | null
+  perm_address_street: string | null
+  created_at: string
+}
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
@@ -45,7 +55,15 @@ export default async function CustomersPage() {
     // Fetch all customers
     const { data: customers, error: customersError } = await supabase
       .from('customers')
-      .select('*')
+      .select(`
+        id,
+        name,
+        email,
+        phone,
+        temp_address_street,
+        perm_address_street,
+        created_at
+      `)
       .order('created_at', { ascending: false })
 
     if (customersError) {

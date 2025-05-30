@@ -112,61 +112,61 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                 tabIndex={0}
                 role="button"
               >
-                <td className="whitespace-nowrap px-6 py-4">
-                  <span className="text-sm font-medium text-gray-900">
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <span className="text-sm font-medium text-gray-900">
                     {booking.booking_id || booking.id}
-                  </span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-gray-900">
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-900">
                       {booking.customer_name}
-                    </span>
-                    <span className="text-sm text-gray-500">
+                      </span>
+                      <span className="text-sm text-gray-500">
                       {booking.customer_contact}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-gray-900">
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-900">
                       {booking.vehicle_details.model}
-                    </span>
-                    <span className="text-sm text-gray-500">
+                      </span>
+                      <span className="text-sm text-gray-500">
                       {booking.vehicle_details.registration}
-                    </span>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium text-gray-900">
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-900">
                       {new Date(booking.start_date).toLocaleDateString('en-IN')}
-                    </span>
-                    <span className="text-sm text-gray-500">
+                      </span>
+                      <span className="text-sm text-gray-500">
                       to {new Date(booking.end_date).toLocaleDateString('en-IN')}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <span className="text-sm font-medium text-gray-900">
+                    {formatCurrency(booking.booking_amount + booking.security_deposit_amount)}
                     </span>
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <span className="text-sm font-medium text-gray-900">
-                    ₹{formatCurrency(booking.booking_amount + booking.security_deposit_amount)}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <span
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <span
                     className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(booking.payment_status)}`}
-                  >
+                    >
                     {booking.payment_status}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap px-6 py-4">
-                  <span
-                    className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getStatusColor(booking.status)}`}
-                  >
-                    {booking.status}
-                  </span>
-                </td>
-              </tr>
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-6 py-4">
+                    <span
+                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getStatusColor(booking.status)}`}
+                    >
+                      {booking.status}
+                    </span>
+                  </td>
+                </tr>
             ))}
           </tbody>
         </table>

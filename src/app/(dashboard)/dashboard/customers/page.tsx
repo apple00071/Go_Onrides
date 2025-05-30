@@ -9,16 +9,12 @@ import CustomerModal from '@/components/customers/CustomerModal';
 import { Search, Plus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-interface Address {
-  permanent?: string;
-  temporary?: string;
-}
-
 interface Customer {
   id: string;
   name: string;
   phone: string;
-  address?: Address;
+  temp_address_street: string | null;
+  perm_address_street: string | null;
   created_at: string;
 }
 
@@ -38,7 +34,8 @@ export default function CustomersPage() {
           id,
           name,
           phone,
-          address,
+          temp_address_street,
+          perm_address_street,
           created_at
         `)
         .order('created_at', { ascending: false });
@@ -54,7 +51,8 @@ export default function CustomersPage() {
         id: customer.id,
         name: customer.name || 'N/A',
         phone: customer.phone || 'N/A',
-        address: customer.address || undefined,
+        temp_address_street: customer.temp_address_street,
+        perm_address_street: customer.perm_address_street,
         created_at: customer.created_at
       }));
 

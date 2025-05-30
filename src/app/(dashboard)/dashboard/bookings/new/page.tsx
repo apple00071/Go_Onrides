@@ -200,17 +200,17 @@ export default function NewBookingPage() {
     }
   }, [formData.payment_status, formData.total_amount]);
 
-  // Check for existing customer documents when phone number changes
+  // Check for existing customer documents when Aadhar number changes
   useEffect(() => {
     const checkExistingCustomer = async () => {
-      if (formData.customer_contact.length >= 10) {
+      if (formData.aadhar_number.length === 12) {
         const supabase = getSupabaseClient();
         
-        // First find the customer
+        // First find the customer by Aadhar number
         const { data: customers, error: customerError } = await supabase
           .from('customers')
           .select('*')
-          .eq('phone', formData.customer_contact)
+          .eq('aadhar_number', formData.aadhar_number)
           .limit(1);
 
         if (customerError) {
@@ -224,40 +224,39 @@ export default function NewBookingPage() {
           // Pre-fill form data with existing customer info
           setFormData(prev => ({
             ...prev,
-            customer_name: customer.name || '',
+            customer_name: customer.name,
+            customer_contact: customer.phone,
             customer_email: customer.email || '',
-            emergency_contact_name: customer.emergency_contact?.name || '',
-            emergency_contact_phone: customer.emergency_contact?.phone || '',
-            aadhar_number: customer.identification?.aadhar_number || '',
-            date_of_birth: customer.date_of_birth || '',
-            dl_number: customer.identification?.dl_number || '',
-            dl_expiry_date: customer.identification?.dl_expiry || '',
-            temp_address: customer.address?.temporary || '',
-            perm_address: customer.address?.permanent || '',
-            documents: {
-              ...prev.documents,
-              customer_photo: customer.documents?.customer_photo || '',
-              aadhar_front: customer.documents?.aadhar_front || '',
-              aadhar_back: customer.documents?.aadhar_back || '',
-              dl_front: customer.documents?.dl_front || '',
-              dl_back: customer.documents?.dl_back || ''
+            emergency_contact_name: customer.emergency_contact_name || '',
+            emergency_contact_phone: customer.emergency_contact_phone || '',
+            date_of_birth: customer.dob || '',
+            dl_number: customer.dl_number || '',
+            dl_expiry_date: customer.dl_expiry_date || '',
+            temp_address: customer.temp_address_street || '',
+            perm_address: customer.perm_address_street || '',
+            documents: customer.documents || {
+              customer_photo: '',
+              aadhar_front: '',
+              aadhar_back: '',
+              dl_front: '',
+              dl_back: ''
             }
           }));
           toast.success('Found existing customer - form pre-filled');
         } else {
           setIsExistingCustomer(false);
-          // Reset form data except phone number
-          const { customer_contact } = formData;
+          // Reset form data except Aadhar number
+          const { aadhar_number } = formData;
           setFormData({
             ...initialFormData,
-            customer_contact
+            aadhar_number
           });
         }
       }
     };
 
     checkExistingCustomer();
-  }, [formData.customer_contact, initialFormData]);
+  }, [formData.aadhar_number, initialFormData]);
 
   // Get today's date in YYYY-MM-DD format for date inputs
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -274,6 +273,20 @@ export default function NewBookingPage() {
 
   // Calculate minimum end date based on start date
   const minEndDate = formData.start_date || today;
+
+  // Calculate maximum start date (1 year from today)
+  const maxStartDate = useMemo(() => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() + 1);
+    return date.toISOString().split('T')[0];
+  }, []);
+
+  // Calculate maximum end date (30 days from start date)
+  const maxEndDate = useMemo(() => {
+    const date = formData.start_date ? new Date(formData.start_date) : new Date();
+    date.setDate(date.getDate() + 30);
+    return date.toISOString().split('T')[0];
+  }, [formData.start_date]);
 
   const handleDocumentUpload = (type: DocumentType, url: string) => {
     setFormData(prev => ({
@@ -386,7 +399,7 @@ export default function NewBookingPage() {
       const { data: existingCustomers, error: customerCheckError } = await supabase
         .from('customers')
         .select('id')
-        .eq('phone', formData.customer_contact)
+        .eq('aadhar_number', formData.aadhar_number)
         .limit(1);
 
       if (customerCheckError) {
@@ -396,6 +409,32 @@ export default function NewBookingPage() {
       if (existingCustomers && existingCustomers.length > 0) {
         customerId = existingCustomers[0].id;
         
+        // Create new customer
+        const { data: newCustomer, error: customerCreateError } = await supabase
+          .from('customers')
+          .insert({
+            name: formData.customer_name,
+            email: formData.customer_email,
+            phone: formData.customer_contact,
+            emergency_contact_name: formData.emergency_contact_name,
+            emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_relationship: 'emergency',
+            dob: formData.date_of_birth,
+            aadhar_number: formData.aadhar_number,
+            dl_number: formData.dl_number,
+            dl_expiry_date: formData.dl_expiry_date,
+            temp_address_street: formData.temp_address,
+            perm_address_street: formData.perm_address,
+            documents: formData.documents
+          })
+          .select('id')
+          .single();
+
+        if (customerCreateError || !newCustomer) {
+          console.error('Customer creation error:', customerCreateError);
+          throw new Error(`Failed to create customer: ${customerCreateError?.message}`);
+        }
+
         // Update existing customer if needed
         if (!isExistingCustomer) {
           const { error: customerUpdateError } = await supabase
@@ -403,19 +442,15 @@ export default function NewBookingPage() {
             .update({
               name: formData.customer_name,
               email: formData.customer_email,
-              emergency_contact: {
-                name: formData.emergency_contact_name,
-                phone: formData.emergency_contact_phone
-              },
-              identification: {
-                aadhar_number: formData.aadhar_number,
-                dl_number: formData.dl_number,
-                dl_expiry: formData.dl_expiry_date
-              },
-              address: {
-                temporary: formData.temp_address,
-                permanent: formData.perm_address
-              },
+              emergency_contact_name: formData.emergency_contact_name,
+              emergency_contact_phone: formData.emergency_contact_phone,
+              emergency_contact_relationship: 'emergency',
+              dob: formData.date_of_birth,
+              aadhar_number: formData.aadhar_number,
+              dl_number: formData.dl_number,
+              dl_expiry_date: formData.dl_expiry_date,
+              temp_address_street: formData.temp_address,
+              perm_address_street: formData.perm_address,
               documents: formData.documents
             })
             .eq('id', customerId);
@@ -433,19 +468,15 @@ export default function NewBookingPage() {
             name: formData.customer_name,
             email: formData.customer_email,
             phone: formData.customer_contact,
-            emergency_contact: {
-              name: formData.emergency_contact_name,
-              phone: formData.emergency_contact_phone
-            },
-            identification: {
-              aadhar_number: formData.aadhar_number,
-              dl_number: formData.dl_number,
-              dl_expiry: formData.dl_expiry_date
-            },
-            address: {
-              temporary: formData.temp_address,
-              permanent: formData.perm_address
-            },
+            emergency_contact_name: formData.emergency_contact_name,
+            emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_relationship: 'emergency',
+            dob: formData.date_of_birth,
+            aadhar_number: formData.aadhar_number,
+            dl_number: formData.dl_number,
+            dl_expiry_date: formData.dl_expiry_date,
+            temp_address_street: formData.temp_address,
+            perm_address_street: formData.perm_address,
             documents: formData.documents
           })
           .select('id')
@@ -470,7 +501,9 @@ export default function NewBookingPage() {
           customer_email: formData.customer_email,
           emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_phone: formData.emergency_contact_phone,
+          aadhar_number: formData.aadhar_number,
           date_of_birth: formData.date_of_birth,
+          dl_number: formData.dl_number,
           dl_expiry_date: formData.dl_expiry_date,
           temp_address: formData.temp_address,
           perm_address: formData.perm_address,
@@ -481,17 +514,11 @@ export default function NewBookingPage() {
           dropoff_time: formData.dropoff_time,
           booking_amount: parseFloat(formData.booking_amount),
           security_deposit_amount: parseFloat(formData.security_deposit_amount),
+          total_amount: parseFloat(formData.total_amount),
           payment_status: formData.payment_status,
           paid_amount: parseFloat(formData.paid_amount),
           payment_mode: formData.payment_mode,
-          status: 'confirmed',
-          created_at: new Date().toISOString(),
-          identification: {
-            aadhar_number: formData.aadhar_number,
-            dl_number: formData.dl_number,
-            dl_expiry: formData.dl_expiry_date
-          },
-          signature: formData.signature
+          status: 'confirmed'
         })
         .select()
         .single();
@@ -544,452 +571,474 @@ export default function NewBookingPage() {
             )}
 
             <div className="space-y-6">
-              {/* All form fields in one continuous section */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label htmlFor="customer_contact" className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer Contact *
-                  </label>
-                  <input
-                    id="customer_contact"
-                    type="tel"
-                    name="customer_contact"
-                    required
-                    value={formData.customer_contact}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  />
+              {/* Customer Information */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Customer Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label htmlFor="aadhar_number" className="block text-sm font-medium text-gray-700 mb-1">
+                      Aadhar Number *
+                    </label>
+                    <input
+                      id="aadhar_number"
+                      type="text"
+                      name="aadhar_number"
+                      required
+                      value={formData.aadhar_number}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                      maxLength={12}
+                      pattern="\d{12}"
+                      title="Please enter a valid 12-digit Aadhar number"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-1">
+                      Customer Name *
+                    </label>
+                    <input
+                      id="customer_name"
+                      type="text"
+                      name="customer_name"
+                      required
+                      value={formData.customer_name}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="customer_contact" className="block text-sm font-medium text-gray-700 mb-1">
+                      Phone Number *
+                    </label>
+                    <input
+                      id="customer_contact"
+                      type="tel"
+                      name="customer_contact"
+                      required
+                      value={formData.customer_contact}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                      maxLength={10}
+                      pattern="\d{10}"
+                      title="Please enter a valid 10-digit phone number"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="customer_email" className="block text-sm font-medium text-gray-700 mb-1">
+                      Email
+                    </label>
+                    <input
+                      id="customer_email"
+                      type="email"
+                      name="customer_email"
+                      value={formData.customer_email}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    />
+                  </div>
+
+                  {!isExistingCustomer && (
+                    <>
+                      <div>
+                        <label htmlFor="emergency_contact_name" className="block text-sm font-medium text-gray-700 mb-1">
+                          Emergency Contact Name *
+                        </label>
+                        <input
+                          id="emergency_contact_name"
+                          type="text"
+                          name="emergency_contact_name"
+                          required
+                          value={formData.emergency_contact_name}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          aria-required="true"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                          Emergency Contact Phone *
+                        </label>
+                        <input
+                          id="emergency_contact_phone"
+                          type="tel"
+                          name="emergency_contact_phone"
+                          required
+                          value={formData.emergency_contact_phone}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          aria-required="true"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 mb-1">
+                          Date of Birth *
+                        </label>
+                        <input
+                          id="date_of_birth"
+                          type="date"
+                          name="date_of_birth"
+                          required
+                          max={maxDOB}
+                          value={formData.date_of_birth}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          aria-required="true"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="dl_number" className="block text-sm font-medium text-gray-700 mb-1">
+                          Driving License Number *
+                        </label>
+                        <input
+                          id="dl_number"
+                          type="text"
+                          name="dl_number"
+                          required
+                          value={formData.dl_number}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          aria-required="true"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="dl_expiry_date" className="block text-sm font-medium text-gray-700 mb-1">
+                          DL Expiry Date *
+                        </label>
+                        <input
+                          id="dl_expiry_date"
+                          type="date"
+                          name="dl_expiry_date"
+                          required
+                          min={minDLExpiry}
+                          value={formData.dl_expiry_date}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          aria-required="true"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label htmlFor="temp_address" className="block text-sm font-medium text-gray-700 mb-1">
+                          Temporary Address *
+                        </label>
+                        <textarea
+                          id="temp_address"
+                          name="temp_address"
+                          required
+                          value={formData.temp_address}
+                          onChange={handleInputChange}
+                          rows={2}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          aria-required="true"
+                        />
+                      </div>
+
+                      <div className="md:col-span-2">
+                        <label htmlFor="perm_address" className="block text-sm font-medium text-gray-700 mb-1">
+                          Permanent Address *
+                        </label>
+                        <textarea
+                          id="perm_address"
+                          name="perm_address"
+                          required
+                          value={formData.perm_address}
+                          onChange={handleInputChange}
+                          rows={2}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          aria-required="true"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
+              </div>
 
-                <div>
-                  <label htmlFor="customer_email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Customer Email *
-                  </label>
-                  <input
-                    id="customer_email"
-                    type="email"
-                    name="customer_email"
-                    required
-                    value={formData.customer_email}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  />
+              {/* Vehicle Details */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Vehicle Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label htmlFor="vehicle_model" className="block text-sm font-medium text-gray-700 mb-1">
+                      Vehicle Model *
+                    </label>
+                    <input
+                      id="vehicle_model"
+                      type="text"
+                      name="vehicle_details.model"
+                      required
+                      value={formData.vehicle_details.model}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="vehicle_registration" className="block text-sm font-medium text-gray-700 mb-1">
+                      Registration Number *
+                    </label>
+                    <input
+                      id="vehicle_registration"
+                      type="text"
+                      name="vehicle_details.registration"
+                      required
+                      value={formData.vehicle_details.registration}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
                 </div>
+              </div>
 
-                {!isExistingCustomer && (
-                  <>
-                    <div>
-                      <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-1">
-                        Customer Name *
-                      </label>
-                      <input
-                        id="customer_name"
-                        type="text"
-                        name="customer_name"
-                        required
-                        value={formData.customer_name}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="emergency_contact_name" className="block text-sm font-medium text-gray-700 mb-1">
-                        Emergency Contact Name *
-                      </label>
-                      <input
-                        id="emergency_contact_name"
-                        type="text"
-                        name="emergency_contact_name"
-                        required
-                        value={formData.emergency_contact_name}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
-                        Emergency Contact Phone *
-                      </label>
-                      <input
-                        id="emergency_contact_phone"
-                        type="tel"
-                        name="emergency_contact_phone"
-                        required
-                        value={formData.emergency_contact_phone}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="aadhar_number" className="block text-sm font-medium text-gray-700 mb-1">
-                        Aadhar Number *
-                      </label>
-                      <input
-                        id="aadhar_number"
-                        type="text"
-                        name="aadhar_number"
-                        required
-                        value={formData.aadhar_number}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 mb-1">
-                        Date of Birth *
-                      </label>
-                      <input
-                        id="date_of_birth"
-                        type="date"
-                        name="date_of_birth"
-                        required
-                        max={maxDOB}
-                        value={formData.date_of_birth}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="dl_number" className="block text-sm font-medium text-gray-700 mb-1">
-                        Driving License Number *
-                      </label>
-                      <input
-                        id="dl_number"
-                        type="text"
-                        name="dl_number"
-                        required
-                        value={formData.dl_number}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="dl_expiry_date" className="block text-sm font-medium text-gray-700 mb-1">
-                        DL Expiry Date *
-                      </label>
-                      <input
-                        id="dl_expiry_date"
-                        type="date"
-                        name="dl_expiry_date"
-                        required
-                        min={minDLExpiry}
-                        value={formData.dl_expiry_date}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label htmlFor="temp_address" className="block text-sm font-medium text-gray-700 mb-1">
-                        Temporary Address *
-                      </label>
-                      <textarea
-                        id="temp_address"
-                        name="temp_address"
-                        required
-                        value={formData.temp_address}
-                        onChange={handleInputChange}
-                        rows={2}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-
-                    <div className="md:col-span-2">
-                      <label htmlFor="perm_address" className="block text-sm font-medium text-gray-700 mb-1">
-                        Permanent Address *
-                      </label>
-                      <textarea
-                        id="perm_address"
-                        name="perm_address"
-                        required
-                        value={formData.perm_address}
-                        onChange={handleInputChange}
-                        rows={2}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div>
-                  <label htmlFor="vehicle_model" className="block text-sm font-medium text-gray-700 mb-1">
-                    Vehicle Model *
-                  </label>
-                  <input
-                    id="vehicle_model"
-                    type="text"
-                    name="vehicle_details.model"
-                    required
-                    value={formData.vehicle_details.model}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  />
+              {/* Booking Details */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Booking Details</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                  <div>
+                    <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
+                      Start Date *
+                    </label>
+                    <input
+                      id="start_date"
+                      type="date"
+                      name="start_date"
+                      required
+                      min={today}
+                      max={maxStartDate}
+                      value={formData.start_date}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
+                      End Date *
+                    </label>
+                    <input
+                      id="end_date"
+                      type="date"
+                      name="end_date"
+                      required
+                      min={minEndDate}
+                      max={maxEndDate}
+                      value={formData.end_date}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="pickup_time" className="block text-sm font-medium text-gray-700 mb-1">
+                      Pickup Time *
+                    </label>
+                    <select
+                      id="pickup_time"
+                      name="pickup_time"
+                      required
+                      value={formData.pickup_time}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    >
+                      <option value="">Select time</option>
+                      {Array.from({ length: 48 }, (_, i): JSX.Element => {
+                        const hour = Math.floor(i / 2);
+                        const minute = i % 2 === 0 ? '00' : '30';
+                        const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+                        return (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="dropoff_time" className="block text-sm font-medium text-gray-700 mb-1">
+                      Drop-off Time *
+                    </label>
+                    <select
+                      id="dropoff_time"
+                      name="dropoff_time"
+                      required
+                      value={formData.dropoff_time}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    >
+                      <option value="">Select time</option>
+                      {Array.from({ length: 48 }, (_, i): JSX.Element => {
+                        const hour = Math.floor(i / 2);
+                        const minute = i % 2 === 0 ? '00' : '30';
+                        const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+                        return (
+                          <option key={time} value={time}>
+                            {time}
+                          </option>
+                        );
+                      })}
+                    </select>
+                  </div>
                 </div>
+              </div>
 
-                <div>
-                  <label htmlFor="vehicle_registration" className="block text-sm font-medium text-gray-700 mb-1">
-                    Registration Number *
-                  </label>
-                  <input
-                    id="vehicle_registration"
-                    type="text"
-                    name="vehicle_details.registration"
-                    required
-                    value={formData.vehicle_details.registration}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date *
-                  </label>
-                  <input
-                    id="start_date"
-                    type="date"
-                    name="start_date"
-                    required
-                    min={today}
-                    value={formData.start_date}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date *
-                  </label>
-                  <input
-                    id="end_date"
-                    type="date"
-                    name="end_date"
-                    required
-                    min={minEndDate}
-                    value={formData.end_date}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="pickup_time" className="block text-sm font-medium text-gray-700 mb-1">
-                    Pickup Time *
-                  </label>
-                  <input
-                    id="pickup_time"
-                    type="time"
-                    name="pickup_time"
-                    required
-                    value={formData.pickup_time}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="dropoff_time" className="block text-sm font-medium text-gray-700 mb-1">
-                    Dropoff Time *
-                  </label>
-                  <input
-                    id="dropoff_time"
-                    type="time"
-                    name="dropoff_time"
-                    required
-                    value={formData.dropoff_time}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="booking_amount" className="block text-sm font-medium text-gray-700 mb-1">
-                    Booking Amount *
-                  </label>
-                  <div className="relative">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
+              {/* Payment Details */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Payment Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div>
+                    <label htmlFor="booking_amount" className="block text-sm font-medium text-gray-700 mb-1">
+                      Booking Amount *
+                    </label>
                     <input
                       id="booking_amount"
                       type="number"
                       name="booking_amount"
                       required
-                      min="0"
-                      step="0.01"
                       value={formData.booking_amount}
                       onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      min="0"
+                      step="0.01"
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label htmlFor="security_deposit_amount" className="block text-sm font-medium text-gray-700 mb-1">
-                    Security Deposit Amount *
-                  </label>
-                  <div className="relative">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
+                  <div>
+                    <label htmlFor="security_deposit" className="block text-sm font-medium text-gray-700 mb-1">
+                      Security Deposit Amount *
+                    </label>
                     <input
-                      id="security_deposit_amount"
+                      id="security_deposit"
                       type="number"
                       name="security_deposit_amount"
                       required
-                      min="0"
-                      step="0.01"
                       value={formData.security_deposit_amount}
                       onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      min="0"
+                      step="0.01"
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label htmlFor="total_amount" className="block text-sm font-medium text-gray-700 mb-1">
-                    Total Amount
-                  </label>
-                  <div className="relative">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
+                  <div>
+                    <label htmlFor="total_amount" className="block text-sm font-medium text-gray-700 mb-1">
+                      Total Amount
+                    </label>
                     <input
                       id="total_amount"
-                      type="text"
-                      readOnly
+                      type="number"
+                      name="total_amount"
                       value={formData.total_amount}
-                      className="block w-full rounded-md border-gray-300 pl-7 bg-gray-50 shadow-sm sm:text-sm"
-                      aria-label="Total Amount"
+                      readOnly
+                      className="block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label htmlFor="payment_status" className="block text-sm font-medium text-gray-700 mb-1">
-                    Payment Status *
-                  </label>
-                  <select
-                    id="payment_status"
-                    name="payment_status"
-                    required
-                    value={formData.payment_status}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="partial">Partial</option>
-                    <option value="full">Full</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="paid_amount" className="block text-sm font-medium text-gray-700 mb-1">
-                    Paid Amount *
-                  </label>
-                  <div className="relative">
-                    <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-                      <span className="text-gray-500 sm:text-sm">₹</span>
-                    </div>
+                  <div>
+                    <label htmlFor="payment_status" className="block text-sm font-medium text-gray-700 mb-1">
+                      Payment Status *
+                    </label>
+                    <select
+                      id="payment_status"
+                      name="payment_status"
+                      required
+                      value={formData.payment_status}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="partial">Partial Payment</option>
+                      <option value="full">Full Payment</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="paid_amount" className="block text-sm font-medium text-gray-700 mb-1">
+                      Paid Amount
+                    </label>
                     <input
                       id="paid_amount"
                       type="number"
                       name="paid_amount"
-                      required
-                      min="0"
-                      step="0.01"
                       value={formData.paid_amount}
                       onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 pl-7 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
+                      min="0"
+                      step="0.01"
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                     />
                   </div>
-                </div>
-
-                <div>
-                  <label htmlFor="payment_mode" className="block text-sm font-medium text-gray-700 mb-1">
-                    Payment Mode *
-                  </label>
-                  <select
-                    id="payment_mode"
-                    name="payment_mode"
-                    required
-                    value={formData.payment_mode}
-                    onChange={handleInputChange}
-                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    aria-required="true"
-                  >
-                    <option value="cash">Cash</option>
-                    <option value="upi">UPI</option>
-                    <option value="card">Card</option>
-                    <option value="bank_transfer">Bank Transfer</option>
-                  </select>
+                  <div>
+                    <label htmlFor="payment_mode" className="block text-sm font-medium text-gray-700 mb-1">
+                      Payment Mode
+                    </label>
+                    <select
+                      id="payment_mode"
+                      name="payment_mode"
+                      value={formData.payment_mode}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                      <option value="card">Card</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                    </select>
+                  </div>
                 </div>
               </div>
 
+              {/* Document Upload - Only for new customers */}
               {!isExistingCustomer && (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <DocumentUpload
-                    customerId={formData.customer_contact}
-                    documentType="customer_photo"
-                    onUploadComplete={(url) => handleDocumentUpload('customer_photo', url)}
-                    existingUrl={formData.documents.customer_photo}
-                  />
-                  <DocumentUpload
-                    customerId={formData.customer_contact}
-                    documentType="aadhar_front"
-                    onUploadComplete={(url) => handleDocumentUpload('aadhar_front', url)}
-                    existingUrl={formData.documents.aadhar_front}
-                  />
-                  <DocumentUpload
-                    customerId={formData.customer_contact}
-                    documentType="aadhar_back"
-                    onUploadComplete={(url) => handleDocumentUpload('aadhar_back', url)}
-                    existingUrl={formData.documents.aadhar_back}
-                  />
-                  <DocumentUpload
-                    customerId={formData.customer_contact}
-                    documentType="dl_front"
-                    onUploadComplete={(url) => handleDocumentUpload('dl_front', url)}
-                    existingUrl={formData.documents.dl_front}
-                  />
-                  <DocumentUpload
-                    customerId={formData.customer_contact}
-                    documentType="dl_back"
-                    onUploadComplete={(url) => handleDocumentUpload('dl_back', url)}
-                    existingUrl={formData.documents.dl_back}
-                  />
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Document Upload</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <DocumentUpload
+                      customerId={formData.customer_contact}
+                      documentType="customer_photo"
+                      onUploadComplete={(url) => handleDocumentUpload('customer_photo', url)}
+                      existingUrl={formData.documents.customer_photo}
+                    />
+                    <DocumentUpload
+                      customerId={formData.customer_contact}
+                      documentType="aadhar_front"
+                      onUploadComplete={(url) => handleDocumentUpload('aadhar_front', url)}
+                      existingUrl={formData.documents.aadhar_front}
+                    />
+                    <DocumentUpload
+                      customerId={formData.customer_contact}
+                      documentType="aadhar_back"
+                      onUploadComplete={(url) => handleDocumentUpload('aadhar_back', url)}
+                      existingUrl={formData.documents.aadhar_back}
+                    />
+                    <DocumentUpload
+                      customerId={formData.customer_contact}
+                      documentType="dl_front"
+                      onUploadComplete={(url) => handleDocumentUpload('dl_front', url)}
+                      existingUrl={formData.documents.dl_front}
+                    />
+                    <DocumentUpload
+                      customerId={formData.customer_contact}
+                      documentType="dl_back"
+                      onUploadComplete={(url) => handleDocumentUpload('dl_back', url)}
+                      existingUrl={formData.documents.dl_back}
+                    />
+                  </div>
                 </div>
               )}
 
-              <div>
+              {/* Signature */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Signature</h3>
                 <div className="border rounded-lg p-4">
                   <div className="border border-gray-300 rounded-lg bg-white">
                     <SignaturePad
@@ -1013,31 +1062,35 @@ export default function NewBookingPage() {
                 </div>
               </div>
 
-              <div className="flex items-start">
-                <div className="flex items-center h-5">
-                  <input
-                    id="terms"
-                    name="terms"
-                    type="checkbox"
-                    checked={formData.terms_accepted}
-                    onChange={(e) => setFormData(prev => ({ ...prev, terms_accepted: e.target.checked }))}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                </div>
-                <div className="ml-3 text-sm">
-                  <label htmlFor="terms" className="font-medium text-gray-700">
-                    I accept the terms and conditions
-                  </label>
-                  <p className="text-gray-500">
-                    By checking this box, you agree to our{' '}
-                    <a href="/terms" className="text-blue-600 hover:text-blue-500">
-                      Terms of Service
-                    </a>{' '}
-                    and{' '}
-                    <a href="/privacy" className="text-blue-600 hover:text-blue-500">
-                      Privacy Policy
-                    </a>
-                  </p>
+              {/* Terms and Conditions */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Terms and Conditions</h3>
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="terms"
+                      name="terms"
+                      type="checkbox"
+                      checked={formData.terms_accepted}
+                      onChange={(e) => setFormData(prev => ({ ...prev, terms_accepted: e.target.checked }))}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="terms" className="font-medium text-gray-700">
+                      I accept the terms and conditions
+                    </label>
+                    <p className="text-gray-500">
+                      By checking this box, you agree to our{' '}
+                      <a href="/terms" className="text-blue-600 hover:text-blue-500">
+                        Terms of Service
+                      </a>{' '}
+                      and{' '}
+                      <a href="/privacy" className="text-blue-600 hover:text-blue-500">
+                        Privacy Policy
+                      </a>
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>

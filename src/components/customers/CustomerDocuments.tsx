@@ -206,6 +206,7 @@ export default function CustomerDocuments({
                       width={400}
                       height={160}
                       className="w-full h-40 object-cover rounded-lg"
+                      style={{ width: 'auto', height: '160px' }}
                     />
                     <button
                       type="button"

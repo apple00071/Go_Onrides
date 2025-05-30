@@ -9,14 +9,12 @@ interface CustomerModalProps {
   onCustomerCreated: () => void;
 }
 
-interface CustomerFormData {
+interface FormData {
   name: string;
   phone: string;
   email: string;
-  address: {
-    permanent?: string;
-    temporary?: string;
-  };
+  temp_address_street: string;
+  perm_address_street: string;
 }
 
 const CustomerModal: React.FC<CustomerModalProps> = ({
@@ -24,13 +22,25 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
   onClose,
   onCustomerCreated,
 }) => {
-  const [formData, setFormData] = useState<CustomerFormData>({
+  const [formData, setFormData] = useState<FormData>({
     name: '',
     phone: '',
     email: '',
-    address: {},
+    temp_address_street: '',
+    perm_address_street: ''
   });
   const [loading, setLoading] = useState(false);
+
+  const handleClose = () => {
+    setFormData({
+      name: '',
+      phone: '',
+      email: '',
+      temp_address_street: '',
+      perm_address_street: ''
+    });
+    onClose();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,22 +48,22 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
 
     try {
       const supabase = createClientComponentClient();
-      const { error } = await supabase.from('customers').insert([
-        {
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          address: formData.address,
-        },
-      ]);
+      const { error } = await supabase.from('customers').insert([{
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        temp_address_street: formData.temp_address_street,
+        perm_address_street: formData.perm_address_street
+      }]);
 
       if (error) throw error;
 
       onCustomerCreated();
-      setFormData({ name: '', phone: '', email: '', address: {} });
+      toast.success('Customer added successfully');
+      handleClose();
     } catch (error) {
-      console.error('Error creating customer:', error);
-      toast.error('Failed to create customer');
+      console.error('Error adding customer:', error);
+      toast.error('Failed to add customer');
     } finally {
       setLoading(false);
     }
@@ -64,14 +74,14 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex min-h-screen items-end justify-center px-4 pb-20 pt-4 text-center sm:block sm:p-0">
-        <div className="fixed inset-0 transition-opacity" onClick={onClose}>
+        <div className="fixed inset-0 transition-opacity" onClick={handleClose}>
           <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
         </div>
 
         <div className="inline-block transform overflow-hidden rounded-lg bg-white px-4 pb-4 pt-5 text-left align-bottom shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg sm:p-6 sm:align-middle">
           <div className="absolute right-0 top-0 hidden pr-4 pt-4 sm:block">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="rounded-md bg-white text-gray-400 hover:text-gray-500 focus:outline-none"
             >
               <X className="h-6 w-6" />
@@ -151,14 +161,11 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     <input
                       type="text"
                       id="permanent-address"
-                      value={formData.address.permanent || ''}
+                      value={formData.perm_address_street || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          address: {
-                            ...prev.address,
-                            permanent: e.target.value,
-                          },
+                          perm_address_street: e.target.value,
                         }))
                       }
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
@@ -175,14 +182,11 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     <input
                       type="text"
                       id="temporary-address"
-                      value={formData.address.temporary || ''}
+                      value={formData.temp_address_street || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
-                          address: {
-                            ...prev.address,
-                            temporary: e.target.value,
-                          },
+                          temp_address_street: e.target.value,
                         }))
                       }
                       className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 sm:text-sm"
@@ -199,7 +203,7 @@ const CustomerModal: React.FC<CustomerModalProps> = ({
                     </button>
                     <button
                       type="button"
-                      onClick={onClose}
+                      onClick={handleClose}
                       className="mt-3 inline-flex w-full justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:mt-0 sm:w-auto sm:text-sm"
                     >
                       Cancel

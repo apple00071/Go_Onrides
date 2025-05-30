@@ -282,7 +282,7 @@ export default function PaymentsPage() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="text-sm font-medium text-gray-900">
-                      <span className="font-mono">₹</span>{formatCurrency(payment.amount).replace('₹', '')}
+                      {formatCurrency(payment.amount)}
                     </div>
                   </td>
                   <td className="px-6 py-4">
@@ -314,4 +314,4 @@ export default function PaymentsPage() {
       />
     </div>
   );
-} 
+}

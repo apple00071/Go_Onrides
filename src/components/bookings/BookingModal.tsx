@@ -6,6 +6,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import DocumentUpload from './DocumentUpload';
 import { generateBookingId } from '@/lib/utils';
+import { CurrencyInput } from '@/components/ui/currency-input';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -91,9 +92,11 @@ export default function BookingModal({
     payment_mode: 'cash',
     status: 'confirmed',
     documents: {
-      aadhar_card: '',
-      driving_license: '',
-      customer_photo: ''
+      customer_photo: '',
+      aadhar_front: '',
+      aadhar_back: '',
+      dl_front: '',
+      dl_back: ''
     }
   }), []); // Empty dependency array since this never changes
 
@@ -362,7 +365,7 @@ export default function BookingModal({
     try {
       const supabase = getSupabaseClient();
 
-      // Generate the booking ID
+      // Generate a new booking ID
       const bookingId = await generateBookingId(supabase);
 
       // Validate required fields based on customer type
@@ -449,19 +452,15 @@ export default function BookingModal({
             .update({
               name: formData.customer_name,
               email: formData.customer_email,
-              emergency_contact: {
-                name: formData.emergency_contact_name,
-                phone: formData.emergency_contact_phone
-              },
-              identification: {
-                aadhar_number: formData.aadhar_number,
-                dl_number: formData.dl_number,
-                dl_expiry: formData.dl_expiry_date
-              },
-              address: {
-                temporary: formData.temp_address,
-                permanent: formData.perm_address
-              },
+              emergency_contact_name: formData.emergency_contact_name,
+              emergency_contact_phone: formData.emergency_contact_phone,
+              emergency_contact_relationship: 'emergency',
+              dob: formData.date_of_birth,
+              aadhar_number: formData.aadhar_number,
+              dl_number: formData.dl_number,
+              dl_expiry_date: formData.dl_expiry_date,
+              temp_address_street: formData.temp_address,
+              perm_address_street: formData.perm_address,
               documents: formData.documents
             })
             .eq('id', customerId);
@@ -479,19 +478,15 @@ export default function BookingModal({
             name: formData.customer_name,
             email: formData.customer_email,
             phone: formData.customer_contact,
-            emergency_contact: {
-              name: formData.emergency_contact_name,
-              phone: formData.emergency_contact_phone
-            },
-            identification: {
-              aadhar_number: formData.aadhar_number,
-              dl_number: formData.dl_number,
-              dl_expiry: formData.dl_expiry_date
-            },
-            address: {
-              temporary: formData.temp_address,
-              permanent: formData.perm_address
-            },
+            emergency_contact_name: formData.emergency_contact_name,
+            emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_relationship: 'emergency',
+            dob: formData.date_of_birth,
+            aadhar_number: formData.aadhar_number,
+            dl_number: formData.dl_number,
+            dl_expiry_date: formData.dl_expiry_date,
+            temp_address_street: formData.temp_address,
+            perm_address_street: formData.perm_address,
             documents: formData.documents
           })
           .select('id')
@@ -518,7 +513,9 @@ export default function BookingModal({
           customer_email: formData.customer_email,
           emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_phone: formData.emergency_contact_phone,
+          aadhar_number: formData.aadhar_number,
           date_of_birth: formData.date_of_birth,
+          dl_number: formData.dl_number,
           dl_expiry_date: formData.dl_expiry_date,
           temp_address: formData.temp_address,
           perm_address: formData.perm_address,
@@ -529,16 +526,11 @@ export default function BookingModal({
           dropoff_time: formData.dropoff_time,
           booking_amount: parseFloat(formData.booking_amount),
           security_deposit_amount: parseFloat(formData.security_deposit_amount),
+          total_amount: parseFloat(formData.total_amount),
           payment_status: formData.payment_status,
           paid_amount: parseFloat(formData.paid_amount),
           payment_mode: formData.payment_mode,
-          status: 'confirmed',
-          created_at: new Date().toISOString(),
-          identification: {
-            aadhar_number: formData.aadhar_number,
-            dl_number: formData.dl_number,
-            dl_expiry: formData.dl_expiry_date
-          }
+          status: 'confirmed'
         })
         .select()
         .single();
@@ -896,41 +888,27 @@ export default function BookingModal({
               <label className="block text-sm font-medium text-gray-700">
                 Booking Amount *
               </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 sm:text-sm">₹</span>
-                </div>
-                <input
-                  type="number"
-                  name="booking_amount"
-                  required
-                  min="0"
-                  step="0.01"
-                  value={formData.booking_amount}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full pl-7 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
+              <CurrencyInput
+                name="booking_amount"
+                required
+                value={formData.booking_amount}
+                onChange={handleInputChange}
+                error={error?.includes('booking_amount')}
+                helperText={error?.includes('booking_amount') ? error : undefined}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Security Deposit Amount *
               </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 sm:text-sm">₹</span>
-                </div>
-                <input
-                  type="number"
-                  name="security_deposit_amount"
-                  required
-                  min="0"
-                  step="0.01"
-                  value={formData.security_deposit_amount}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full pl-7 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
+              <CurrencyInput
+                name="security_deposit_amount"
+                required
+                value={formData.security_deposit_amount}
+                onChange={handleInputChange}
+                error={error?.includes('security_deposit')}
+                helperText={error?.includes('security_deposit') ? error : undefined}
+              />
             </div>
           </div>
 
@@ -940,18 +918,12 @@ export default function BookingModal({
               <label className="block text-sm font-medium text-gray-700">
                 Total Amount
               </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 sm:text-sm">₹</span>
-                </div>
-                <input
-                  type="number"
-                  name="total_amount"
-                  readOnly
-                  value={formData.total_amount}
-                  className="mt-1 block w-full pl-7 border-gray-300 bg-gray-50 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
+              <CurrencyInput
+                name="total_amount"
+                readOnly
+                value={formData.total_amount}
+                className="bg-gray-50"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">
@@ -977,20 +949,13 @@ export default function BookingModal({
               <label className="block text-sm font-medium text-gray-700">
                 Paid Amount
               </label>
-              <div className="mt-1 relative rounded-md shadow-sm">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-gray-500 sm:text-sm">₹</span>
-                </div>
-                <input
-                  type="number"
-                  name="paid_amount"
-                  min="0"
-                  step="0.01"
-                  value={formData.paid_amount}
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full pl-7 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
+              <CurrencyInput
+                name="paid_amount"
+                value={formData.paid_amount}
+                onChange={handleInputChange}
+                error={error?.includes('paid_amount')}
+                helperText={error?.includes('paid_amount') ? error : undefined}
+              />
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700">

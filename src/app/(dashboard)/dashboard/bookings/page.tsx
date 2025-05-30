@@ -67,7 +67,7 @@ export default function BookingsPage() {
     const matchesSearch = booking.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          booking.customer_contact?.includes(searchTerm) ||
                          booking.booking_id?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesFilter = filterStatus === 'all' || booking.status === filterStatus;
 
     return matchesSearch && matchesFilter;
@@ -107,7 +107,7 @@ export default function BookingsPage() {
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Filter className="h-5 w-5 text-gray-400" />
-                </div>
+          </div>
                 <select
                   value={filterStatus}
                   onChange={handleFilterChange}

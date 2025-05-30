@@ -5,6 +5,7 @@ import { X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import type { Booking } from '@/types/database';
 import { formatCurrency } from '@/lib/utils';
+import { CurrencyInput } from '@/components/ui/currency-input';
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -12,11 +13,21 @@ interface PaymentModalProps {
   onPaymentCreated: () => void;
 }
 
-interface BookingWithPayments extends Booking {
-  total_amount: number;
-  paid_amount: number;
-  remaining_amount: number;
+interface BookingWithPayments {
+  id: string;
   booking_id: string;
+  customer_name: string;
+  vehicle_details: {
+    model: string;
+    registration: string;
+  };
+  booking_amount: number;
+  security_deposit_amount: number;
+  paid_amount: number;
+  payment_status: string;
+  status: string;
+  total_amount: number;
+  remaining_amount: number;
 }
 
 export default function PaymentModal({
@@ -44,26 +55,50 @@ export default function PaymentModal({
   const fetchBookings = async () => {
     try {
       const supabase = getSupabaseClient();
+      console.log('Fetching bookings...');
       
-      // First, get all active bookings
+      // Get all active bookings with pending or partial payments
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
-          *,
-          payments (
-            amount
-          )
+          id,
+          booking_id,
+          customer_name,
+          vehicle_details,
+          booking_amount,
+          security_deposit_amount,
+          paid_amount,
+          payment_status,
+          status,
+          total_amount
         `)
-        .in('status', ['confirmed', 'in_use'])
+        .in('payment_status', ['pending', 'partial'])
         .order('created_at', { ascending: false });
 
-      if (bookingsError) throw bookingsError;
+      if (bookingsError) {
+        console.error('Booking fetch error:', bookingsError);
+        throw bookingsError;
+      }
 
-      // Calculate total and remaining amounts for each booking
-      const processedBookings = (bookingsData || []).map(booking => {
-        const totalAmount = booking.booking_amount + booking.security_deposit_amount;
-        const paidAmount = booking.payments?.reduce((sum: number, payment: { amount: number }) => sum + (payment.amount || 0), 0) || 0;
+      console.log('Raw bookings data:', bookingsData);
+
+      if (!bookingsData || bookingsData.length === 0) {
+        console.log('No bookings found with pending/partial payments');
+        setBookings([]);
+        return;
+      }
+
+      // Process bookings to calculate remaining amounts
+      const processedBookings = bookingsData.map(booking => {
+        const totalAmount = booking.total_amount || (booking.booking_amount + booking.security_deposit_amount);
+        const paidAmount = booking.paid_amount || 0;
         const remainingAmount = totalAmount - paidAmount;
+
+        console.log(`Processing booking ${booking.booking_id}:`, {
+          totalAmount,
+          paidAmount,
+          remainingAmount
+        });
 
         return {
           ...booking,
@@ -77,6 +112,8 @@ export default function PaymentModal({
       const bookingsWithPendingPayments = processedBookings.filter(
         booking => booking.remaining_amount > 0
       );
+
+      console.log('Final bookings with pending payments:', bookingsWithPendingPayments);
 
       setBookings(bookingsWithPendingPayments);
     } catch (error) {
@@ -131,7 +168,7 @@ export default function PaymentModal({
           amount: amount,
           payment_mode: formData.payment_mode,
           payment_status: 'completed',
-          created_at: new Date(formData.payment_date).toISOString()
+          created_at: new Date().toISOString()
         });
 
       if (paymentError) throw paymentError;
@@ -206,15 +243,15 @@ export default function PaymentModal({
             <div className="bg-gray-50 p-3 rounded-md space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Total Amount:</span>
-                <span className="font-medium"><span className="font-mono">₹</span>{formatCurrency(selectedBooking.total_amount).replace('₹', '')}</span>
+                <span className="font-medium">{formatCurrency(selectedBooking.total_amount)}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-500">Paid Amount:</span>
-                <span className="font-medium"><span className="font-mono">₹</span>{formatCurrency(selectedBooking.paid_amount).replace('₹', '')}</span>
+                <span className="font-medium">{formatCurrency(selectedBooking.paid_amount)}</span>
               </div>
               <div className="flex justify-between text-sm font-medium">
                 <span className="text-gray-500">Remaining Amount:</span>
-                <span className="text-blue-600"><span className="font-mono">₹</span>{formatCurrency(selectedBooking.remaining_amount).replace('₹', '')}</span>
+                <span className="text-blue-600">{formatCurrency(selectedBooking.remaining_amount)}</span>
               </div>
             </div>
           )}
@@ -223,23 +260,16 @@ export default function PaymentModal({
             <label className="block text-sm font-medium text-gray-700">
               Amount
             </label>
-            <div className="mt-1 relative rounded-md shadow-sm">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <span className="text-gray-500 sm:text-sm font-mono">₹</span>
-              </div>
-              <input
-                type="number"
-                name="amount"
-                required
-                min="0"
-                step="0.01"
-                value={formData.amount}
-                onChange={handleInputChange}
-                max={selectedBooking?.remaining_amount}
-                className="block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                placeholder={selectedBooking ? `Max ${formatCurrency(selectedBooking.remaining_amount)}` : '0.00'}
-              />
-            </div>
+            <CurrencyInput
+              name="amount"
+              required
+              value={formData.amount}
+              onChange={handleInputChange}
+              max={selectedBooking?.remaining_amount}
+              placeholder={selectedBooking ? `Max ${formatCurrency(selectedBooking.remaining_amount)}` : '0.00'}
+              error={!!error}
+              helperText={error || undefined}
+            />
           </div>
 
           <div>

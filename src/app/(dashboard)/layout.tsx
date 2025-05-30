@@ -165,12 +165,12 @@ export default function DashboardLayout({
         <div className="flex-1 ml-64">
           {/* Header */}
           <header className="fixed top-0 right-0 left-64 h-16 bg-white border-b z-10">
-            <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
+          <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
           </header>
 
           {/* Main content area with proper scrolling */}
           <main className="pt-16 min-w-[1024px] overflow-x-auto">
-            {children}
+          {children}
           </main>
         </div>
       </div>

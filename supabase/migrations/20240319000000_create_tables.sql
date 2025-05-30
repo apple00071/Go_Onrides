@@ -4,46 +4,62 @@ DROP TABLE IF EXISTS documents CASCADE;
 DROP TABLE IF EXISTS bookings CASCADE;
 DROP TABLE IF EXISTS customers CASCADE;
 
--- Create customers table first
+-- Create customers table
 CREATE TABLE IF NOT EXISTS customers (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    phone VARCHAR(20) NOT NULL UNIQUE,
-    emergency_contact JSONB NOT NULL,
-    identification JSONB NOT NULL,
-    address JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT NOT NULL,
+  dob DATE,
+  aadhar_number TEXT,
+  dl_number TEXT,
+  dl_expiry_date DATE,
+  temp_address_street TEXT,
+  temp_address_city TEXT,
+  temp_address_state TEXT,
+  temp_address_pincode TEXT,
+  perm_address_street TEXT,
+  perm_address_city TEXT,
+  perm_address_state TEXT,
+  perm_address_pincode TEXT,
+  emergency_contact_name TEXT,
+  emergency_contact_phone TEXT,
+  emergency_contact_relationship TEXT,
+  documents JSONB,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
--- Create bookings table with proper foreign key reference
+-- Create bookings table
 CREATE TABLE IF NOT EXISTS bookings (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    customer_id UUID NOT NULL,
-    customer_name VARCHAR(255) NOT NULL,
-    customer_contact VARCHAR(20) NOT NULL,
-    emergency_contact_name VARCHAR(255) NOT NULL,
-    emergency_contact_phone VARCHAR(20) NOT NULL,
-    aadhar_number VARCHAR(20) NOT NULL,
-    date_of_birth DATE NOT NULL,
-    dl_number VARCHAR(50) NOT NULL,
-    dl_expiry_date DATE NOT NULL,
-    temp_address TEXT NOT NULL,
-    perm_address TEXT NOT NULL,
-    vehicle_details JSONB NOT NULL,
-    start_date DATE NOT NULL,
-    end_date DATE NOT NULL,
-    pickup_time TIME NOT NULL,
-    dropoff_time TIME NOT NULL,
-    booking_amount DECIMAL(10,2) NOT NULL,
-    security_deposit_amount DECIMAL(10,2) NOT NULL,
-    payment_status VARCHAR(20) NOT NULL,
-    paid_amount DECIMAL(10,2) NOT NULL,
-    payment_mode VARCHAR(20) NOT NULL,
-    status VARCHAR(20) NOT NULL DEFAULT 'pending',
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-    CONSTRAINT fk_customer FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  booking_id TEXT NOT NULL UNIQUE,
+  customer_id UUID REFERENCES customers(id),
+  customer_name TEXT NOT NULL,
+  customer_contact TEXT NOT NULL,
+  customer_email TEXT,
+  emergency_contact_name TEXT,
+  emergency_contact_phone TEXT,
+  aadhar_number TEXT,
+  date_of_birth DATE,
+  dl_number TEXT,
+  dl_expiry_date DATE,
+  temp_address TEXT,
+  perm_address TEXT,
+  vehicle_details JSONB NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  pickup_time TIME NOT NULL,
+  dropoff_time TIME NOT NULL,
+  booking_amount DECIMAL(10,2) NOT NULL,
+  security_deposit_amount DECIMAL(10,2) NOT NULL,
+  total_amount DECIMAL(10,2) NOT NULL,
+  payment_status TEXT NOT NULL,
+  paid_amount DECIMAL(10,2) NOT NULL,
+  payment_mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Create documents table

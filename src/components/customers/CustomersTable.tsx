@@ -2,16 +2,12 @@ import React from 'react';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 
-interface Address {
-  permanent?: string;
-  temporary?: string;
-}
-
 interface Customer {
   id: string;
   name: string;
   phone: string;
-  address?: Address;
+  temp_address_street: string | null;
+  perm_address_street: string | null;
   created_at: string;
 }
 
@@ -24,13 +20,6 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers }) => {
 
   const handleRowClick = (customerId: string) => {
     router.push(`/customers/${customerId}`);
-  };
-
-  const formatAddress = (address?: Address) => {
-    if (!address) return 'N/A';
-    if (address.temporary) return `Temp: ${address.temporary}`;
-    if (address.permanent) return `Perm: ${address.permanent}`;
-    return 'N/A';
   };
 
   return (
@@ -74,23 +63,23 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers }) => {
                   </span>
                 </td>
                 <td className="px-6 py-4">
-                    <span className="text-sm font-medium text-gray-900">
-                      {customer.phone}
-                    </span>
+                  <span className="text-sm font-medium text-gray-900">
+                    {customer.phone}
+                  </span>
                 </td>
                 <td className="px-6 py-4">
                   <div className="space-y-1">
-                    {customer.address?.permanent && (
+                    {customer.perm_address_street && (
                       <div className="text-sm text-gray-500">
-                        <span className="font-medium">Permanent:</span> {customer.address.permanent}
+                        <span className="font-medium">Permanent:</span> {customer.perm_address_street}
                       </div>
                     )}
-                    {customer.address?.temporary && (
+                    {customer.temp_address_street && (
                       <div className="text-sm text-gray-500">
-                        <span className="font-medium">Temporary:</span> {customer.address.temporary}
+                        <span className="font-medium">Temporary:</span> {customer.temp_address_street}
                       </div>
                     )}
-                    {!customer.address?.permanent && !customer.address?.temporary && (
+                    {!customer.perm_address_street && !customer.temp_address_street && (
                       <span className="text-sm text-gray-500">N/A</span>
                     )}
                   </div>

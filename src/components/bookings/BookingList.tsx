@@ -1,7 +1,9 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import CompleteBookingModal from './CompleteBookingModal';
 
 interface Booking {
   id: string;
@@ -16,6 +18,8 @@ interface Booking {
   end_date: string;
   booking_amount: number;
   security_deposit_amount: number;
+  total_amount: number;
+  paid_amount: number;
   payment_status: string;
   status: string;
   created_at: string;
@@ -27,6 +31,8 @@ interface BookingListProps {
 
 export default function BookingList({ bookings }: BookingListProps) {
   const router = useRouter();
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800',
@@ -44,91 +50,131 @@ export default function BookingList({ bookings }: BookingListProps) {
     }
   };
 
+  const handleCompleteClick = (e: React.MouseEvent, booking: Booking) => {
+    e.stopPropagation(); // Prevent row click
+    setSelectedBooking(booking);
+    setShowCompleteModal(true);
+  };
+
+  const handleCompleteSuccess = () => {
+    router.refresh(); // Refresh the page to show updated data
+  };
+
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-gray-200">
-        <thead className="bg-gray-50">
-          <tr>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Booking ID
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Customer
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Vehicle
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Duration
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Amount
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Payment
-            </th>
-            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Status
-            </th>
-          </tr>
-        </thead>
-        <tbody className="bg-white divide-y divide-gray-200">
-          {bookings.map((booking) => (
-            <tr
-              key={booking.id}
-              onClick={() => handleBookingClick(booking)}
-              className="hover:bg-gray-50 cursor-pointer"
-            >
-              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                {booking.booking_id || booking.id}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="text-sm font-medium text-gray-900">
-                  {booking.customer_name}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {booking.customer_contact}
-                </div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="text-sm font-medium text-gray-900">
-                  {booking.vehicle_details.model}
-                </div>
-                <div className="text-sm text-gray-500">
-                  {booking.vehicle_details.registration}
-                </div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <div className="text-sm text-gray-900">
-                  {formatDate(booking.start_date)}
-                </div>
-                <div className="text-sm text-gray-500">
-                  to {formatDate(booking.end_date)}
-                </div>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                {formatCurrency(booking.booking_amount + booking.security_deposit_amount)}
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <span className={`inline-flex text-xs leading-5 font-semibold rounded-full px-2 py-1 ${
-                  booking.payment_status === 'full'
-                    ? 'bg-green-100 text-green-800'
-                    : booking.payment_status === 'partial'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-red-100 text-red-800'
-                }`}>
-                  {booking.payment_status}
-                </span>
-              </td>
-              <td className="px-6 py-4 whitespace-nowrap">
-                <span className={`inline-flex text-xs leading-5 font-semibold rounded-full px-2 py-1 ${statusColors[booking.status as keyof typeof statusColors]}`}>
-                  {booking.status}
-                </span>
-              </td>
+    <>
+      <div className="overflow-x-auto">
+        <table className="min-w-full divide-y divide-gray-200">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Booking ID
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Customer
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Vehicle
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Duration
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Amount
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Payment
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Status
+              </th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                Actions
+              </th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {bookings.map((booking) => (
+              <tr
+                key={booking.id}
+                onClick={() => handleBookingClick(booking)}
+                className="hover:bg-gray-50 cursor-pointer"
+              >
+                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                  {booking.booking_id || booking.id}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">
+                    {booking.customer_name}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {booking.customer_contact}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm font-medium text-gray-900">
+                    {booking.vehicle_details.model}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    {booking.vehicle_details.registration}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <div className="text-sm text-gray-900">
+                    {formatDate(booking.start_date)}
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    to {formatDate(booking.end_date)}
+                  </div>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  {formatCurrency(booking.booking_amount + booking.security_deposit_amount)}
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex text-xs leading-5 font-semibold rounded-full px-2 py-1 ${
+                    booking.payment_status === 'full'
+                      ? 'bg-green-100 text-green-800'
+                      : booking.payment_status === 'partial'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {booking.payment_status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap">
+                  <span className={`inline-flex text-xs leading-5 font-semibold rounded-full px-2 py-1 ${statusColors[booking.status as keyof typeof statusColors]}`}>
+                    {booking.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  {booking.status === 'in_use' && (
+                    <button
+                      onClick={(e) => handleCompleteClick(e, booking)}
+                      className="text-blue-600 hover:text-blue-900"
+                    >
+                      Complete
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {selectedBooking && (
+        <CompleteBookingModal
+          isOpen={showCompleteModal}
+          onClose={() => {
+            setShowCompleteModal(false);
+            setSelectedBooking(null);
+          }}
+          onComplete={handleCompleteSuccess}
+          bookingId={selectedBooking.id}
+          totalAmount={selectedBooking.total_amount}
+          paidAmount={selectedBooking.paid_amount}
+          securityDeposit={selectedBooking.security_deposit_amount}
+        />
+      )}
+    </>
   );
 } 
