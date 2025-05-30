@@ -1,21 +1,16 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 
 export async function POST(request: Request) {
   try {
     const requestData = await request.json();
     const { email, password, role, permissions } = requestData;
 
-    // Initialize Supabase client with service role
-    const supabase = createRouteHandlerClient(
-      { cookies },
-      {
-        supabaseKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
-      }
-    );
-
-    // First check if the requesting user is an admin
+    // First check if the requesting user is an admin using the normal client
+    const supabase = createRouteHandlerClient({ cookies });
+    
     const {
       data: { session },
     } = await supabase.auth.getSession();
@@ -41,8 +36,20 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create the user
-    const { data: userData, error: createUserError } = await supabase.auth.admin.createUser({
+    // Create a new Supabase client with the service role key for admin operations
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
+    // Create the user using the admin client
+    const { data: userData, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -59,8 +66,8 @@ export async function POST(request: Request) {
       throw new Error('Failed to create user');
     }
 
-    // Create the user's profile
-    const { error: profileError } = await supabase
+    // Create the user's profile using the admin client
+    const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert({
         id: userData.user.id,
@@ -71,7 +78,7 @@ export async function POST(request: Request) {
 
     if (profileError) {
       // If profile creation fails, try to delete the auth user
-      await supabase.auth.admin.deleteUser(userData.user.id);
+      await supabaseAdmin.auth.admin.deleteUser(userData.user.id);
       throw profileError;
     }
 
