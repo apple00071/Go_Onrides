@@ -12,15 +12,14 @@ interface DocumentUploadSectionProps {
 
 export default function DocumentUploadSection({ onDocumentsChange }: DocumentUploadSectionProps) {
   const [isMobile, setIsMobile] = useState(false);
-  const [isChrome, setIsChrome] = useState(false);
+  const [activeDocument, setActiveDocument] = useState<DocumentType | null>(null);
+  const [showChooser, setShowChooser] = useState(false);
 
   useEffect(() => {
     const checkBrowser = () => {
       const userAgent = navigator.userAgent.toLowerCase();
       const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
-      const isChromeBrowser = /chrome|crios/i.test(userAgent);
       setIsMobile(isMobileDevice);
-      setIsChrome(isChromeBrowser);
     };
     
     checkBrowser();
@@ -35,20 +34,8 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   });
 
   const [previews, setPreviews] = useState<Partial<Record<DocumentType, string>>>({});
-  const cameraInputRefs = useRef<Record<DocumentType, HTMLInputElement | null>>({
-    customer_photo: null,
-    aadhar_front: null,
-    aadhar_back: null,
-    dl_front: null,
-    dl_back: null
-  });
-  const galleryInputRefs = useRef<Record<DocumentType, HTMLInputElement | null>>({
-    customer_photo: null,
-    aadhar_front: null,
-    aadhar_back: null,
-    dl_front: null,
-    dl_back: null
-  });
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const documentLabels: Record<DocumentType, string> = {
     customer_photo: 'Customer Photo',
@@ -94,6 +81,7 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
 
       // Reset the input value to allow selecting the same file again
       e.target.value = '';
+      setShowChooser(false);
     }
   };
 
@@ -111,60 +99,77 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
     onDocumentsChange(updatedDocuments);
   };
 
-  const requestCameraPermission = async (): Promise<boolean> => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      // Stop the stream immediately after getting permission
-      stream.getTracks().forEach(track => track.stop());
-      return true;
-    } catch (err) {
-      console.error('Camera permission denied:', err);
-      return false;
-    }
+  const handleUploadClick = (type: DocumentType) => {
+    setActiveDocument(type);
+    setShowChooser(true);
   };
 
-  const handleUploadClick = async (type: DocumentType, useCamera: boolean) => {
-    if (!isMobile && useCamera) {
-      alert('Camera capture is only available on mobile devices. Please use the gallery option.');
-      return;
-    }
+  const handleOptionClick = (useCamera: boolean) => {
+    if (!activeDocument) return;
 
     if (useCamera) {
-      try {
-        // First request camera permission
-        const hasPermission = await requestCameraPermission();
-        if (!hasPermission) {
-          alert('Camera permission is required to take photos. Please grant permission and try again.');
-          return;
-        }
-
-        // Create a new input element for camera capture
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = 'image/*';
-        input.capture = 'environment';
-        
-        // Add the change event listener
-        input.onchange = (e) => {
-          const target = e.target as HTMLInputElement;
-          if (target.files && target.files[0]) {
-            handleFileChange(type)({ target } as React.ChangeEvent<HTMLInputElement>);
-          }
-        };
-        
-        // Trigger the input
-        input.click();
-      } catch (error) {
-        console.error('Error accessing camera:', error);
-        alert('Failed to access camera. Please try using the gallery option.');
+      if (cameraInputRef.current) {
+        cameraInputRef.current.click();
       }
-    } else if (galleryInputRefs.current[type]) {
-      galleryInputRefs.current[type]?.click();
+    } else {
+      if (galleryInputRef.current) {
+        galleryInputRef.current.click();
+      }
     }
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 relative">
+      {/* Global file inputs */}
+      <input
+        type="file"
+        ref={cameraInputRef}
+        className="hidden"
+        accept="image/*"
+        capture="environment"
+        onChange={e => activeDocument && handleFileChange(activeDocument)(e)}
+      />
+      <input
+        type="file"
+        ref={galleryInputRef}
+        className="hidden"
+        accept="image/*"
+        onChange={e => activeDocument && handleFileChange(activeDocument)(e)}
+      />
+
+      {/* Chooser Dialog */}
+      {showChooser && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-4 w-80 max-w-full">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Select Source</h3>
+            <div className="space-y-2">
+              {isMobile && (
+                <button
+                  onClick={() => handleOptionClick(true)}
+                  className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Camera className="h-5 w-5 mr-2" />
+                  Take Photo
+                </button>
+              )}
+              <button
+                onClick={() => handleOptionClick(false)}
+                className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-gray-700 bg-gray-100 border border-gray-300 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <ImageIcon className="h-5 w-5 mr-2" />
+                Choose from Gallery
+              </button>
+              <button
+                onClick={() => setShowChooser(false)}
+                className="flex items-center justify-center w-full px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 focus:outline-none"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <h3 className="text-lg font-medium text-gray-900">Required Documents</h3>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {(Object.entries(documentLabels) as [DocumentType, string][]).map(([type, label]) => (
@@ -188,34 +193,13 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                 </button>
               </div>
             ) : (
-              <div className="space-y-2">
-                {/* Gallery Input */}
-                <input
-                  type="file"
-                  className="hidden"
-                  accept="image/*"
-                  onChange={handleFileChange(type)}
-                  ref={el => {
-                    galleryInputRefs.current[type] = el;
-                  }}
-                />
-                {isMobile && (
-                  <button
-                    onClick={() => handleUploadClick(type, true)}
-                    className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                    aria-label="Take photo using camera"
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    Take Photo
-                  </button>
-                )}
+              <div>
                 <button
-                  onClick={() => handleUploadClick(type, false)}
-                  className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                  aria-label="Choose photo from gallery"
+                  onClick={() => handleUploadClick(type)}
+                  className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-dashed border-gray-300 rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
-                  <ImageIcon className="h-4 w-4 mr-2" />
-                  Choose from Gallery
+                  <Upload className="h-5 w-5 mr-2 text-gray-400" />
+                  Upload Document
                 </button>
               </div>
             )}
