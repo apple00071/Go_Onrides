@@ -20,7 +20,14 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   });
 
   const [previews, setPreviews] = useState<Partial<Record<DocumentType, string>>>({});
-  const fileInputRefs = useRef<Record<DocumentType, HTMLInputElement | null>>({
+  const cameraInputRefs = useRef<Record<DocumentType, HTMLInputElement | null>>({
+    customer_photo: null,
+    aadhar_front: null,
+    aadhar_back: null,
+    dl_front: null,
+    dl_back: null
+  });
+  const galleryInputRefs = useRef<Record<DocumentType, HTMLInputElement | null>>({
     customer_photo: null,
     aadhar_front: null,
     aadhar_back: null,
@@ -90,13 +97,10 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   };
 
   const handleUploadClick = (type: DocumentType, useCamera: boolean) => {
-    if (fileInputRefs.current[type]) {
-      const input = fileInputRefs.current[type]!;
-      input.removeAttribute('capture');
-      if (useCamera) {
-        input.setAttribute('capture', 'environment');
-      }
-      input.click();
+    if (useCamera && cameraInputRefs.current[type]) {
+      cameraInputRefs.current[type]?.click();
+    } else if (!useCamera && galleryInputRefs.current[type]) {
+      galleryInputRefs.current[type]?.click();
     }
   };
 
@@ -126,13 +130,25 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
               </div>
             ) : (
               <div className="space-y-2">
+                {/* Camera Input */}
+                <input
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileChange(type)}
+                  ref={el => {
+                    cameraInputRefs.current[type] = el;
+                  }}
+                />
+                {/* Gallery Input */}
                 <input
                   type="file"
                   className="hidden"
                   accept="image/*"
                   onChange={handleFileChange(type)}
                   ref={el => {
-                    fileInputRefs.current[type] = el;
+                    galleryInputRefs.current[type] = el;
                   }}
                 />
                 <button
