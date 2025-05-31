@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, X, Camera, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 
@@ -11,6 +11,18 @@ interface DocumentUploadSectionProps {
 }
 
 export default function DocumentUploadSection({ onDocumentsChange }: DocumentUploadSectionProps) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor;
+      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+      setIsMobile(isMobileDevice);
+    };
+    
+    checkMobile();
+  }, []);
+
   const [documents, setDocuments] = useState<Record<DocumentType, File | null>>({
     customer_photo: null,
     aadhar_front: null,
@@ -97,6 +109,11 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   };
 
   const handleUploadClick = (type: DocumentType, useCamera: boolean) => {
+    if (!isMobile && useCamera) {
+      alert('Camera capture is only available on mobile devices. Please use the gallery option.');
+      return;
+    }
+
     if (useCamera && cameraInputRefs.current[type]) {
       cameraInputRefs.current[type]?.click();
     } else if (!useCamera && galleryInputRefs.current[type]) {
@@ -133,9 +150,10 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                 {/* Camera Input */}
                 <input
                   type="file"
+                  name="camera"
                   className="hidden"
                   accept="image/*"
-                  capture="environment"
+                  {...(isMobile ? { capture: true } : {})}
                   onChange={handleFileChange(type)}
                   ref={el => {
                     cameraInputRefs.current[type] = el;
@@ -151,13 +169,15 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                     galleryInputRefs.current[type] = el;
                   }}
                 />
-                <button
-                  onClick={() => handleUploadClick(type, true)}
-                  className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  <Camera className="h-4 w-4 mr-2" />
-                  Take Photo
-                </button>
+                {isMobile && (
+                  <button
+                    onClick={() => handleUploadClick(type, true)}
+                    className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    Take Photo
+                  </button>
+                )}
                 <button
                   onClick={() => handleUploadClick(type, false)}
                   className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
