@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { X, Camera } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Camera, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 
 type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
@@ -20,6 +20,10 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   });
 
   const [previews, setPreviews] = useState<Partial<Record<DocumentType, string>>>({});
+  const [showCamera, setShowCamera] = useState(false);
+  const [activeDocument, setActiveDocument] = useState<DocumentType | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const documentLabels: Record<DocumentType, string> = {
     customer_photo: 'Customer Photo',
@@ -29,6 +33,7 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
     dl_back: 'Driving License - Back'
   };
 
+  // Handle file selection from gallery
   const handleFileChange = (type: DocumentType) => async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -45,26 +50,32 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
         return;
       }
 
-      // Create preview
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPreviews(prev => ({
-          ...prev,
-          [type]: reader.result as string
-        }));
-      };
-      reader.readAsDataURL(file);
-
-      // Update documents
-      const updatedDocuments = {
-        ...documents,
-        [type]: file
-      };
-      setDocuments(updatedDocuments);
-      onDocumentsChange(updatedDocuments);
+      processImageFile(file, type);
     }
   };
 
+  // Process the image file (either from gallery or camera)
+  const processImageFile = (file: File, documentType: DocumentType) => {
+    // Create preview
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreviews(prev => ({
+        ...prev,
+        [documentType]: reader.result as string
+      }));
+    };
+    reader.readAsDataURL(file);
+
+    // Update documents
+    const updatedDocuments = {
+      ...documents,
+      [documentType]: file
+    };
+    setDocuments(updatedDocuments);
+    onDocumentsChange(updatedDocuments);
+  };
+
+  // Remove a document
   const removeDocument = (type: DocumentType) => {
     const updatedDocuments = {
       ...documents,
@@ -79,9 +90,113 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
     onDocumentsChange(updatedDocuments);
   };
 
+  // Open camera to take a photo
+  const openCamera = async (type: DocumentType) => {
+    try {
+      setActiveDocument(type);
+      setShowCamera(true);
+      
+      // This will trigger the browser permission dialog
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: type === 'customer_photo' ? 'user' : 'environment',
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      alert('Failed to access camera. Please make sure camera permissions are granted and try again.');
+      setShowCamera(false);
+    }
+  };
+
+  // Capture photo from camera
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current || !activeDocument) return;
+    
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    // Set canvas size to match video dimensions
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    // Draw video frame to canvas
+    const context = canvas.getContext('2d');
+    if (context) {
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      
+      // Convert to file
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], `${activeDocument}.jpg`, { type: 'image/jpeg' });
+          processImageFile(file, activeDocument);
+          closeCamera();
+        }
+      }, 'image/jpeg', 0.95);
+    }
+  };
+
+  // Close camera stream and UI
+  const closeCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+    }
+    setShowCamera(false);
+  };
+
+  // Clean up camera on component unmount
+  useEffect(() => {
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, []);
+
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-medium text-gray-900">Required Documents</h3>
+      
+      {/* Camera UI */}
+      {showCamera && (
+        <div className="fixed inset-0 bg-black z-50 flex flex-col">
+          <div className="flex-1 relative">
+            <video 
+              ref={videoRef}
+              autoPlay 
+              playsInline
+              className="w-full h-full object-cover"
+            />
+            <canvas ref={canvasRef} className="hidden" />
+          </div>
+          <div className="bg-black p-4 flex justify-between items-center">
+            <button
+              onClick={closeCamera}
+              className="px-4 py-2 bg-red-600 text-white rounded"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={capturePhoto}
+              className="px-4 py-2 bg-blue-600 text-white rounded"
+            >
+              Capture
+            </button>
+          </div>
+        </div>
+      )}
+      
+      {/* Document Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {(Object.entries(documentLabels) as [DocumentType, string][]).map(([type, label]) => (
           <div key={type} className="border rounded-lg p-4">
@@ -105,22 +220,17 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
               </div>
             ) : (
               <div className="flex flex-col gap-2">
+                <button
+                  onClick={() => openCamera(type)}
+                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400"
+                >
+                  <Camera className="h-8 w-8 text-gray-400" />
+                  <p className="text-xs text-gray-500 mt-2">Take Photo</p>
+                </button>
+                
                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400">
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <Camera className="h-8 w-8 text-gray-400" />
-                    <p className="text-xs text-gray-500 mt-2">Take Photo</p>
-                  </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    capture="environment"
-                    onChange={handleFileChange(type)}
-                  />
-                </label>
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <Camera className="h-8 w-8 text-gray-400" />
+                    <ImageIcon className="h-8 w-8 text-gray-400" />
                     <p className="text-xs text-gray-500 mt-2">Choose from Gallery</p>
                   </div>
                   <input
