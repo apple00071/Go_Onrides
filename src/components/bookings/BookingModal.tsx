@@ -553,18 +553,24 @@ export default function BookingModal({
             amount: parseFloat(formData.paid_amount),
             payment_mode: formData.payment_mode,
             payment_status: 'completed',
+            payment_type: 'initial',
+            notes: `Initial payment at booking - ${formData.payment_status === 'full' ? 'Full payment' : 'Partial payment'}`,
             created_at: new Date().toISOString()
           });
 
         if (paymentError) {
-          console.error('Payment record creation error:', paymentError);
-          throw new Error(`Failed to create payment record: ${paymentError.message}`);
+          console.error('Payment creation error:', paymentError);
+          // Don't throw error here, just log it and continue
+          // This way the booking is still created even if payment record fails
+          toast.error('Booking created but there was an issue recording the payment history');
+        } else {
+          toast.success('Booking and payment recorded successfully');
         }
       }
 
-      toast.success(`Booking created successfully. Booking ID: ${bookingId}`);
       onBookingCreated();
       onClose();
+      toast.success('Booking created successfully');
     } catch (error) {
       console.error('Error creating booking:', error);
       setError(error instanceof Error ? error.message : 'An unexpected error occurred while creating the booking. Please check the console for details.');

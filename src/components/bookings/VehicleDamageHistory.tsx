@@ -36,6 +36,15 @@ export default function VehicleDamageHistory({ bookingId }: VehicleDamageHistory
   const fetchDamageHistory = async () => {
     try {
       const supabase = getSupabaseClient();
+
+      // Validate bookingId is a UUID
+      if (bookingId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingId)) {
+        console.error('Invalid booking ID format:', bookingId);
+        setError('Invalid booking ID format');
+        setLoading(false);
+        return;
+      }
+
       let query = supabase
         .from('vehicle_damages')
         .select(`
@@ -55,11 +64,17 @@ export default function VehicleDamageHistory({ bookingId }: VehicleDamageHistory
 
       const { data, error: fetchError } = await query;
 
-      if (fetchError) throw fetchError;
-      setDamages(data || []);
+      if (fetchError) {
+        console.error('Error fetching damage history:', fetchError);
+        throw new Error(fetchError.message);
+      }
+
+      // Filter out any records with null or invalid booking data
+      const validDamages = data?.filter(damage => damage.booking && damage.booking.vehicle_details) || [];
+      setDamages(validDamages);
     } catch (err) {
       console.error('Error fetching damage history:', err);
-      setError('Failed to load damage history');
+      setError(err instanceof Error ? err.message : 'Failed to load damage history');
     } finally {
       setLoading(false);
     }

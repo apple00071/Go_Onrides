@@ -163,18 +163,18 @@ export default function DashboardLayout({
         />
       )}
 
-      <div className="flex min-h-screen">
+      <div className="flex h-screen overflow-hidden">
         {/* Sidebar */}
         <Sidebar user={user} isOpen={isSidebarOpen} />
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col min-w-0 relative">
+        <div className="flex-1 flex flex-col overflow-hidden">
           {/* Header */}
           <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
 
           {/* Main content area */}
-          <main className="flex-1 pb-8 overflow-y-auto">
-            <div className="px-4 sm:px-6 lg:px-8">
+          <main className="flex-1 overflow-y-auto bg-gray-50">
+            <div className="px-4 sm:px-6 lg:px-8 py-8">
               {children}
             </div>
           </main>

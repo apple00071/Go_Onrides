@@ -480,10 +480,12 @@ export default function BookingDetailsPage() {
           </div>
         </div>
 
-        {/* Add Vehicle Damage History section */}
-        <div className="mt-6">
-          <VehicleDamageHistory bookingId={Array.isArray(params.id) ? params.id[0] : params.id} />
-        </div>
+        {/* Add Vehicle Damage History section - only show for completed bookings */}
+        {booking.status === 'completed' && (
+          <div className="mt-6">
+            <VehicleDamageHistory bookingId={booking.id} />
+          </div>
+        )}
       </div>
 
       {/* Image Preview Modal */}

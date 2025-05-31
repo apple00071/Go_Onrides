@@ -3,15 +3,9 @@
 import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
-import type { Booking } from '@/types/database';
 import { formatCurrency } from '@/lib/utils';
 import { CurrencyInput } from '@/components/ui/currency-input';
-
-interface PaymentModalProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onPaymentCreated: () => void;
-}
+import { toast } from 'react-hot-toast';
 
 interface BookingWithPayments {
   id: string;
@@ -25,9 +19,14 @@ interface BookingWithPayments {
   security_deposit_amount: number;
   paid_amount: number;
   payment_status: string;
-  status: string;
   total_amount: number;
   remaining_amount: number;
+}
+
+interface PaymentModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  onPaymentCreated: () => void;
 }
 
 export default function PaymentModal({
@@ -171,7 +170,10 @@ export default function PaymentModal({
           created_at: new Date().toISOString()
         });
 
-      if (paymentError) throw paymentError;
+      if (paymentError) {
+        console.error('Payment creation error:', paymentError);
+        throw paymentError;
+      }
 
       // Update the booking's payment status
       const newPaidAmount = selectedBooking.paid_amount + amount;
@@ -185,8 +187,12 @@ export default function PaymentModal({
         })
         .eq('id', formData.booking_id);
 
-      if (bookingError) throw bookingError;
+      if (bookingError) {
+        console.error('Booking update error:', bookingError);
+        throw bookingError;
+      }
 
+      toast.success('Payment recorded successfully');
       onPaymentCreated();
       onClose();
     } catch (error) {
