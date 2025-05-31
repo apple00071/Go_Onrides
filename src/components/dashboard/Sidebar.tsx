@@ -16,9 +16,10 @@ import type { UserProfile } from '@/types/database';
 
 interface SidebarProps {
   user: UserProfile | null;
+  isOpen: boolean;
 }
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar({ user, isOpen }: SidebarProps) {
   const pathname = usePathname();
 
   const navigation = [
@@ -46,8 +47,13 @@ export default function Sidebar({ user }: SidebarProps) {
   };
 
   return (
-    <div className="flex h-full flex-col bg-card-white">
-      <div className="flex h-16 items-center gap-2 border-b border-gray-100 px-6">
+    <div className={`
+      fixed inset-y-0 left-0 z-30 w-64 transform transition-transform duration-300 ease-in-out
+      md:relative md:translate-x-0 md:transform-none
+      ${!isOpen ? '-translate-x-full' : 'translate-x-0'}
+      flex h-full flex-col bg-white border-r
+    `}>
+      <div className="flex h-16 items-center gap-2 border-b border-gray-100 px-4 sm:px-6">
         <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-blue text-white">
           GR
         </div>
@@ -76,7 +82,7 @@ export default function Sidebar({ user }: SidebarProps) {
                   `}
                   aria-hidden="true"
                 />
-                {item.name}
+                <span className="truncate">{item.name}</span>
               </Link>
             );
           })}
@@ -91,7 +97,7 @@ export default function Sidebar({ user }: SidebarProps) {
               className="h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-primary-text transition-colors"
               aria-hidden="true"
             />
-            Sign Out
+            <span className="truncate">Sign Out</span>
           </button>
         </div>
       </div>

@@ -155,22 +155,28 @@ export default function DashboardLayout({
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <div className="flex">
+      {/* Overlay for mobile sidebar */}
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity md:hidden z-20"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
+      <div className="flex min-h-screen">
         {/* Sidebar */}
-        <div className="fixed inset-y-0 left-0 w-64 bg-white border-r">
-          <Sidebar user={user} />
-        </div>
+        <Sidebar user={user} isOpen={isSidebarOpen} />
 
         {/* Main content */}
-        <div className="flex-1 ml-64">
+        <div className="flex-1 flex flex-col min-w-0 relative">
           {/* Header */}
-          <header className="fixed top-0 right-0 left-64 h-16 bg-white border-b z-10">
           <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
-          </header>
 
-          {/* Main content area with proper scrolling */}
-          <main className="pt-16 min-w-[1024px] overflow-x-auto">
-          {children}
+          {/* Main content area */}
+          <main className="flex-1 pb-8 overflow-y-auto">
+            <div className="px-4 sm:px-6 lg:px-8">
+              {children}
+            </div>
           </main>
         </div>
       </div>
