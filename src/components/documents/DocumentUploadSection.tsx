@@ -111,15 +111,54 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
     onDocumentsChange(updatedDocuments);
   };
 
-  const handleUploadClick = (type: DocumentType, useCamera: boolean) => {
+  const requestCameraPermission = async (): Promise<boolean> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Stop the stream immediately after getting permission
+      stream.getTracks().forEach(track => track.stop());
+      return true;
+    } catch (err) {
+      console.error('Camera permission denied:', err);
+      return false;
+    }
+  };
+
+  const handleUploadClick = async (type: DocumentType, useCamera: boolean) => {
     if (!isMobile && useCamera) {
       alert('Camera capture is only available on mobile devices. Please use the gallery option.');
       return;
     }
 
-    if (useCamera && cameraInputRefs.current[type]) {
-      cameraInputRefs.current[type]?.click();
-    } else if (!useCamera && galleryInputRefs.current[type]) {
+    if (useCamera) {
+      try {
+        // First request camera permission
+        const hasPermission = await requestCameraPermission();
+        if (!hasPermission) {
+          alert('Camera permission is required to take photos. Please grant permission and try again.');
+          return;
+        }
+
+        // Create a new input element for camera capture
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.capture = 'environment';
+        
+        // Add the change event listener
+        input.onchange = (e) => {
+          const target = e.target as HTMLInputElement;
+          if (target.files && target.files[0]) {
+            handleFileChange(type)({ target } as React.ChangeEvent<HTMLInputElement>);
+          }
+        };
+        
+        // Trigger the input
+        input.click();
+      } catch (error) {
+        console.error('Error accessing camera:', error);
+        alert('Failed to access camera. Please try using the gallery option.');
+      }
+    } else if (galleryInputRefs.current[type]) {
       galleryInputRefs.current[type]?.click();
     }
   };
@@ -150,18 +189,6 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
               </div>
             ) : (
               <div className="space-y-2">
-                {/* Camera Input */}
-                <input
-                  type="file"
-                  name="camera"
-                  className="hidden"
-                  accept={isChrome ? "image/*;capture=camera" : "image/*"}
-                  {...(!isChrome ? { capture: "environment" } : {})}
-                  onChange={handleFileChange(type)}
-                  ref={el => {
-                    cameraInputRefs.current[type] = el;
-                  }}
-                />
                 {/* Gallery Input */}
                 <input
                   type="file"
