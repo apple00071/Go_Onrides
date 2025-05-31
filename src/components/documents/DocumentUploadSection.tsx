@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Upload, X } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Upload, X, Camera, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 
 type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
@@ -20,6 +20,13 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   });
 
   const [previews, setPreviews] = useState<Partial<Record<DocumentType, string>>>({});
+  const fileInputRefs = useRef<Record<DocumentType, HTMLInputElement | null>>({
+    customer_photo: null,
+    aadhar_front: null,
+    aadhar_back: null,
+    dl_front: null,
+    dl_back: null
+  });
 
   const documentLabels: Record<DocumentType, string> = {
     customer_photo: 'Customer Photo',
@@ -62,6 +69,9 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
       };
       setDocuments(updatedDocuments);
       onDocumentsChange(updatedDocuments);
+
+      // Reset the input value to allow selecting the same file again
+      e.target.value = '';
     }
   };
 
@@ -77,6 +87,17 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
       return updated;
     });
     onDocumentsChange(updatedDocuments);
+  };
+
+  const handleUploadClick = (type: DocumentType, useCamera: boolean) => {
+    if (fileInputRefs.current[type]) {
+      const input = fileInputRefs.current[type]!;
+      input.removeAttribute('capture');
+      if (useCamera) {
+        input.setAttribute('capture', 'environment');
+      }
+      input.click();
+    }
   };
 
   return (
@@ -104,19 +125,31 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400">
-                <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                  <Upload className="h-8 w-8 text-gray-400" />
-                  <p className="text-xs text-gray-500 mt-2">Click to upload</p>
-                </div>
+              <div className="space-y-2">
                 <input
                   type="file"
                   className="hidden"
                   accept="image/*"
-                  capture="environment"
                   onChange={handleFileChange(type)}
+                  ref={el => {
+                    fileInputRefs.current[type] = el;
+                  }}
                 />
-              </label>
+                <button
+                  onClick={() => handleUploadClick(type, true)}
+                  className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Camera className="h-4 w-4 mr-2" />
+                  Take Photo
+                </button>
+                <button
+                  onClick={() => handleUploadClick(type, false)}
+                  className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <ImageIcon className="h-4 w-4 mr-2" />
+                  Choose from Gallery
+                </button>
+              </div>
             )}
           </div>
         ))}
