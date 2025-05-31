@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Upload, X, Camera, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
 
@@ -22,10 +22,53 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   const [previews, setPreviews] = useState<Partial<Record<DocumentType, string>>>({});
   const [activeType, setActiveType] = useState<DocumentType | null>(null);
   const [showChooser, setShowChooser] = useState(false);
+  const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
+  const [isCameraAvailable, setIsCameraAvailable] = useState<boolean>(false);
 
   // Separate refs for camera and gallery inputs
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    checkCameraAvailability();
+  }, []);
+
+  const checkCameraAvailability = async () => {
+    try {
+      // Check if the browser supports mediaDevices
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setIsCameraAvailable(false);
+        return;
+      }
+
+      // Check if we have existing camera permission
+      const permissionStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
+      setHasCameraPermission(permissionStatus.state === 'granted');
+
+      // Listen for permission changes
+      permissionStatus.addEventListener('change', () => {
+        setHasCameraPermission(permissionStatus.state === 'granted');
+      });
+
+      setIsCameraAvailable(true);
+    } catch (error) {
+      console.error('Error checking camera availability:', error);
+      setIsCameraAvailable(false);
+    }
+  };
+
+  const requestCameraPermission = async (): Promise<boolean> => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      stream.getTracks().forEach(track => track.stop()); // Stop the stream immediately
+      setHasCameraPermission(true);
+      return true;
+    } catch (error) {
+      console.error('Error requesting camera permission:', error);
+      setHasCameraPermission(false);
+      return false;
+    }
+  };
 
   const documentLabels: Record<DocumentType, string> = {
     customer_photo: 'Customer Photo',
@@ -97,11 +140,29 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
     setShowChooser(true);
   };
 
-  const handleSourceSelect = (useCamera: boolean) => {
+  const handleSourceSelect = async (useCamera: boolean) => {
     if (!activeType) return;
 
     try {
       if (useCamera) {
+        if (!isCameraAvailable) {
+          alert('Camera is not available on your device or browser.');
+          return;
+        }
+
+        if (hasCameraPermission === false) {
+          alert('Camera permission was denied. Please enable camera access in your browser settings and try again.');
+          return;
+        }
+
+        if (hasCameraPermission === null) {
+          const granted = await requestCameraPermission();
+          if (!granted) {
+            alert('Camera permission is required to take photos.');
+            return;
+          }
+        }
+
         if (cameraInputRef.current) {
           cameraInputRef.current.click();
         }
@@ -113,6 +174,11 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
     } catch (error) {
       console.error('Error accessing input:', error);
       alert('Failed to access ' + (useCamera ? 'camera' : 'gallery') + '. Please try again.');
+    } finally {
+      // If there was an error, close the chooser
+      if (!cameraInputRef.current?.value && !galleryInputRef.current?.value) {
+        setShowChooser(false);
+      }
     }
   };
 
@@ -149,13 +215,15 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
               Select Source
             </div>
             <div className="space-y-3">
-              <button
-                onClick={() => handleSourceSelect(true)}
-                className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg flex items-center justify-center space-x-2 hover:bg-blue-700 transition-colors"
-              >
-                <Camera className="w-5 h-5" />
-                <span>Take Photo</span>
-              </button>
+              {isCameraAvailable && (
+                <button
+                  onClick={() => handleSourceSelect(true)}
+                  className="w-full py-3 px-4 bg-blue-600 text-white rounded-lg flex items-center justify-center space-x-2 hover:bg-blue-700 transition-colors"
+                >
+                  <Camera className="w-5 h-5" />
+                  <span>Take Photo</span>
+                </button>
+              )}
               <button
                 onClick={() => handleSourceSelect(false)}
                 className="w-full py-3 px-4 bg-white border border-gray-300 text-gray-700 rounded-lg flex items-center justify-center space-x-2 hover:bg-gray-50 transition-colors"
