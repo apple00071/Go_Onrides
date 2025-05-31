@@ -42,22 +42,15 @@ export default function DashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
 
-      // Get total income from completed bookings and their payments
+      // Get total income from completed bookings
       const { data: completedBookings, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
           id,
-          total_amount,
-          status,
-          payment_status,
-          created_at,
-          payments (
-            id,
-            amount,
-            payment_status
-          )
+          booking_amount,
+          paid_amount,
+          payment_status
         `)
-        .eq('status', 'completed')
         .eq('payment_status', 'full');
 
       if (bookingsError) {
@@ -65,29 +58,16 @@ export default function DashboardPage() {
         throw bookingsError;
       }
 
-      console.log('Raw completed bookings with payments:', completedBookings);
-
-      // Calculate total income from booking amounts
-      let totalIncomeFromBookings = 0;
-      completedBookings?.forEach(booking => {
-        const amount = typeof booking.total_amount === 'string' 
-          ? parseFloat(booking.total_amount) 
-          : booking.total_amount;
+      // Calculate total income from booking amounts only (excluding security deposits)
+      const totalIncome = completedBookings?.reduce((sum, booking) => {
+        const amount = typeof booking.booking_amount === 'string'
+          ? parseFloat(booking.booking_amount)
+          : booking.booking_amount;
         
-        if (!isNaN(amount)) {
-          console.log(`Booking ${booking.id} amount: ${amount}`);
-          totalIncomeFromBookings += amount;
-        }
+        return !isNaN(amount) ? sum + amount : sum;
+      }, 0) || 0;
 
-        // Also log payments for verification
-        if (booking.payments?.length > 0) {
-          console.log(`Payments for booking ${booking.id}:`, booking.payments);
-        }
-      });
-
-      console.log('Total income from bookings:', totalIncomeFromBookings);
-      
-      const totalIncome = totalIncomeFromBookings;
+      console.log('Total income from bookings:', totalIncome);
 
       // Get pending payments total
       const { data: pendingBookings } = await supabase

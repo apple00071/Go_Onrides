@@ -113,6 +113,7 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                   type="file"
                   className="hidden"
                   accept="image/*"
+                  capture="environment"
                   onChange={handleFileChange(type)}
                 />
               </label>

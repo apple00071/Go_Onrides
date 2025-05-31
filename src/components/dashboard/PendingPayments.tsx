@@ -34,12 +34,18 @@ export default function PendingPayments() {
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
-        .in('payment_status', ['pending', 'partial'])
+        .eq('status', 'confirmed')
         .order('created_at', { ascending: false });
 
       if (error) throw error;
 
-      setPayments(data || []);
+      const pendingPayments = (data || []).filter(booking => {
+        const totalRequired = booking.booking_amount + booking.security_deposit_amount;
+        const paidAmount = booking.paid_amount || 0;
+        return paidAmount < totalRequired;
+      });
+
+      setPayments(pendingPayments);
     } catch (error) {
       console.error('Error fetching pending payments:', error);
     } finally {

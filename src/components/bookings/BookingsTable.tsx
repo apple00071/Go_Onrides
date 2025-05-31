@@ -18,6 +18,7 @@ interface Booking {
   payment_status: 'full' | 'partial' | 'pending';
   status: 'confirmed' | 'pending' | 'cancelled' | 'in_use' | 'completed';
   created_at: string;
+  paid_amount?: number;
 }
 
 interface BookingsTableProps {
@@ -38,7 +39,14 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
-  const getPaymentStatusColor = (status: string) => {
+  const getPaymentStatusDisplay = (booking: Booking) => {
+    const totalRequired = booking.booking_amount + booking.security_deposit_amount;
+    const paidAmount = booking.paid_amount || 0;
+    return paidAmount >= totalRequired ? 'full' : paidAmount > 0 ? 'partial' : 'pending';
+  };
+
+  const getPaymentStatusColor = (booking: Booking) => {
+    const status = getPaymentStatusDisplay(booking);
     const colors = {
       full: 'bg-green-100 text-green-800',
       partial: 'bg-yellow-100 text-yellow-800',
@@ -154,9 +162,9 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                   </td>
                   <td className="whitespace-nowrap px-6 py-4">
                     <span
-                    className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(booking.payment_status)}`}
+                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(booking)}`}
                     >
-                    {booking.payment_status}
+                      {getPaymentStatusDisplay(booking)}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-6 py-4">

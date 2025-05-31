@@ -71,7 +71,7 @@ export default function PaymentModal({
           status,
           total_amount
         `)
-        .in('payment_status', ['pending', 'partial'])
+        .eq('status', 'confirmed')
         .order('created_at', { ascending: false });
 
       if (bookingsError) {
@@ -82,18 +82,20 @@ export default function PaymentModal({
       console.log('Raw bookings data:', bookingsData);
 
       if (!bookingsData || bookingsData.length === 0) {
-        console.log('No bookings found with pending/partial payments');
+        console.log('No bookings found');
         setBookings([]);
         return;
       }
 
       // Process bookings to calculate remaining amounts
       const processedBookings = bookingsData.map(booking => {
-        const totalAmount = booking.total_amount || (booking.booking_amount + booking.security_deposit_amount);
+        const totalAmount = booking.booking_amount + booking.security_deposit_amount;
         const paidAmount = booking.paid_amount || 0;
         const remainingAmount = totalAmount - paidAmount;
 
         console.log(`Processing booking ${booking.booking_id}:`, {
+          bookingAmount: booking.booking_amount,
+          securityDeposit: booking.security_deposit_amount,
           totalAmount,
           paidAmount,
           remainingAmount
@@ -107,13 +109,12 @@ export default function PaymentModal({
         };
       });
 
-      // Only show bookings that have remaining amount to be paid
+      // Show all bookings that have any remaining amount to be paid
       const bookingsWithPendingPayments = processedBookings.filter(
         booking => booking.remaining_amount > 0
       );
 
-      console.log('Final bookings with pending payments:', bookingsWithPendingPayments);
-
+      console.log('Bookings with pending payments:', bookingsWithPendingPayments);
       setBookings(bookingsWithPendingPayments);
     } catch (error) {
       console.error('Error fetching bookings:', error);
@@ -177,7 +178,10 @@ export default function PaymentModal({
 
       // Update the booking's payment status
       const newPaidAmount = selectedBooking.paid_amount + amount;
-      const paymentStatus = newPaidAmount >= selectedBooking.total_amount ? 'full' : 'partial';
+      const totalRequired = selectedBooking.booking_amount + selectedBooking.security_deposit_amount;
+      
+      // Set status to full only when total amount is received
+      const paymentStatus = newPaidAmount >= totalRequired ? 'full' : 'partial';
 
       const { error: bookingError } = await supabase
         .from('bookings')
@@ -248,7 +252,15 @@ export default function PaymentModal({
           {selectedBooking && (
             <div className="bg-gray-50 p-3 rounded-md space-y-2">
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Total Amount:</span>
+                <span className="text-gray-500">Booking Amount:</span>
+                <span className="font-medium">{formatCurrency(selectedBooking.booking_amount)}</span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Security Deposit:</span>
+                <span className="font-medium">{formatCurrency(selectedBooking.security_deposit_amount)}</span>
+              </div>
+              <div className="flex justify-between text-sm font-semibold border-t border-gray-200 pt-2">
+                <span className="text-gray-500">Total Required:</span>
                 <span className="font-medium">{formatCurrency(selectedBooking.total_amount)}</span>
               </div>
               <div className="flex justify-between text-sm">
@@ -259,6 +271,11 @@ export default function PaymentModal({
                 <span className="text-gray-500">Remaining Amount:</span>
                 <span className="text-blue-600">{formatCurrency(selectedBooking.remaining_amount)}</span>
               </div>
+              {selectedBooking.remaining_amount > 0 && (
+                <div className="mt-2 text-xs text-gray-500 bg-blue-50 p-2 rounded">
+                  Note: Payment will be applied to the total outstanding amount. Status will remain partial until full payment is received.
+                </div>
+              )}
             </div>
           )}
 

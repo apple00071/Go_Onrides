@@ -60,6 +60,12 @@ export default function BookingList({ bookings }: BookingListProps) {
     router.refresh(); // Refresh the page to show updated data
   };
 
+  const getPaymentStatusDisplay = (booking: Booking) => {
+    const totalRequired = booking.booking_amount + booking.security_deposit_amount;
+    const paidAmount = booking.paid_amount || 0;
+    return paidAmount >= totalRequired ? 'full' : paidAmount > 0 ? 'partial' : 'pending';
+  };
+
   return (
     <>
       <div className="overflow-x-auto">
@@ -131,13 +137,13 @@ export default function BookingList({ bookings }: BookingListProps) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <span className={`inline-flex text-xs leading-5 font-semibold rounded-full px-2 py-1 ${
-                    booking.payment_status === 'full'
+                    getPaymentStatusDisplay(booking) === 'full'
                       ? 'bg-green-100 text-green-800'
-                      : booking.payment_status === 'partial'
+                      : getPaymentStatusDisplay(booking) === 'partial'
                       ? 'bg-yellow-100 text-yellow-800'
                       : 'bg-red-100 text-red-800'
                   }`}>
-                    {booking.payment_status}
+                    {getPaymentStatusDisplay(booking)}
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
