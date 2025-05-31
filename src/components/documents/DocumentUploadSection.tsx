@@ -12,15 +12,18 @@ interface DocumentUploadSectionProps {
 
 export default function DocumentUploadSection({ onDocumentsChange }: DocumentUploadSectionProps) {
   const [isMobile, setIsMobile] = useState(false);
+  const [isChrome, setIsChrome] = useState(false);
 
   useEffect(() => {
-    const checkMobile = () => {
-      const userAgent = navigator.userAgent || navigator.vendor;
-      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+    const checkBrowser = () => {
+      const userAgent = navigator.userAgent.toLowerCase();
+      const isMobileDevice = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent);
+      const isChromeBrowser = /chrome|crios/i.test(userAgent);
       setIsMobile(isMobileDevice);
+      setIsChrome(isChromeBrowser);
     };
     
-    checkMobile();
+    checkBrowser();
   }, []);
 
   const [documents, setDocuments] = useState<Record<DocumentType, File | null>>({
@@ -152,8 +155,8 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                   type="file"
                   name="camera"
                   className="hidden"
-                  accept="image/*"
-                  {...(isMobile ? { capture: true } : {})}
+                  accept={isChrome ? "image/*;capture=camera" : "image/*"}
+                  {...(!isChrome ? { capture: "environment" } : {})}
                   onChange={handleFileChange(type)}
                   ref={el => {
                     cameraInputRefs.current[type] = el;
@@ -173,6 +176,7 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                   <button
                     onClick={() => handleUploadClick(type, true)}
                     className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    aria-label="Take photo using camera"
                   >
                     <Camera className="h-4 w-4 mr-2" />
                     Take Photo
@@ -181,6 +185,7 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                 <button
                   onClick={() => handleUploadClick(type, false)}
                   className="flex items-center justify-center w-full px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  aria-label="Choose photo from gallery"
                 >
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Choose from Gallery
