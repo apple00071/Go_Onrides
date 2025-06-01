@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { Upload, X, Camera, Image as ImageIcon } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -23,15 +23,11 @@ export default function DocumentUpload({
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(existingUrl || null);
   const [error, setError] = useState<string | null>(null);
-  const [showCamera, setShowCamera] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showOptions, setShowOptions] = useState(false);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) {
-      setError('No file selected');
       return;
     }
 
@@ -48,6 +44,7 @@ export default function DocumentUpload({
     }
 
     await uploadFile(file);
+    setShowOptions(false);
   };
 
   const uploadFile = async (file: File) => {
@@ -107,66 +104,9 @@ export default function DocumentUpload({
       toast.error(errorMessage);
     }
   };
-
-  const openCamera = async () => {
-    try {
-      setShowCamera(true);
-      
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: documentType === 'customer_photo' ? 'user' : 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      setError('Failed to access camera. Please check permissions.');
-      setShowCamera(false);
-    }
-  };
-
-  const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current) return;
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    const context = canvas.getContext('2d');
-    if (context) {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      canvas.toBlob(async (blob) => {
-        if (blob) {
-          const file = new File([blob], `${documentType}-${Date.now()}.jpg`, { type: 'image/jpeg' });
-          closeCamera();
-          await uploadFile(file);
-        }
-      }, 'image/jpeg', 0.95);
-    }
-  };
-
-  const closeCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setShowCamera(false);
-  };
-
-  const openGallery = () => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
+  
+  const toggleOptions = () => {
+    setShowOptions(!showOptions);
   };
 
   const documentLabels = {
@@ -182,36 +122,6 @@ export default function DocumentUpload({
       <label className="block text-sm font-medium text-gray-700">
         {documentLabels[documentType]}
       </label>
-      
-      {showCamera && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col">
-          <div className="flex-1 relative">
-            <video 
-              ref={videoRef}
-              autoPlay 
-              playsInline
-              className="w-full h-full object-cover"
-            />
-            <canvas ref={canvasRef} className="hidden" />
-          </div>
-          <div className="bg-black p-4 flex justify-between items-center">
-            <button
-              type="button"
-              onClick={closeCamera}
-              className="px-4 py-2 bg-red-600 text-white rounded"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={capturePhoto}
-              className="px-4 py-2 bg-blue-600 text-white rounded"
-            >
-              Capture
-            </button>
-          </div>
-        </div>
-      )}
       
       {preview ? (
         <div className="relative">
@@ -232,46 +142,60 @@ export default function DocumentUpload({
           </button>
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/*"
-            onChange={handleFileChange}
-            className="hidden"
-            id={`file-${documentType}`}
-            disabled={uploading}
-          />
-          
+        <div className="space-y-2">
           <button
             type="button"
-            onClick={openCamera}
-            className="flex flex-col items-center justify-center w-full h-20 border border-gray-300 rounded-lg hover:bg-gray-50"
+            onClick={toggleOptions}
+            className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             disabled={uploading}
           >
-            <div className="flex items-center justify-center">
-              <Camera className="h-5 w-5 mr-2 text-gray-500" />
-              <span className="text-sm text-gray-700">Take Photo</span>
-            </div>
+            <Upload className="h-5 w-5 mr-2 text-gray-500" />
+            <span className="text-sm text-gray-700">Upload Document</span>
           </button>
           
-          <button
-            type="button"
-            onClick={openGallery}
-            className="flex flex-col items-center justify-center w-full h-20 border border-gray-300 rounded-lg hover:bg-gray-50"
-            disabled={uploading}
-          >
-            <div className="flex items-center justify-center">
-              <ImageIcon className="h-5 w-5 mr-2 text-gray-500" />
-              <span className="text-sm text-gray-700">Choose from Gallery</span>
+          {showOptions && (
+            <div className="flex flex-col gap-2 border rounded-lg p-4 bg-gray-50 animate-fadeIn">
+              <label
+                htmlFor={`camera-${documentType}`}
+                className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 cursor-pointer"
+              >
+                <Camera className="h-5 w-5 mr-2 text-gray-500" />
+                <span className="text-sm text-gray-700">Take Photo</span>
+                <input
+                  type="file"
+                  id={`camera-${documentType}`}
+                  accept="image/*"
+                  capture={documentType === 'customer_photo' ? 'user' : 'environment'}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </label>
+              
+              <label
+                htmlFor={`gallery-${documentType}`}
+                className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 cursor-pointer"
+              >
+                <ImageIcon className="h-5 w-5 mr-2 text-gray-500" />
+                <span className="text-sm text-gray-700">Choose from Gallery</span>
+                <input
+                  type="file"
+                  id={`gallery-${documentType}`}
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                  disabled={uploading}
+                />
+              </label>
             </div>
-          </button>
+          )}
           
           {uploading && (
             <p className="text-center text-sm text-gray-500 mt-2">Uploading...</p>
           )}
         </div>
       )}
+      
       {error && (
         <p className="mt-1 text-sm text-red-600">{error}</p>
       )}
