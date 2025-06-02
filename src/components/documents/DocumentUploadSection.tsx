@@ -33,11 +33,13 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   // Handle file selection from native device dialog
   const handleDocumentSelection = (type: DocumentType) => async () => {
     try {
-      // Use the native file input to trigger device's file picker
+      // Create a file input element programmatically
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
-      // Use a broader MIME type to encourage the OS to show all relevant apps
-      fileInput.accept = "image/*,video/*";
+      
+      // Don't specify accept type to encourage showing all options
+      // This approach will force the OS to ask the user which app to use
+      // because it can't determine the most appropriate one
       
       // Handle the file selection
       fileInput.onchange = (e: Event) => {

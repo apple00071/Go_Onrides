@@ -29,8 +29,9 @@ export default function DocumentUpload({
       // Create a file input element programmatically
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
-      // Use a broader MIME type to encourage the OS to show all relevant apps
-      fileInput.accept = "image/*,video/*";
+      
+      // Don't specify accept type to encourage showing all options
+      // This approach will force the OS to ask the user which app to use
       
       // Set up the onchange event handler
       fileInput.onchange = async (e: Event) => {
