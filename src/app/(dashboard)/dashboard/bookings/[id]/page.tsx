@@ -3,22 +3,30 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import CompleteBookingModal from '@/components/bookings/CompleteBookingModal';
 import VehicleDamageHistory from '@/components/bookings/VehicleDamageHistory';
+import EditBookingModal from '@/components/bookings/EditBookingModal';
+import ExtendBookingModal from '@/components/bookings/ExtendBookingModal';
+import BookingExtensionHistory from '@/components/bookings/BookingExtensionHistory';
+import { usePermissions } from '@/lib/usePermissions';
+import { notifyBookingEvent } from '@/lib/notification';
 
-interface BookingDetails {
+// Rename the interface to avoid collision with imported EditBookingModal's BookingDetails
+interface BookingDetailsData {
   id: string;
   booking_id: string;
   customer_id: string;
   customer_name: string;
   customer_contact: string;
+  customer_email: string;
   emergency_contact_name: string;
   emergency_contact_phone: string;
   aadhar_number: string;
+  date_of_birth: string;
   dl_number: string;
   dl_expiry_date: string;
   temp_address: string;
@@ -46,16 +54,33 @@ interface BookingDetails {
   }>;
 }
 
+// Helper function to convert our booking data format to the format expected by EditBookingModal
+function convertToEditBookingFormat(booking: BookingDetailsData) {
+  // Convert array of document objects to object format with document types as keys
+  const docsObj: {[key: string]: string} = {};
+  booking.documents.forEach(doc => {
+    docsObj[doc.document_type] = doc.document_url;
+  });
+  
+  return {
+    ...booking,
+    documents: docsObj
+  };
+}
+
 export default function BookingDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [booking, setBooking] = useState<BookingDetails | null>(null);
+  const [booking, setBooking] = useState<BookingDetailsData | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageLabel, setSelectedImageLabel] = useState<string>('');
   const [payments, setPayments] = useState<any[]>([]);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const { isAdmin, canEdit } = usePermissions();
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
@@ -129,10 +154,10 @@ export default function BookingDetailsPage() {
               created_at: bookingData.created_at // Use booking creation date as we don't have document creation date
             })) : [];
 
-        const bookingWithDocs = {
+        const bookingWithDocs: BookingDetailsData = {
           ...bookingData,
           documents: transformedDocuments
-        } as BookingDetails;
+        };
 
         console.log('Setting booking state with:', bookingWithDocs);
 
@@ -223,6 +248,110 @@ export default function BookingDetailsPage() {
     setSelectedImageLabel(label);
   };
 
+  const handleEditComplete = async () => {
+    // Refresh the booking data after edit
+    setLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      const bookingIdentifier = decodeURIComponent(params.id as string);
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
+      
+      // Fetch updated booking data
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
+        .single();
+
+      if (bookingError) throw bookingError;
+
+      // Get customer documents
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('documents')
+        .eq('id', bookingData.customer_id)
+        .single();
+
+      // Transform the documents data to match our interface
+      const transformedDocuments = customerData?.documents ? 
+        Object.entries(customerData.documents)
+          .filter(([_, url]) => url) // Filter out empty URLs
+          .map(([type, url]) => ({
+            id: type, // Use the document type as ID
+            document_type: type,
+            document_url: url as string,
+            created_at: bookingData.created_at // Use booking creation date as we don't have document creation date
+          })) : [];
+
+      // Create the booking object with the correct types
+      const bookingWithDocs: BookingDetailsData = {
+        ...bookingData,
+        documents: transformedDocuments
+      };
+
+      setBooking(bookingWithDocs);
+      toast.success('Booking updated successfully');
+    } catch (error) {
+      console.error('Error refreshing booking data:', error);
+      toast.error('Failed to refresh booking data');
+    } finally {
+      setLoading(false);
+      setShowEditModal(false);
+    }
+  };
+
+  const handleExtendComplete = async () => {
+    // Refresh the booking data after extension
+    setLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      const bookingIdentifier = decodeURIComponent(params.id as string);
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
+      
+      // Fetch updated booking data
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select('*')
+        .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
+        .single();
+
+      if (bookingError) throw bookingError;
+
+      // Get customer documents
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('documents')
+        .eq('id', bookingData.customer_id)
+        .single();
+
+      // Transform the documents data to match our interface
+      const transformedDocuments = customerData?.documents ? 
+        Object.entries(customerData.documents)
+          .filter(([_, url]) => url) // Filter out empty URLs
+          .map(([type, url]) => ({
+            id: type, // Use the document type as ID
+            document_type: type,
+            document_url: url as string,
+            created_at: bookingData.created_at // Use booking creation date as we don't have document creation date
+          })) : [];
+
+      // Create the booking object with the correct types
+      const bookingWithDocs: BookingDetailsData = {
+        ...bookingData,
+        documents: transformedDocuments
+      };
+
+      setBooking(bookingWithDocs);
+      toast.success('Booking extended successfully');
+    } catch (error) {
+      console.error('Error refreshing booking data:', error);
+      toast.error('Failed to refresh booking data');
+    } finally {
+      setLoading(false);
+      setShowExtendModal(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -280,6 +409,29 @@ export default function BookingDetailsPage() {
             <span className="text-sm text-gray-500">
               Created on {formatDate(booking.created_at)}
             </span>
+            
+            {/* Extend Booking button - available to everyone */}
+            {booking && booking.status !== 'completed' && booking.status !== 'cancelled' && (
+              <button
+                onClick={() => setShowExtendModal(true)}
+                className="flex items-center px-3 py-1 text-sm font-medium text-green-700 bg-green-50 rounded-md hover:bg-green-100"
+              >
+                <CalendarPlus className="h-3.5 w-3.5 mr-1" />
+                Extend Booking
+              </button>
+            )}
+            
+            {/* Edit Booking button - admin only */}
+            {isAdmin && (
+              <button
+                onClick={() => setShowEditModal(true)}
+                className="flex items-center px-3 py-1 text-sm font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100"
+              >
+                <PenSquare className="h-3.5 w-3.5 mr-1" />
+                Edit Booking
+              </button>
+            )}
+            
             <select
               value={booking.status}
               onChange={(e) => handleStatusChange(e.target.value)}
@@ -486,6 +638,11 @@ export default function BookingDetailsPage() {
             <VehicleDamageHistory bookingId={booking.id} />
           </div>
         )}
+
+        {/* Extension History Section */}
+        <div className="bg-white rounded-lg shadow p-6 space-y-4 mt-6">
+          <BookingExtensionHistory bookingId={booking?.id || ''} />
+        </div>
       </div>
 
       {/* Image Preview Modal */}
@@ -525,6 +682,31 @@ export default function BookingDetailsPage() {
           totalAmount={booking.booking_amount + booking.security_deposit_amount}
           paidAmount={booking.paid_amount}
           securityDeposit={booking.security_deposit_amount}
+        />
+      )}
+      
+      {/* Replace the placeholder edit modal with this */}
+      {showEditModal && booking && (
+        <EditBookingModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          onBookingUpdated={handleEditComplete}
+          booking={convertToEditBookingFormat(booking)}
+        />
+      )}
+
+      {booking && showExtendModal && (
+        <ExtendBookingModal
+          isOpen={showExtendModal}
+          onClose={() => setShowExtendModal(false)}
+          onBookingExtended={handleExtendComplete}
+          booking={{
+            id: booking.id,
+            booking_id: booking.booking_id,
+            end_date: booking.end_date,
+            dropoff_time: booking.dropoff_time,
+            booking_amount: booking.booking_amount
+          }}
         />
       )}
     </div>

@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { UserPlus, Trash2 } from 'lucide-react';
+import { UserPlus, Trash2, Edit2 } from 'lucide-react';
 import type { UserProfile } from '@/types/database';
 import CreateUserModal from '@/components/settings/CreateUserModal';
+import EditUserModal from '@/components/settings/EditUserModal';
+import UserActivityLogs from '@/components/settings/UserActivityLogs';
 import { toast } from 'react-hot-toast';
 
 export default function SettingsPage() {
@@ -14,6 +16,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
 
   const fetchUsers = async () => {
     try {
@@ -122,7 +126,14 @@ export default function SettingsPage() {
     }
   };
 
-  const formatDate = (dateString: string) => {
+  const handleEditUser = (user: UserProfile) => {
+    setSelectedUser(user);
+    setIsEditModalOpen(true);
+  };
+
+  const formatDate = (dateString: string | undefined) => {
+    if (!dateString) return 'Unknown';
+    
     return new Date(dateString).toLocaleDateString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -195,7 +206,7 @@ export default function SettingsPage() {
                 <div className="col-span-6 sm:col-span-2 md:col-span-2">ROLE</div>
                 <div className="hidden sm:block sm:col-span-5 md:col-span-5">PERMISSIONS</div>
                 <div className="col-span-5 sm:col-span-1 md:col-span-1">JOINED</div>
-                <div className="col-span-1">ACTIONS</div>
+                <div className="col-span-1 sm:col-span-1 md:col-span-1">ACTIONS</div>
               </div>
             </div>
 
@@ -238,7 +249,14 @@ export default function SettingsPage() {
                     <div className="col-span-5 sm:col-span-1 md:col-span-1 text-gray-500 whitespace-nowrap">
                       {formatDate(user.created_at)}
                     </div>
-                    <div className="col-span-1 flex justify-end">
+                    <div className="col-span-1 sm:col-span-1 md:col-span-1 flex justify-end space-x-2">
+                      <button
+                        onClick={() => handleEditUser(user)}
+                        className="text-blue-600 hover:text-blue-900 p-1 rounded-full hover:bg-blue-50"
+                        title="Edit user"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
                       <button
                         onClick={() => handleDeleteUser(user.id, user.email)}
                         className="text-red-600 hover:text-red-900 p-1 rounded-full hover:bg-red-50"
@@ -255,14 +273,31 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <CreateUserModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onUserCreated={() => {
-          setIsModalOpen(false);
-          fetchUsers();
-        }}
-      />
+      {isModalOpen && (
+        <CreateUserModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          onUserCreated={fetchUsers}
+        />
+      )}
+      
+      {isEditModalOpen && selectedUser && (
+        <EditUserModal
+          isOpen={isEditModalOpen}
+          onClose={() => {
+            setIsEditModalOpen(false);
+            setSelectedUser(null);
+          }}
+          user={selectedUser}
+          onUserUpdated={fetchUsers}
+        />
+      )}
+      
+      {/* User Activity Logs */}
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">User Activity Logs</h2>
+        <UserActivityLogs />
+      </div>
     </div>
   );
 } 

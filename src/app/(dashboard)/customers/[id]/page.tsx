@@ -205,9 +205,17 @@ export default function CustomerDetailsPage() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Customers
           </button>
-          <span className="text-sm text-gray-500">
-            Customer since {formatDate(customer.created_at)}
-          </span>
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-500">
+              Customer since {formatDate(customer.created_at)}
+            </span>
+            <button
+              onClick={() => router.push(`/dashboard/customers/${customer.id}/edit`)}
+              className="px-3 py-1 text-sm font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100"
+            >
+              Edit Customer
+            </button>
+          </div>
         </div>
       </div>
 

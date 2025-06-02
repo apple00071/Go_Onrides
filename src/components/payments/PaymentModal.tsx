@@ -6,6 +6,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/utils';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { toast } from 'react-hot-toast';
+import { notifyPaymentEvent } from '@/lib/notification';
 
 interface BookingWithPayments {
   id: string;
@@ -124,13 +125,10 @@ export default function PaymentModal({
 
   const handleBookingChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const bookingId = e.target.value;
-    const selected = bookings.find(b => b.id === bookingId) || null;
-    setSelectedBooking(selected);
-    setFormData(prev => ({
-      ...prev,
-      booking_id: bookingId,
-      amount: selected ? selected.remaining_amount.toString() : ''
-    }));
+    setFormData(prev => ({ ...prev, booking_id: bookingId }));
+    
+    const selected = bookings.find(booking => booking.id === bookingId);
+    setSelectedBooking(selected || null);
     setError(null);
   };
 
@@ -161,7 +159,7 @@ export default function PaymentModal({
       const amount = parseFloat(formData.amount);
 
       // Create the payment record
-      const { error: paymentError } = await supabase
+      const { data: paymentData, error: paymentError } = await supabase
         .from('payments')
         .insert({
           booking_id: formData.booking_id,
@@ -169,7 +167,9 @@ export default function PaymentModal({
           payment_mode: formData.payment_mode,
           payment_status: 'completed',
           created_at: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
 
       if (paymentError) {
         console.error('Payment creation error:', paymentError);
@@ -194,6 +194,23 @@ export default function PaymentModal({
       if (bookingError) {
         console.error('Booking update error:', bookingError);
         throw bookingError;
+      }
+      
+      // Get current user for the notification
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      // Send notification to admin users about the payment
+      if (paymentData && selectedBooking) {
+        await notifyPaymentEvent(
+          'PAYMENT_CREATED',
+          paymentData.id,
+          {
+            amount: amount,
+            bookingId: selectedBooking.booking_id,
+            customerName: selectedBooking.customer_name,
+            actionBy: user?.email || 'Unknown User'
+          }
+        );
       }
 
       toast.success('Payment recorded successfully');

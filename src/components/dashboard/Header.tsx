@@ -1,11 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Menu, Bell, UserIcon } from 'lucide-react';
-import type { UserProfile } from '@/types/database';
+import { Menu, UserIcon } from 'lucide-react';
+import NotificationBell from '@/components/ui/NotificationBell';
+
+interface User {
+  email: string;
+  role: string;
+}
 
 interface HeaderProps {
-  user: UserProfile | null;
+  user?: User;
   onMenuClick: () => void;
 }
 
@@ -30,13 +35,7 @@ export default function Header({ user, onMenuClick }: HeaderProps) {
         {/* Right side content */}
         <div className="flex items-center gap-2 sm:gap-4">
           {/* Notifications */}
-          <button
-            type="button"
-            className="p-2 text-gray-500 hover:text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary-blue rounded-md"
-            aria-label="View notifications"
-          >
-            <Bell className="h-6 w-6" />
-          </button>
+          <NotificationBell />
 
           {/* User info */}
           <div className="flex items-center gap-2 sm:gap-3">

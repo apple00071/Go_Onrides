@@ -2,77 +2,42 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import {
-  BarChart as BarChartIcon,
-  TrendingUp,
-  Calendar,
-  DollarSign,
-  RefreshCw,
-  ArrowUp,
-  ArrowDown,
-  Car,
-  Users,
-  Clock,
-  AlertTriangle
-} from 'lucide-react';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { usePermissions } from '@/lib/usePermissions';
 import { Card } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
-import { addDays, format } from 'date-fns';
-import { Calendar as CalendarIcon } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+  ResponsiveContainer,
   AreaChart,
   Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
   BarChart,
   Bar,
   PieChart,
   Pie,
-  Cell
+  Cell,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend
 } from 'recharts';
-
-// Custom Rupee Icon component
-const RupeeIcon = (props: any) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="24"
-    height="24"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    {...props}
-  >
-    <path d="M6 3h12M6 8h12M6 13l8.5 8M9 13h3c2 0 5-1.2 5-5" />
-  </svg>
-);
+import { addDays, format, eachDayOfInterval, eachMonthOfInterval, eachWeekOfInterval } from 'date-fns';
+import { AlertTriangle, Calendar, Car, RefreshCw, Users, TrendingUp, IndianRupee as RupeeIcon, Filter, Download } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 
 interface RevenueData {
-  month: string;
+  date: string;
   revenue: number;
 }
 
-interface BookingStats {
-  total: number;
-  active: number;
-  completed: number;
-  cancelled: number;
-  pending: number;
+interface CustomerMetrics {
+  total_customers: number;
+  new_customers: number;
+  repeat_customers: number;
+  average_booking_value: number;
 }
 
 interface VehicleUtilization {
@@ -83,16 +48,37 @@ interface VehicleUtilization {
   utilization_rate: number;
 }
 
-interface CustomerMetrics {
-  total_customers: number;
-  new_customers: number;
-  repeat_customers: number;
-  average_booking_value: number;
+interface BookingStats {
+  total: number;
+  active: number;
+  completed: number;
+  cancelled: number;
+  pending: number;
+}
+
+interface StaffPerformance {
+  id: string;
+  name: string;
+  bookings_created: number;
+  customers_added: number;
+  documents_uploaded: number;
 }
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
+const CHART_TYPES = ['line', 'bar', 'area'] as const;
+type ChartType = typeof CHART_TYPES[number];
+
+const formatCurrency = (amount: number) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount);
+};
 
 export default function ReportsPage() {
+  const { canView, isAdmin } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
@@ -110,12 +96,15 @@ export default function ReportsPage() {
     repeat_customers: 0,
     average_booking_value: 0
   });
+  const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([]);
   const [dateRange, setDateRange] = useState({
     from: addDays(new Date(), -30),
     to: new Date(),
   });
   const [timeframe, setTimeframe] = useState('30d');
-
+  const [selectedChart, setSelectedChart] = useState<ChartType>('area');
+  const [revenuePeriod, setRevenuePeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  
   const fetchReportData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -123,29 +112,104 @@ export default function ReportsPage() {
     try {
       const supabase = getSupabaseClient();
 
-      // Fetch monthly revenue data
-      const { data: payments, error: paymentsError } = await supabase
-        .from('payments')
-        .select('amount, created_at, payment_status')
+      // Get total income from completed bookings to match dashboard calculation
+      const { data: completedBookings, error: completedBookingsError } = await supabase
+        .from('bookings')
+        .select(`
+          id,
+          booking_amount,
+          paid_amount,
+          payment_status,
+          created_at
+        `)
+        .eq('payment_status', 'full')
         .gte('created_at', format(dateRange.from, 'yyyy-MM-dd'))
-        .lte('created_at', format(dateRange.to, 'yyyy-MM-dd'))
-        .eq('payment_status', 'completed');
+        .lte('created_at', format(dateRange.to, 'yyyy-MM-dd'));
 
-      if (paymentsError) throw new Error(`Failed to fetch payments: ${paymentsError.message}`);
+      if (completedBookingsError) throw new Error(`Failed to fetch completed bookings: ${completedBookingsError.message}`);
 
-      // Process revenue data
-      const monthlyRevenue = (payments || []).reduce((acc: { [key: string]: number }, payment) => {
-        const month = format(new Date(payment.created_at), 'MMM yyyy');
-        acc[month] = (acc[month] || 0) + Number(payment.amount);
-        return acc;
-      }, {});
+      // Calculate total income from booking amounts only (excluding security deposits)
+      // and organize by date for the chart
+      const revenuePeriods = new Map<string, number>();
+      
+      // Initialize periods with 0 revenue based on selected timeframe
+      let intervalData: Date[] = [];
+      let formatString = '';
 
-      setRevenueData(
-        Object.entries(monthlyRevenue).map(([month, revenue]) => ({
-          month,
-          revenue
-        }))
-      );
+      switch (revenuePeriod) {
+        case 'daily':
+          intervalData = eachDayOfInterval({
+            start: dateRange.from,
+            end: dateRange.to
+          });
+          formatString = 'MMM dd';
+          break;
+        case 'weekly':
+          intervalData = eachWeekOfInterval({
+            start: dateRange.from,
+            end: dateRange.to
+          });
+          formatString = "'Week of' MMM dd";
+          break;
+        case 'monthly':
+          intervalData = eachMonthOfInterval({
+            start: dateRange.from,
+            end: dateRange.to
+          });
+          formatString = 'MMM yyyy';
+          break;
+      }
+
+      // Initialize all periods with 0 revenue
+      intervalData.forEach(date => {
+        const periodKey = format(date, formatString);
+        revenuePeriods.set(periodKey, 0);
+      });
+
+      // Sum up revenue by period
+      (completedBookings || []).forEach(booking => {
+        let periodKey = '';
+        const bookingDate = new Date(booking.created_at);
+        
+        switch (revenuePeriod) {
+          case 'daily':
+            periodKey = format(bookingDate, 'MMM dd');
+            break;
+          case 'weekly':
+            // Find the start of the week containing this booking
+            intervalData.forEach(weekStart => {
+              if (bookingDate >= weekStart && 
+                  bookingDate < addDays(weekStart, 7)) {
+                periodKey = format(weekStart, "'Week of' MMM dd");
+              }
+            });
+            break;
+          case 'monthly':
+            periodKey = format(bookingDate, 'MMM yyyy');
+            break;
+        }
+
+        if (periodKey && revenuePeriods.has(periodKey)) {
+          const amount = typeof booking.booking_amount === 'string'
+            ? parseFloat(booking.booking_amount)
+            : booking.booking_amount;
+          
+          if (!isNaN(amount)) {
+            revenuePeriods.set(
+              periodKey, 
+              (revenuePeriods.get(periodKey) || 0) + amount
+            );
+          }
+        }
+      });
+
+      // Convert the map to array for the chart
+      const revenueArray = Array.from(revenuePeriods.entries()).map(([date, revenue]) => ({
+        date,
+        revenue
+      }));
+
+      setRevenueData(revenueArray);
 
       // Fetch booking statistics
       const { data: bookings, error: bookingsError } = await supabase
@@ -196,24 +260,35 @@ export default function ReportsPage() {
 
       // Process vehicle utilization
       const vehicleStats = (vehicleBookings || []).reduce((acc: { [key: string]: VehicleUtilization }, booking) => {
-        const vehicle = `${booking.vehicle_details.make} ${booking.vehicle_details.model}`;
-        if (!acc[vehicle]) {
-          acc[vehicle] = {
-            make: booking.vehicle_details.make,
-            model: booking.vehicle_details.model,
+        // Extract make and model safely, providing defaults if missing
+        const make = booking.vehicle_details?.make || '';
+        const model = booking.vehicle_details?.model || booking.vehicle_details?.registration || 'Unknown Vehicle';
+        const registration = booking.vehicle_details?.registration || '';
+        
+        // Create a better vehicle key that doesn't show "Unknown" prefix
+        const vehicleKey = make && make.toLowerCase() !== 'unknown' 
+          ? `${make} ${model}` 
+          : model;
+        
+        if (!acc[vehicleKey]) {
+          acc[vehicleKey] = {
+            // Don't use "Unknown" as a prefix if we have a model name
+            make: make && make.toLowerCase() !== 'unknown' ? make : '',
+            model: model,
             bookings: 0,
             revenue: 0,
             utilization_rate: 0
           };
         }
-        acc[vehicle].bookings++;
-        acc[vehicle].revenue += Number(booking.booking_amount);
+        
+        acc[vehicleKey].bookings++;
+        acc[vehicleKey].revenue += Number(booking.booking_amount);
         
         // Calculate utilization rate based on booking duration
         const startDate = new Date(booking.start_date);
         const endDate = new Date(booking.end_date);
         const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
-        acc[vehicle].utilization_rate += days;
+        acc[vehicleKey].utilization_rate += days;
         
         return acc;
       }, {});
@@ -225,13 +300,31 @@ export default function ReportsPage() {
       });
 
       setVehicleUtilization(Object.values(vehicleStats));
+
+      // Only fetch staff performance if user is admin
+      if (isAdmin) {
+        // For now, create placeholder data for staff performance since we don't have created_by
+        // This can be replaced with actual implementation later
+        const placeholderStaffData: StaffPerformance[] = [
+          {
+            id: '1',
+            name: 'Admin User',
+            bookings_created: stats.total,
+            customers_added: customerMetrics.total_customers,
+            documents_uploaded: Math.floor(stats.total * 2)
+          }
+        ];
+        
+        setStaffPerformance(placeholderStaffData);
+      }
+
     } catch (error) {
       console.error('Error fetching report data:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch report data');
     } finally {
       setLoading(false);
     }
-  }, [dateRange]);
+  }, [dateRange, revenuePeriod, isAdmin]);
 
   useEffect(() => {
     fetchReportData();
@@ -262,6 +355,57 @@ export default function ReportsPage() {
     setDateRange({ from: fromDate, to: today });
   };
 
+  // Export reports to CSV
+  const exportToCsv = () => {
+    // Revenue data
+    let csvContent = "data:text/csv;charset=utf-8,";
+    
+    // Revenue data header
+    csvContent += "Period,Revenue\n";
+    
+    // Revenue data rows
+    revenueData.forEach(item => {
+      csvContent += `${item.date},${item.revenue}\n`;
+    });
+    
+    // Add a blank line between datasets
+    csvContent += "\n";
+    
+    // Booking stats header
+    csvContent += "Booking Metric,Count\n";
+    
+    // Booking stats rows
+    csvContent += `Total Bookings,${bookingStats.total}\n`;
+    csvContent += `Active Bookings,${bookingStats.active}\n`;
+    csvContent += `Completed Bookings,${bookingStats.completed}\n`;
+    csvContent += `Cancelled Bookings,${bookingStats.cancelled}\n`;
+    csvContent += `Pending Bookings,${bookingStats.pending}\n`;
+    
+    // Add a blank line between datasets
+    csvContent += "\n";
+    
+    // Vehicle utilization header
+    csvContent += "Vehicle,Bookings,Revenue,Utilization Rate (%)\n";
+    
+    // Vehicle utilization rows
+    vehicleUtilization.forEach(vehicle => {
+      csvContent += `${vehicle.make} ${vehicle.model},${vehicle.bookings},${vehicle.revenue},${vehicle.utilization_rate.toFixed(1)}\n`;
+    });
+    
+    // Encode the CSV
+    const encodedUri = encodeURI(csvContent);
+    
+    // Create a temporary link to trigger the download
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `goonriders_report_${format(dateRange.from, 'yyyy-MM-dd')}_to_${format(dateRange.to, 'yyyy-MM-dd')}.csv`);
+    document.body.appendChild(link);
+    
+    // Trigger download and remove the link
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const stats = [
     {
       name: 'Total Bookings',
@@ -278,8 +422,8 @@ export default function ReportsPage() {
       changeType: 'neutral'
     },
     {
-      name: 'Total Revenue',
-      value: formatCurrency(revenueData.reduce((sum, month) => sum + month.revenue, 0)),
+      name: 'Total Income',
+      value: formatCurrency(revenueData.reduce((sum, item) => sum + item.revenue, 0)),
       icon: RupeeIcon,
       change: 'From all completed bookings',
       changeType: 'positive'
@@ -293,10 +437,22 @@ export default function ReportsPage() {
     }
   ];
 
+  // Check if user has permission to access reports
+  if (!canView('accessReports')) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-800">Access Denied</h2>
+          <p className="mt-2 text-gray-600">You don't have permission to access reports.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8 p-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Reports & Analytics</h1>
           <p className="mt-2 text-muted-foreground">
@@ -304,7 +460,7 @@ export default function ReportsPage() {
           </p>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-4">
           <Select value={timeframe} onValueChange={handleTimeframeChange}>
             <SelectTrigger className="w-[180px]">
               <SelectValue placeholder="Select timeframe" />
@@ -336,6 +492,15 @@ export default function ReportsPage() {
             disabled={loading}
           >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+          </Button>
+          
+          <Button
+            variant="outline"
+            onClick={exportToCsv}
+            className="flex items-center gap-2"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
           </Button>
         </div>
       </div>
@@ -371,54 +536,90 @@ export default function ReportsPage() {
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-semibold">Revenue Trend</h3>
+            <div className="flex items-center gap-2">
+              <Select value={revenuePeriod} onValueChange={(value: 'daily' | 'weekly' | 'monthly') => setRevenuePeriod(value)}>
+                <SelectTrigger className="w-[100px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="daily">Daily</SelectItem>
+                  <SelectItem value="weekly">Weekly</SelectItem>
+                  <SelectItem value="monthly">Monthly</SelectItem>
+                </SelectContent>
+              </Select>
+              
+              <div className="flex gap-1">
+                {CHART_TYPES.map(type => (
+                  <Button
+                    key={type}
+                    variant={selectedChart === type ? 'default' : 'outline'}
+                    size="sm"
+                    className="px-2 py-1 h-8"
+                    onClick={() => setSelectedChart(type)}
+                  >
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </Button>
+                ))}
+              </div>
+            </div>
           </div>
+          
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={revenueData}>
-                <defs>
-                  <linearGradient id="revenue" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#0088FE" stopOpacity={0.8}/>
-                    <stop offset="95%" stopColor="#0088FE" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="month" />
-                <YAxis />
-                <CartesianGrid strokeDasharray="3 3" />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="revenue"
-                  stroke="#0088FE"
-                  fillOpacity={1}
-                  fill="url(#revenue)"
-                />
-              </AreaChart>
+              {selectedChart === 'area' ? (
+                <AreaChart data={revenueData}>
+                  <defs>
+                    <linearGradient id="revenue" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#0088FE" stopOpacity={0.8}/>
+                      <stop offset="95%" stopColor="#0088FE" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <Tooltip />
+                  <Area
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#0088FE"
+                    fillOpacity={1}
+                    fill="url(#revenue)"
+                  />
+                </AreaChart>
+              ) : selectedChart === 'bar' ? (
+                <BarChart data={revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="revenue" fill="#0088FE" />
+                </BarChart>
+              ) : (
+                <LineChart data={revenueData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line 
+                    type="monotone" 
+                    dataKey="revenue" 
+                    stroke="#0088FE" 
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    activeDot={{ r: 5 }}
+                  />
+                </LineChart>
+              )}
             </ResponsiveContainer>
           </div>
         </Card>
 
-        {/* Vehicle Utilization */}
+        {/* Booking Status */}
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Vehicle Utilization</h3>
-          </div>
-          <div className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={vehicleUtilization}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="model" />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="utilization_rate" fill="#00C49F" name="Utilization Rate (%)" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        {/* Booking Status Distribution */}
-        <Card className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold">Booking Status Distribution</h3>
+            <h3 className="text-lg font-semibold">Booking Status</h3>
           </div>
           <div className="h-[300px]">
             <ResponsiveContainer width="100%" height="100%">
@@ -456,6 +657,40 @@ export default function ReportsPage() {
           </div>
         </Card>
 
+        {/* Vehicle Utilization */}
+        <Card className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold">Vehicle Utilization</h3>
+          </div>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart 
+                data={vehicleUtilization}
+                layout="vertical"
+                margin={{ top: 5, right: 30, left: 80, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" />
+                <YAxis 
+                  dataKey={(vehicle) => {
+                    // Display only model if make is empty, otherwise show make + model
+                    return vehicle.make ? `${vehicle.make} ${vehicle.model}` : vehicle.model;
+                  }} 
+                  type="category" 
+                  width={150}
+                />
+                <Tooltip formatter={(value: any) => {
+                  // Ensure value is treated as a number for formatting
+                  const numValue = Number(value);
+                  return [`${numValue.toFixed(1)}%`, 'Utilization'];
+                }} />
+                <Legend />
+                <Bar dataKey="utilization_rate" fill="#82ca9d" name="Utilization %" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+
         {/* Customer Metrics */}
         <Card className="p-6">
           <div className="flex items-center justify-between mb-4">
@@ -482,8 +717,61 @@ export default function ReportsPage() {
                 </p>
               </div>
             </div>
+            
+            <div className="mt-4">
+              <ResponsiveContainer width="100%" height={150}>
+                <PieChart>
+                  <Pie
+                    data={[
+                      { name: 'New Customers', value: customerMetrics.new_customers },
+                      { name: 'Repeat Customers', value: customerMetrics.repeat_customers }
+                    ]}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={60}
+                    fill="#8884d8"
+                    dataKey="value"
+                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  >
+                    <Cell fill="#0088FE" />
+                    <Cell fill="#00C49F" />
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </Card>
+        
+        {/* Staff Performance - Only visible to admins */}
+        {isAdmin && staffPerformance.length > 0 && (
+          <Card className="p-6 md:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold">Staff Performance</h3>
+            </div>
+            <div className="h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={staffPerformance}
+                  margin={{
+                    top: 20,
+                    right: 30,
+                    left: 20,
+                    bottom: 5,
+                  }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="bookings_created" name="Bookings Created" fill="#8884d8" />
+                  <Bar dataKey="customers_added" name="Customers Added" fill="#82ca9d" />
+                  <Bar dataKey="documents_uploaded" name="Documents Uploaded" fill="#ffc658" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        )}
       </div>
     </div>
   );

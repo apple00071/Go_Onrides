@@ -1,18 +1,31 @@
 export interface Permission {
-  viewBookings: boolean;
-  createBooking: boolean;
-  viewDocuments: boolean;
-  uploadDocuments: boolean;
-  accessReports: boolean;
-  managePayments: boolean;
+  createBooking?: boolean;
+  viewBookings?: boolean;
+  editBookings?: boolean;
+  uploadDocuments?: boolean;
+  viewDocuments?: boolean;
+  editDocuments?: boolean;
+  managePayments?: boolean;
+  accessReports?: boolean;
 }
 
 export interface UserProfile {
   id: string;
   email: string;
-  role: 'admin' | 'worker';
-  permissions: Permission;
+  role: string;
+  permissions?: Permission;
+  created_at?: string;
+}
+
+export interface UserLog {
+  id: string;
+  user_id: string;
+  action_type: 'login' | 'logout' | 'create' | 'update' | 'delete';
+  entity_type: 'user' | 'booking' | 'customer' | 'payment' | 'document' | 'vehicle';
+  entity_id: string;
+  details: any;
   created_at: string;
+  user_email?: string;
 }
 
 export interface Database {

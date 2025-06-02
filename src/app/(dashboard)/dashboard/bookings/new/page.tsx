@@ -9,6 +9,7 @@ import { generateBookingId } from '@/lib/utils';
 import SignaturePad from 'react-signature-canvas';
 import type SignaturePadType from 'react-signature-canvas';
 import { ArrowLeft } from 'lucide-react';
+import Link from 'next/link';
 
 type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
 
@@ -1036,6 +1037,54 @@ export default function NewBookingPage() {
                 </div>
               )}
 
+              {/* Terms and Conditions */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Terms and Conditions</h3>
+                <div className="bg-gray-50 p-4 rounded-md text-sm text-gray-700 mb-4">
+                  <ul className="list-disc pl-5 space-y-2">
+                    <li>Day implies 24 hours. A maximum of a 1-hour grace period is accepted on 1 day prior intimation.</li>
+                    <li>The vehicle should be given back with the same amount of fuel available while taking the vehicle, and if in case fuel is not topped up fuel charges + 10% fuel charges are levied.</li>
+                    <li>The vehicle shall be collected and dropped off at our garage. Vehicle pickup/drop-off charges shall be Rs.300 each way in case pickup/drop-off of the vehicle at your location is required. (Subject to the availability of drivers.)</li>
+                    <li>Any accident/damages shall be the client cost and shall be charged at actuals. The decision of GO-ON RIDERS.</li>
+                    <li>Any maintenance charges accrued due to misuse of the vehicle shall be to the client's account.</li>
+                    <li>Routine maintenance is to GO-ON RIDERS account.</li>
+                    <li>The vehicle shall not be used for motor sports or any such activity that may impair the long term performance and condition of the vehicle.</li>
+                    <li>The minimum age of the renter shall be 21 years, and he/she shall possess a minimum driving experience of 1 years.</li>
+                    <li>The vehicle shall not be used for any other purpose other than the given purpose in the agreement form.</li>
+                    <li>Any extension of the Vehicle should be informed in advance and is possible with the acceptance of GO-ON RIDERS.</li>
+                    <li>Any violation of the terms will lead to termination of the deposit.</li>
+                    <li>Without prior intimation of extension of vehicle lead to penalty of Rs. 1000 per day.</li>
+                  </ul>
+                </div>
+                <div className="flex items-start">
+                  <div className="flex items-center h-5">
+                    <input
+                      id="terms"
+                      name="terms"
+                      type="checkbox"
+                      checked={formData.terms_accepted}
+                      onChange={(e) => setFormData(prev => ({ ...prev, terms_accepted: e.target.checked }))}
+                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                  </div>
+                  <div className="ml-3 text-sm">
+                    <label htmlFor="terms" className="font-medium text-gray-700">
+                      I accept the terms and conditions
+                    </label>
+                    <p className="text-gray-500">
+                      By checking this box, you agree to our{' '}
+                      <Link href="/terms" className="text-blue-600 hover:text-blue-500">
+                        Terms of Service
+                      </Link>{' '}
+                      and{' '}
+                      <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
+                        Privacy Policy
+                      </Link>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               {/* Signature */}
               <div className="space-y-6">
                 <h3 className="text-lg font-medium text-gray-900">Signature</h3>
@@ -1058,38 +1107,6 @@ export default function NewBookingPage() {
                     >
                       Clear Signature
                     </button>
-                  </div>
-                </div>
-              </div>
-
-              {/* Terms and Conditions */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Terms and Conditions</h3>
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input
-                      id="terms"
-                      name="terms"
-                      type="checkbox"
-                      checked={formData.terms_accepted}
-                      onChange={(e) => setFormData(prev => ({ ...prev, terms_accepted: e.target.checked }))}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                  </div>
-                  <div className="ml-3 text-sm">
-                    <label htmlFor="terms" className="font-medium text-gray-700">
-                      I accept the terms and conditions
-                    </label>
-                    <p className="text-gray-500">
-                      By checking this box, you agree to our{' '}
-                      <a href="/terms" className="text-blue-600 hover:text-blue-500">
-                        Terms of Service
-                      </a>{' '}
-                      and{' '}
-                      <a href="/privacy" className="text-blue-600 hover:text-blue-500">
-                        Privacy Policy
-                      </a>
-                    </p>
                   </div>
                 </div>
               </div>
