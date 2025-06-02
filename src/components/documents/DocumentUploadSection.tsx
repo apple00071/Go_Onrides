@@ -36,8 +36,8 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
       // Use the native file input to trigger device's file picker
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
-      fileInput.accept = 'image/*';
-      fileInput.capture = 'environment'; // This enables camera on mobile devices
+      // Use a broader MIME type to encourage the OS to show all relevant apps
+      fileInput.accept = "image/*,video/*";
       
       // Handle the file selection
       fileInput.onchange = (e: Event) => {

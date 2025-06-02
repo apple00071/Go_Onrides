@@ -29,14 +29,8 @@ export default function DocumentUpload({
       // Create a file input element programmatically
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
-      fileInput.accept = 'image/*';
-      
-      // Allow for camera access on mobile devices
-      if (documentType === 'customer_photo') {
-        fileInput.capture = 'user'; // Front camera for customer photo
-      } else {
-        fileInput.capture = 'environment'; // Back camera for documents
-      }
+      // Use a broader MIME type to encourage the OS to show all relevant apps
+      fileInput.accept = "image/*,video/*";
       
       // Set up the onchange event handler
       fileInput.onchange = async (e: Event) => {
