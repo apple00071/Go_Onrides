@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, Camera, Image as ImageIcon } from 'lucide-react';
 import Image from 'next/image';
+import { toast } from 'react-hot-toast';
 
 type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
 
@@ -94,7 +95,9 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   const openCamera = async (type: DocumentType) => {
     try {
       setActiveDocument(type);
-      setShowCamera(true);
+      
+      // Show loading toast
+      const loadingToast = toast.loading('Requesting camera access...');
       
       // This will trigger the browser permission dialog
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -106,13 +109,19 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
         audio: false
       });
       
+      // If we reach here, permission was granted
+      toast.dismiss(loadingToast);
+      toast.success('Camera access granted');
+      
+      // Now show the camera UI
+      setShowCamera(true);
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
       }
     } catch (error) {
       console.error('Error accessing camera:', error);
-      alert('Failed to access camera. Please make sure camera permissions are granted and try again.');
-      setShowCamera(false);
+      toast.error('Camera permission denied. Please enable camera access in your device settings.');
     }
   };
 
@@ -225,13 +234,13 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                   className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400"
                 >
                   <Camera className="h-8 w-8 text-gray-400" />
-                  <p className="text-xs text-gray-500 mt-2">Take Photo</p>
+                  <p className="text-xs text-gray-500 mt-2">Take Photo (Camera Access Required)</p>
                 </button>
                 
                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400">
                   <div className="flex flex-col items-center justify-center pt-5 pb-6">
                     <ImageIcon className="h-8 w-8 text-gray-400" />
-                    <p className="text-xs text-gray-500 mt-2">Choose from Gallery</p>
+                    <p className="text-xs text-gray-500 mt-2">Choose from Gallery (Storage Access Required)</p>
                   </div>
                   <input
                     type="file"

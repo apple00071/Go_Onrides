@@ -105,8 +105,44 @@ export default function DocumentUpload({
     }
   };
   
+  const requestPermissions = async () => {
+    try {
+      // Show loading toast
+      const loadingToast = toast.loading('Requesting camera access...');
+      
+      // Request camera permission first
+      if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
+        // This will trigger the browser permission dialog for camera
+        const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // Stop the stream immediately after permission is granted
+        cameraStream.getTracks().forEach(track => track.stop());
+        
+        // Dismiss loading toast and show success
+        toast.dismiss(loadingToast);
+        toast.success('Camera access granted. You can now take photos or select from gallery.');
+      } else {
+        // Device doesn't support camera API
+        toast.dismiss(loadingToast);
+        toast.error('Your device doesn\'t support camera access. Try uploading from gallery.');
+      }
+      
+      // Show the upload options
+      setShowOptions(true);
+    } catch (err) {
+      console.error('Permission request error:', err);
+      toast.error('Camera access denied. You may need to enable it in your device settings. You can still upload from gallery.');
+      // Still show options even if camera permission is denied
+      // as user might want to upload from gallery
+      setShowOptions(true);
+    }
+  };
+  
   const toggleOptions = () => {
-    setShowOptions(!showOptions);
+    if (!showOptions) {
+      requestPermissions();
+    } else {
+      setShowOptions(false);
+    }
   };
 
   const documentLabels = {
@@ -160,7 +196,7 @@ export default function DocumentUpload({
                 className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 cursor-pointer"
               >
                 <Camera className="h-5 w-5 mr-2 text-gray-500" />
-                <span className="text-sm text-gray-700">Take Photo</span>
+                <span className="text-sm text-gray-700">Take Photo (Camera Access Required)</span>
                 <input
                   type="file"
                   id={`camera-${documentType}`}
@@ -177,7 +213,7 @@ export default function DocumentUpload({
                 className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 cursor-pointer"
               >
                 <ImageIcon className="h-5 w-5 mr-2 text-gray-500" />
-                <span className="text-sm text-gray-700">Choose from Gallery</span>
+                <span className="text-sm text-gray-700">Choose from Gallery (Storage Access Required)</span>
                 <input
                   type="file"
                   id={`gallery-${documentType}`}
