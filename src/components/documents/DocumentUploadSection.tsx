@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { X, Camera, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X } from 'lucide-react';
 import Image from 'next/image';
 import { toast } from 'react-hot-toast';
 
@@ -21,10 +21,6 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
   });
 
   const [previews, setPreviews] = useState<Partial<Record<DocumentType, string>>>({});
-  const [showCamera, setShowCamera] = useState(false);
-  const [activeDocument, setActiveDocument] = useState<DocumentType | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const documentLabels: Record<DocumentType, string> = {
     customer_photo: 'Customer Photo',
@@ -34,28 +30,46 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
     dl_back: 'Driving License - Back'
   };
 
-  // Handle file selection from gallery
-  const handleFileChange = (type: DocumentType) => async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
+  // Handle file selection from native device dialog
+  const handleDocumentSelection = (type: DocumentType) => async () => {
+    try {
+      // Use the native file input to trigger device's file picker
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      fileInput.capture = 'environment'; // This enables camera on mobile devices
       
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        alert('Please upload an image file');
-        return;
-      }
-      
-      // Validate file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('File size should be less than 5MB');
-        return;
-      }
+      // Handle the file selection
+      fileInput.onchange = (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        if (target.files && target.files[0]) {
+          const file = target.files[0];
+          
+          // Validate file type
+          if (!file.type.startsWith('image/')) {
+            toast.error('Please upload an image file');
+            return;
+          }
+          
+          // Validate file size (max 5MB)
+          if (file.size > 5 * 1024 * 1024) {
+            toast.error('File size should be less than 5MB');
+            return;
+          }
 
-      processImageFile(file, type);
+          processImageFile(file, type);
+        }
+      };
+      
+      // Trigger the file dialog
+      fileInput.click();
+    } catch (error) {
+      console.error('Error selecting document:', error);
+      toast.error('Failed to open file picker');
     }
   };
 
-  // Process the image file (either from gallery or camera)
+  // Process the image file
   const processImageFile = (file: File, documentType: DocumentType) => {
     // Create preview
     const reader = new FileReader();
@@ -74,6 +88,8 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
     };
     setDocuments(updatedDocuments);
     onDocumentsChange(updatedDocuments);
+    
+    toast.success(`${documentLabels[documentType]} uploaded successfully`);
   };
 
   // Remove a document
@@ -89,121 +105,12 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
       return updated;
     });
     onDocumentsChange(updatedDocuments);
+    toast.success(`${documentLabels[type]} removed`);
   };
-
-  // Open camera to take a photo
-  const openCamera = async (type: DocumentType) => {
-    try {
-      setActiveDocument(type);
-      
-      // Show loading toast
-      const loadingToast = toast.loading('Requesting camera access...');
-      
-      // This will trigger the browser permission dialog
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: type === 'customer_photo' ? 'user' : 'environment',
-          width: { ideal: 1280 },
-          height: { ideal: 720 }
-        },
-        audio: false
-      });
-      
-      // If we reach here, permission was granted
-      toast.dismiss(loadingToast);
-      toast.success('Camera access granted');
-      
-      // Now show the camera UI
-      setShowCamera(true);
-      
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-      }
-    } catch (error) {
-      console.error('Error accessing camera:', error);
-      toast.error('Camera permission denied. Please enable camera access in your device settings.');
-    }
-  };
-
-  // Capture photo from camera
-  const capturePhoto = () => {
-    if (!videoRef.current || !canvasRef.current || !activeDocument) return;
-    
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-    
-    // Set canvas size to match video dimensions
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
-    
-    // Draw video frame to canvas
-    const context = canvas.getContext('2d');
-    if (context) {
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      
-      // Convert to file
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const file = new File([blob], `${activeDocument}.jpg`, { type: 'image/jpeg' });
-          processImageFile(file, activeDocument);
-          closeCamera();
-        }
-      }, 'image/jpeg', 0.95);
-    }
-  };
-
-  // Close camera stream and UI
-  const closeCamera = () => {
-    if (videoRef.current && videoRef.current.srcObject) {
-      const stream = videoRef.current.srcObject as MediaStream;
-      stream.getTracks().forEach(track => track.stop());
-      videoRef.current.srcObject = null;
-    }
-    setShowCamera(false);
-  };
-
-  // Clean up camera on component unmount
-  useEffect(() => {
-    return () => {
-      if (videoRef.current && videoRef.current.srcObject) {
-        const stream = videoRef.current.srcObject as MediaStream;
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
-  }, []);
 
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-medium text-gray-900">Required Documents</h3>
-      
-      {/* Camera UI */}
-      {showCamera && (
-        <div className="fixed inset-0 bg-black z-50 flex flex-col">
-          <div className="flex-1 relative">
-            <video 
-              ref={videoRef}
-              autoPlay 
-              playsInline
-              className="w-full h-full object-cover"
-            />
-            <canvas ref={canvasRef} className="hidden" />
-          </div>
-          <div className="bg-black p-4 flex justify-between items-center">
-            <button
-              onClick={closeCamera}
-              className="px-4 py-2 bg-red-600 text-white rounded"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={capturePhoto}
-              className="px-4 py-2 bg-blue-600 text-white rounded"
-            >
-              Capture
-            </button>
-          </div>
-        </div>
-      )}
       
       {/* Document Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -228,28 +135,15 @@ export default function DocumentUploadSection({ onDocumentsChange }: DocumentUpl
                 </button>
               </div>
             ) : (
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={() => openCamera(type)}
-                  className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400"
-                >
-                  <Camera className="h-8 w-8 text-gray-400" />
-                  <p className="text-xs text-gray-500 mt-2">Take Photo (Camera Access Required)</p>
-                </button>
-                
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-gray-400">
-                  <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                    <ImageIcon className="h-8 w-8 text-gray-400" />
-                    <p className="text-xs text-gray-500 mt-2">Choose from Gallery (Storage Access Required)</p>
-                  </div>
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={handleFileChange(type)}
-                  />
-                </label>
-              </div>
+              <button
+                onClick={handleDocumentSelection(type)}
+                className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <p className="text-sm text-gray-500 mt-2">Upload Document</p>
+              </button>
             )}
           </div>
         ))}

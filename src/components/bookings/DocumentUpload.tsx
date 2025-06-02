@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, X, Camera, Image as ImageIcon } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -23,28 +23,49 @@ export default function DocumentUpload({
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState<string | null>(existingUrl || null);
   const [error, setError] = useState<string | null>(null);
-  const [showOptions, setShowOptions] = useState(false);
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) {
-      return;
+  const handleFileSelection = async () => {
+    try {
+      // Create a file input element programmatically
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      
+      // Allow for camera access on mobile devices
+      if (documentType === 'customer_photo') {
+        fileInput.capture = 'user'; // Front camera for customer photo
+      } else {
+        fileInput.capture = 'environment'; // Back camera for documents
+      }
+      
+      // Set up the onchange event handler
+      fileInput.onchange = async (e: Event) => {
+        const target = e.target as HTMLInputElement;
+        const file = target.files?.[0];
+        
+        if (!file) return;
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+          setError('Please upload an image file');
+          return;
+        }
+
+        // Validate file size (max 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+          setError('File size should be less than 5MB');
+          return;
+        }
+
+        await uploadFile(file);
+      };
+      
+      // Trigger the file dialog
+      fileInput.click();
+    } catch (err) {
+      console.error('Error selecting document:', err);
+      toast.error('Failed to open file picker');
     }
-
-    // Validate file type
-    if (!file.type.startsWith('image/')) {
-      setError('Please upload an image file');
-      return;
-    }
-
-    // Validate file size (max 5MB)
-    if (file.size > 5 * 1024 * 1024) {
-      setError('File size should be less than 5MB');
-      return;
-    }
-
-    await uploadFile(file);
-    setShowOptions(false);
   };
 
   const uploadFile = async (file: File) => {
@@ -70,6 +91,7 @@ export default function DocumentUpload({
 
       setPreview(publicUrl);
       onUploadComplete?.(publicUrl);
+      toast.success('Document uploaded successfully');
     } catch (err: unknown) {
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : 'Failed to upload document');
@@ -102,46 +124,6 @@ export default function DocumentUpload({
       console.error('Remove error:', error);
       const errorMessage = error instanceof Error ? error.message : 'Failed to remove document';
       toast.error(errorMessage);
-    }
-  };
-  
-  const requestPermissions = async () => {
-    try {
-      // Show loading toast
-      const loadingToast = toast.loading('Requesting camera access...');
-      
-      // Request camera permission first
-      if ('mediaDevices' in navigator && 'getUserMedia' in navigator.mediaDevices) {
-        // This will trigger the browser permission dialog for camera
-        const cameraStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        // Stop the stream immediately after permission is granted
-        cameraStream.getTracks().forEach(track => track.stop());
-        
-        // Dismiss loading toast and show success
-        toast.dismiss(loadingToast);
-        toast.success('Camera access granted. You can now take photos or select from gallery.');
-      } else {
-        // Device doesn't support camera API
-        toast.dismiss(loadingToast);
-        toast.error('Your device doesn\'t support camera access. Try uploading from gallery.');
-      }
-      
-      // Show the upload options
-      setShowOptions(true);
-    } catch (err) {
-      console.error('Permission request error:', err);
-      toast.error('Camera access denied. You may need to enable it in your device settings. You can still upload from gallery.');
-      // Still show options even if camera permission is denied
-      // as user might want to upload from gallery
-      setShowOptions(true);
-    }
-  };
-  
-  const toggleOptions = () => {
-    if (!showOptions) {
-      requestPermissions();
-    } else {
-      setShowOptions(false);
     }
   };
 
@@ -181,50 +163,13 @@ export default function DocumentUpload({
         <div className="space-y-2">
           <button
             type="button"
-            onClick={toggleOptions}
+            onClick={handleFileSelection}
             className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             disabled={uploading}
           >
             <Upload className="h-5 w-5 mr-2 text-gray-500" />
             <span className="text-sm text-gray-700">Upload Document</span>
           </button>
-          
-          {showOptions && (
-            <div className="flex flex-col gap-2 border rounded-lg p-4 bg-gray-50 animate-fadeIn">
-              <label
-                htmlFor={`camera-${documentType}`}
-                className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 cursor-pointer"
-              >
-                <Camera className="h-5 w-5 mr-2 text-gray-500" />
-                <span className="text-sm text-gray-700">Take Photo (Camera Access Required)</span>
-                <input
-                  type="file"
-                  id={`camera-${documentType}`}
-                  accept="image/*"
-                  capture={documentType === 'customer_photo' ? 'user' : 'environment'}
-                  onChange={handleFileChange}
-                  className="hidden"
-                  disabled={uploading}
-                />
-              </label>
-              
-              <label
-                htmlFor={`gallery-${documentType}`}
-                className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg bg-white hover:bg-gray-50 cursor-pointer"
-              >
-                <ImageIcon className="h-5 w-5 mr-2 text-gray-500" />
-                <span className="text-sm text-gray-700">Choose from Gallery (Storage Access Required)</span>
-                <input
-                  type="file"
-                  id={`gallery-${documentType}`}
-                  accept="image/*"
-                  onChange={handleFileChange}
-                  className="hidden"
-                  disabled={uploading}
-                />
-              </label>
-            </div>
-          )}
           
           {uploading && (
             <p className="text-center text-sm text-gray-500 mt-2">Uploading...</p>
