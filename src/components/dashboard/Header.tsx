@@ -18,7 +18,7 @@ export default function Header({ user, onMenuClick }: HeaderProps) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-10 bg-white border-b">
+    <header className="sticky top-0 z-10 bg-white border-b w-full">
       <div className="flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
         <div className="flex items-center">
           <button
@@ -40,7 +40,7 @@ export default function Header({ user, onMenuClick }: HeaderProps) {
           {/* User info */}
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="hidden sm:flex sm:flex-col sm:items-end">
-              <p className="text-sm font-medium text-gray-900 truncate max-w-[150px] sm:max-w-[200px]">{user?.email}</p>
+              <p className="text-sm font-medium text-gray-900 truncate max-w-[120px] sm:max-w-[150px] md:max-w-[200px]">{user?.email}</p>
               <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
             </div>
             <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg bg-blue-100">

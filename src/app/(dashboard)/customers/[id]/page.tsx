@@ -196,8 +196,8 @@ export default function CustomerDetailsPage() {
   return (
     <div className="flex flex-col min-h-screen bg-gray-50">
       {/* Header */}
-      <div className="sticky top-0 bg-gray-50 z-10 p-6 border-b">
-        <div className="flex items-center justify-between">
+      <div className="sticky top-0 bg-gray-50 z-10 p-4 sm:p-6 border-b">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <button
             onClick={() => router.back()}
             className="flex items-center text-gray-600 hover:text-gray-900"
@@ -205,7 +205,7 @@ export default function CustomerDetailsPage() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Customers
           </button>
-          <div className="flex items-center space-x-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
             <span className="text-sm text-gray-500">
               Customer since {formatDate(customer.created_at)}
             </span>
@@ -220,27 +220,27 @@ export default function CustomerDetailsPage() {
       </div>
 
       {/* Main Content */}
-      <div className="flex-1 p-6 overflow-y-auto">
+      <div className="flex-1 p-4 sm:p-6 overflow-y-auto">
         {/* Customer Information Section */}
         <div className="bg-white rounded-lg shadow mb-6">
-          <div className="grid grid-cols-3 gap-6 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4 sm:p-6">
             {/* Basic Information */}
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-gray-900">Basic Information</h2>
               <div className="space-y-3">
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Name</span>
                   <span className="text-sm text-gray-900">{customer.name}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Phone</span>
                   <span className="text-sm text-gray-900">{customer.phone}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Email</span>
-                  <span className="text-sm text-gray-900">{customer.email || 'Not provided'}</span>
+                  <span className="text-sm text-gray-900 break-words">{customer.email || 'Not provided'}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Date of Birth</span>
                   <span className="text-sm text-gray-900">{customer.dob ? formatDate(customer.dob) : 'Not provided'}</span>
                 </div>
@@ -251,15 +251,15 @@ export default function CustomerDetailsPage() {
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-gray-900">Emergency Contact</h2>
               <div className="space-y-3">
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Name</span>
                   <span className="text-sm text-gray-900">{customer.emergency_contact_name || 'Not provided'}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Phone</span>
                   <span className="text-sm text-gray-900">{customer.emergency_contact_phone || 'Not provided'}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Relationship</span>
                   <span className="text-sm text-gray-900">{customer.emergency_contact_relationship || 'Not provided'}</span>
                 </div>
@@ -270,15 +270,15 @@ export default function CustomerDetailsPage() {
             <div className="space-y-4">
               <h2 className="text-xl font-semibold text-gray-900">Identification</h2>
               <div className="space-y-3">
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Aadhar Number</span>
                   <span className="text-sm text-gray-900">{customer.aadhar_number || 'Not provided'}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">DL Number</span>
                   <span className="text-sm text-gray-900">{customer.dl_number || 'Not provided'}</span>
                 </div>
-                <div className="flex justify-between">
+                <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">DL Expiry</span>
                   <span className="text-sm text-gray-900">{customer.dl_expiry_date ? formatDate(customer.dl_expiry_date) : 'Not provided'}</span>
                 </div>
@@ -289,9 +289,9 @@ export default function CustomerDetailsPage() {
 
         {/* Address Section */}
         <div className="bg-white rounded-lg shadow mb-6">
-          <div className="grid grid-cols-2 divide-x">
+          <div className="grid grid-cols-1 md:grid-cols-2 divide-y md:divide-y-0 md:divide-x">
             {/* Temporary Address */}
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Temporary Address</h2>
               <p className="text-gray-900">
                 {[
@@ -304,7 +304,7 @@ export default function CustomerDetailsPage() {
             </div>
 
             {/* Permanent Address */}
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <h2 className="text-xl font-semibold text-gray-900 mb-4">Permanent Address</h2>
               <p className="text-gray-900">
                 {[
@@ -320,9 +320,9 @@ export default function CustomerDetailsPage() {
 
         {/* Documents Section */}
         <div className="bg-white rounded-lg shadow mb-6">
-          <div className="p-6">
+          <div className="p-4 sm:p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Documents</h2>
-            <div className="grid grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {customer.documents && typeof customer.documents === 'object' && (
                 <>
                   {customer.documents.customer_photo && (
@@ -425,6 +425,29 @@ export default function CustomerDetailsPage() {
                       No documents uploaded
                     </div>
                   )}
+                  {selectedImage && (
+                    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
+                      <div className="bg-white rounded-lg overflow-hidden max-w-3xl w-full max-h-[90vh] flex flex-col">
+                        <div className="flex items-center justify-between p-4 border-b">
+                          <h3 className="text-lg font-medium text-gray-900">{selectedImageLabel}</h3>
+                          <button
+                            onClick={() => setSelectedImage(null)}
+                            className="text-gray-400 hover:text-gray-500"
+                          >
+                            <X className="h-5 w-5" aria-hidden="true" />
+                          </button>
+                        </div>
+                        <div className="flex-1 overflow-hidden relative min-h-[60vh]">
+                          <Image
+                            src={selectedImage}
+                            alt={selectedImageLabel}
+                            fill
+                            className="object-contain"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
               {(!customer.documents || typeof customer.documents !== 'object') && (
@@ -436,108 +459,67 @@ export default function CustomerDetailsPage() {
           </div>
         </div>
 
-        {/* Image Modal */}
-        {selectedImage && (
-          <div 
-            className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
-            onClick={() => setSelectedImage(null)}
-          >
-            <div 
-              className="relative max-w-4xl w-full bg-white rounded-lg overflow-hidden"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="p-4 border-b flex justify-between items-center">
-                <h3 className="text-lg font-medium text-gray-900">
-                  {selectedImageLabel}
-                </h3>
-                <button
-                  onClick={() => setSelectedImage(null)}
-                  className="text-gray-400 hover:text-gray-500"
-                >
-                  <X className="h-6 w-6" />
-                </button>
-              </div>
-              <div className="relative h-[80vh]">
-                <Image
-                  src={selectedImage}
-                  alt={selectedImageLabel}
-                  fill
-                  className="object-contain"
-                  sizes="(max-width: 1024px) 100vw, 80vw"
-                />
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Booking History */}
-        <div className="bg-white rounded-lg shadow overflow-hidden">
-          <div className="p-6 border-b">
-            <h2 className="text-xl font-semibold text-gray-900">Booking History</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Booking ID
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vehicle
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Dates
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Amount
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {customer.bookings.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-4 text-center text-sm text-gray-500">
-                      No bookings found
-                    </td>
-                  </tr>
-                ) : (
-                  customer.bookings.map((booking) => (
-                    <tr 
-                      key={booking.id} 
-                      className="hover:bg-gray-50 cursor-pointer" 
-                      onClick={() => router.push(`/dashboard/bookings/${booking.id}`)}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-blue-600">
-                        {booking.booking_id}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {booking.vehicle_details.model} ({booking.vehicle_details.registration})
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatDate(booking.start_date)} - {formatDate(booking.end_date)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {formatCurrency(booking.booking_amount)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                          ${booking.status === 'completed' ? 'bg-green-100 text-green-800' :
-                            booking.status === 'in_use' ? 'bg-blue-100 text-blue-800' :
-                            booking.status === 'confirmed' ? 'bg-yellow-100 text-yellow-800' :
-                            booking.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                            'bg-gray-100 text-gray-800'
-                          }`}>
-                          {booking.status.replace('_', ' ')}
-                        </span>
-                      </td>
+        {/* Bookings Section */}
+        <div className="bg-white rounded-lg shadow">
+          <div className="p-4 sm:p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Booking History</h2>
+            {customer.bookings && customer.bookings.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Booking ID
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Vehicle
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Dates
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Amount
+                      </th>
+                      <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {customer.bookings.map((booking) => (
+                      <tr key={booking.id} className="hover:bg-gray-50">
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                          {booking.booking_id}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {booking.vehicle_details?.model || 'Unknown'} 
+                          <span className="block text-xs text-gray-400">
+                            {booking.vehicle_details?.registration || 'No Reg'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <span className="block">{formatDate(booking.start_date)}</span>
+                          <span className="block text-xs text-gray-400">to {formatDate(booking.end_date)}</span>
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatCurrency(booking.booking_amount)}
+                        </td>
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full 
+                            ${statusColors[booking.status as keyof typeof statusColors] || 'bg-gray-100 text-gray-800'}`}>
+                            {booking.status?.replace('_', ' ') || 'Unknown'}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                No booking history available
+              </div>
+            )}
           </div>
         </div>
       </div>

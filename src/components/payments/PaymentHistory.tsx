@@ -37,20 +37,71 @@ export default function PaymentHistory({ bookingId }: PaymentHistoryProps) {
       setLoading(true);
       const supabase = getSupabaseClient();
       
-      const { data, error: fetchError } = await supabase
+      console.log('Fetching payment history for booking:', bookingId);
+      
+      // First, get booking details to make sure we have the correct ID
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select('id, booking_id')
+        .eq('id', bookingId)
+        .single();
+      
+      if (bookingError) {
+        console.log('Error fetching booking by ID, trying booking_id field instead:', bookingError);
+        
+        // Try to find by booking_id field instead
+        const { data: altBookingData, error: altBookingError } = await supabase
+          .from('bookings')
+          .select('id, booking_id')
+          .eq('booking_id', bookingId)
+          .single();
+        
+        if (altBookingError) {
+          console.error('Could not find booking with either id or booking_id:', bookingId);
+          throw new Error('Booking not found');
+        }
+        
+        console.log('Found booking by booking_id field:', altBookingData);
+        fetchPaymentsForBooking(altBookingData.id);
+      } else {
+        console.log('Found booking by id:', bookingData);
+        fetchPaymentsForBooking(bookingData.id);
+      }
+    } catch (error) {
+      console.error('Error in payment history:', error);
+      setError('Failed to load payment history');
+      setLoading(false);
+    }
+  };
+  
+  const fetchPaymentsForBooking = async (dbBookingId: string) => {
+    try {
+      const supabase = getSupabaseClient();
+      
+      console.log('Fetching payments for booking ID:', dbBookingId);
+      
+      // Query the payments table with the booking ID
+      const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
         .select('*')
-        .eq('booking_id', bookingId)
+        .eq('booking_id', dbBookingId)
         .order('created_at', { ascending: false });
       
-      if (fetchError) {
-        throw fetchError;
+      if (paymentsError) {
+        console.error('Error fetching payments for booking:', paymentsError);
+        throw paymentsError;
       }
       
-      setPayments(data || []);
+      console.log('Payments found for booking:', paymentsData);
+      
+      if (!paymentsData || paymentsData.length === 0) {
+        console.log('No payments found for booking ID:', dbBookingId);
+      }
+      
+      setPayments(paymentsData || []);
       setError(null);
     } catch (error) {
-      console.error('Error fetching payment history:', error);
+      console.error('Error fetching payments for booking:', error);
       setError('Failed to load payment history');
     } finally {
       setLoading(false);

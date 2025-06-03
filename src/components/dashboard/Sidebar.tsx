@@ -51,7 +51,7 @@ export default function Sidebar({ user, isOpen }: SidebarProps) {
       className={`
         flex h-screen flex-col
         fixed md:sticky top-0 z-30
-        w-[280px] md:w-64
+        w-64 max-w-[80vw]
         bg-white border-r border-gray-200
         transition-transform duration-300 ease-in-out
         ${!isOpen ? '-translate-x-full' : 'translate-x-0'}

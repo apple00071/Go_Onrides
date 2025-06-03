@@ -25,6 +25,18 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchDashboardStats();
+    
+    // Listen for dashboard refresh events from other pages
+    const handleDashboardRefresh = () => {
+      console.log('Dashboard refresh event received, refreshing stats...');
+      fetchDashboardStats();
+    };
+    
+    window.addEventListener('dashboard:refresh', handleDashboardRefresh);
+    
+    return () => {
+      window.removeEventListener('dashboard:refresh', handleDashboardRefresh);
+    };
   }, []);
 
   const fetchDashboardStats = async () => {
@@ -46,9 +58,10 @@ export default function DashboardPage() {
       console.log(`Found ${totalBookings} total bookings and ${activeRentals} active rentals`);
 
       // Get total income from the payments table - FIXED QUERY
+      console.log('Fetching payments for total income calculation...');
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
-        .select('id, amount, payment_status');
+        .select('*');
 
       if (paymentsError) {
         console.error('Error fetching payments:', paymentsError);
@@ -57,10 +70,13 @@ export default function DashboardPage() {
 
       console.log('Raw payments data:', paymentsData);
 
-      // Calculate total income from all payments
+      // Calculate total income from all payments that have a completed status
       let totalIncome = 0;
-      if (paymentsData) {
+      if (paymentsData && paymentsData.length > 0) {
         totalIncome = paymentsData.reduce((sum, payment) => {
+          // Only include completed payments in total income
+          if (payment.payment_status !== 'completed') return sum;
+          
           // Ensure proper number conversion
           let amount = 0;
           if (typeof payment.amount === 'string') {
@@ -72,6 +88,7 @@ export default function DashboardPage() {
           console.log(`Processing payment ${payment.id}:`, {
             rawAmount: payment.amount,
             parsedAmount: amount,
+            status: payment.payment_status,
             type: typeof payment.amount
           });
 

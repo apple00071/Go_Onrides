@@ -161,6 +161,12 @@ export default function PaymentModal({
       // Get current user for the notification
       const { data: { user } } = await supabase.auth.getUser();
       
+      console.log('Creating payment record for booking:', {
+        bookingId: formData.booking_id,
+        amount,
+        paymentMode: formData.payment_mode
+      });
+      
       // Create the payment record
       const { data: paymentData, error: paymentError } = await supabase
         .from('payments')
@@ -180,6 +186,8 @@ export default function PaymentModal({
         throw paymentError;
       }
 
+      console.log('Created payment record successfully:', paymentData);
+
       // Update the booking's payment status
       const newPaidAmount = selectedBooking.paid_amount + amount;
       const totalRequired = selectedBooking.booking_amount + selectedBooking.security_deposit_amount;
@@ -187,19 +195,32 @@ export default function PaymentModal({
       // Set status to full only when total amount is received
       const paymentStatus = newPaidAmount >= totalRequired ? 'full' : 'partial';
 
-      const { error: bookingError } = await supabase
+      console.log('Updating booking payment status:', {
+        bookingId: formData.booking_id,
+        newPaidAmount,
+        totalRequired,
+        paymentStatus
+      });
+      
+      const { data: updatedBooking, error: bookingError } = await supabase
         .from('bookings')
         .update({
           paid_amount: newPaidAmount,
-          payment_status: paymentStatus
+          payment_status: paymentStatus,
+          updated_at: new Date().toISOString(),
+          updated_by: user?.id
         })
-        .eq('id', formData.booking_id);
+        .eq('id', formData.booking_id)
+        .select()
+        .single();
 
       if (bookingError) {
         console.error('Booking update error:', bookingError);
         throw bookingError;
       }
       
+      console.log('Updated booking successfully:', updatedBooking);
+
       // Send notification to admin users about the payment
       if (paymentData && selectedBooking) {
         await notifyPaymentEvent(

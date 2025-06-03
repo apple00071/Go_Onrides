@@ -548,7 +548,7 @@ export default function BookingDetailsPage() {
                 </p>
               </div>
             </div>
-            <div className="pt-4 border-t">
+            <div className="mt-8">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Payment History</h3>
               <PaymentHistory bookingId={booking.id} />
             </div>

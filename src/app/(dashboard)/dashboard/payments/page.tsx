@@ -35,6 +35,7 @@ export default function PaymentsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     fetchPayments();
@@ -45,40 +46,50 @@ export default function PaymentsPage() {
     setError(null);
 
     try {
+      console.log('Fetching payments for payments page...');
       const supabase = getSupabaseClient();
-      const { data, error: paymentsError } = await supabase
+      
+      // First, get all payments
+      const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
-        .select(`
-          id,
-          booking_id,
-          amount,
-          payment_mode,
-          payment_status,
-          created_at,
-          bookings (
-            id,
-            booking_id,
-            customer_name,
-            vehicle_details,
-            booking_amount,
-            security_deposit_amount,
-            paid_amount
-          )
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (paymentsError) {
+        console.error('Error fetching payments:', paymentsError);
         throw new Error(`Failed to fetch payments: ${paymentsError.message}`);
       }
-
-      if (!data) {
+      
+      console.log('Raw payments data:', paymentsData);
+      
+      if (!paymentsData || paymentsData.length === 0) {
+        console.log('No payments found');
         setPayments([]);
         return;
       }
+      
+      // Get all bookings to map to payments
+      const { data: bookingsData, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('*');
+        
+      if (bookingsError) {
+        console.error('Error fetching bookings:', bookingsError);
+        throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
+      }
+      
+      // Create a lookup map for bookings
+      const bookingsMap = new Map();
+      bookingsData?.forEach(booking => {
+        bookingsMap.set(booking.id, booking);
+      });
+      
+      console.log('Processed bookings map:', Array.from(bookingsMap.keys()));
 
-      // Transform the data to match the expected interface
-      const transformedPayments: PaymentWithBooking[] = data.map(payment => {
-        const booking = Array.isArray(payment.bookings) ? payment.bookings[0] : payment.bookings;
+      // Now transform payments with booking data
+      const transformedPayments: PaymentWithBooking[] = paymentsData.map(payment => {
+        const booking = bookingsMap.get(payment.booking_id);
+        console.log(`Mapping payment ${payment.id} to booking ${payment.booking_id}:`, booking ? 'Found' : 'Not found');
         
         return {
           id: payment.id,
@@ -87,7 +98,7 @@ export default function PaymentsPage() {
           payment_mode: payment.payment_mode,
           payment_status: payment.payment_status,
           created_at: payment.created_at,
-          created_by: 'system',
+          created_by: payment.created_by || 'system',
           booking: {
             id: booking?.id || '',
             booking_id: booking?.booking_id || '',
@@ -102,10 +113,11 @@ export default function PaymentsPage() {
           }
         };
       });
-
+      
+      console.log('Transformed payments data:', transformedPayments);
       setPayments(transformedPayments);
     } catch (error) {
-      console.error('Error fetching payments:', error);
+      console.error('Error in fetchPayments:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch payments');
     } finally {
       setLoading(false);
@@ -149,6 +161,15 @@ export default function PaymentsPage() {
   const totalAmount = filteredPayments.reduce((sum, payment) => {
     return payment.payment_status === 'completed' ? sum + Number(payment.amount) : sum;
   }, 0);
+
+  const handlePaymentCreated = () => {
+    console.log('Payment created, refreshing data...');
+    setRefreshKey(prevKey => prevKey + 1);
+    
+    // Trigger dashboard refresh by sending a custom event
+    const dashboardRefreshEvent = new CustomEvent('dashboard:refresh');
+    window.dispatchEvent(dashboardRefreshEvent);
+  };
 
   return (
     <div className="min-h-screen p-6">
@@ -310,7 +331,7 @@ export default function PaymentsPage() {
       <PaymentModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
-        onPaymentCreated={fetchPayments}
+        onPaymentCreated={handlePaymentCreated}
       />
     </div>
   );

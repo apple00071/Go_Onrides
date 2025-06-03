@@ -548,6 +548,29 @@ export default function BookingModal({
       if (!booking) {
         throw new Error('No booking data returned after creation');
       }
+
+      // Create payment record if there's a paid amount
+      if (parseFloat(formData.paid_amount) > 0) {
+        console.log('Creating payment record for booking:', booking.id, 'amount:', formData.paid_amount);
+        
+        const { error: paymentError } = await supabase
+          .from('payments')
+          .insert({
+            booking_id: booking.id,
+            amount: parseFloat(formData.paid_amount),
+            payment_mode: formData.payment_mode,
+            payment_status: 'completed',
+            created_at: new Date().toISOString(),
+            created_by: user?.id
+          });
+
+        if (paymentError) {
+          console.error('Payment record creation error:', paymentError);
+          throw new Error(`Failed to create payment record: ${paymentError.message}`);
+        }
+
+        console.log('Payment record created successfully');
+      }
       
       // Send notification to admin users about the new booking
       await notifyBookingEvent(

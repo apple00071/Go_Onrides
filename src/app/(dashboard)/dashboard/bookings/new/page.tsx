@@ -101,6 +101,34 @@ export default function NewBookingPage() {
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
 
+  // Get current time rounded up to the next 30-minute slot
+  const getCurrentTime = () => {
+    const now = new Date();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    
+    // Round up to the next 30-minute slot
+    if (minutes > 30) {
+      // If minutes > 30, round up to the next hour
+      return `${(hours + 1).toString().padStart(2, '0')}:00`;
+    } else if (minutes > 0) {
+      // If minutes > 0 but <= 30, round up to the next 30-minute mark
+      return `${hours.toString().padStart(2, '0')}:30`;
+    }
+    // If minutes = 0, use current hour
+    return `${hours.toString().padStart(2, '0')}:00`;
+  };
+
+  // Check if a time is in the past for today
+  const isTimeInPast = (time: string) => {
+    if (!time) return false;
+    const today = new Date().toISOString().split('T')[0];
+    if (formData.start_date !== today) return false;
+    
+    const currentTime = getCurrentTime();
+    return time <= currentTime; // Changed from < to <= to include current time slot
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
 
@@ -164,11 +192,31 @@ export default function NewBookingPage() {
       if (startDate < today) {
         setError('Start date cannot be in the past');
       }
+      // Reset pickup time if it would be in the past
+      if (formData.pickup_time && isTimeInPast(formData.pickup_time)) {
+        setFormData(prev => ({ ...prev, pickup_time: '' }));
+      }
     } else if (name === 'end_date') {
       const endDate = new Date(value);
       const startDate = new Date(formData.start_date);
       if (endDate < startDate) {
         setError('End date cannot be before start date');
+      }
+    } else if (name === 'pickup_time') {
+      if (isTimeInPast(value)) {
+        setError('Pickup time cannot be in the past');
+        return;
+      }
+      if (formData.start_date === formData.end_date && formData.dropoff_time && value >= formData.dropoff_time) {
+        setError('Pickup time must be before drop-off time on same day bookings');
+      }
+    } else if (name === 'dropoff_time') {
+      if (isTimeInPast(value)) {
+        setError('Drop-off time cannot be in the past');
+        return;
+      }
+      if (formData.start_date === formData.end_date && formData.pickup_time && value <= formData.pickup_time) {
+        setError('Drop-off time must be after pickup time on same day bookings');
       }
     } else if (name === 'booking_amount' || name === 'security_deposit_amount' || name === 'paid_amount') {
       const amount = parseFloat(value);
@@ -533,6 +581,25 @@ export default function NewBookingPage() {
         throw new Error('No booking data returned after creation');
       }
 
+      // Create initial payment record if paid amount is greater than 0
+      if (parseFloat(formData.paid_amount) > 0) {
+        const { error: paymentError } = await supabase
+          .from('payments')
+          .insert({
+            booking_id: booking.id,
+            amount: parseFloat(formData.paid_amount),
+            payment_mode: formData.payment_mode,
+            payment_status: 'completed',
+            created_at: new Date().toISOString(),
+            created_by: (await supabase.auth.getUser()).data.user?.id
+          });
+
+        if (paymentError) {
+          console.error('Payment creation error:', paymentError);
+          // Don't throw error here, just log it since booking is already created
+        }
+      }
+
       toast.success(`Booking created successfully. Booking ID: ${bookingId}`);
       router.push('/dashboard/bookings');
     } catch (error) {
@@ -840,55 +907,59 @@ export default function NewBookingPage() {
                     />
                   </div>
                   <div>
-                    <label htmlFor="pickup_time" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700">
                       Pickup Time *
                     </label>
                     <select
-                      id="pickup_time"
                       name="pickup_time"
                       required
                       value={formData.pickup_time}
                       onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     >
                       <option value="">Select time</option>
-                      {Array.from({ length: 48 }, (_, i): JSX.Element => {
+                      {Array.from({ length: 48 }, (_, i) => {
                         const hour = Math.floor(i / 2);
                         const minute = i % 2 === 0 ? '00' : '30';
                         const time = `${hour.toString().padStart(2, '0')}:${minute}`;
-                        return (
-                          <option key={time} value={time}>
-                            {time}
-                          </option>
-                        );
-                      })}
+                        // Only show future times
+                        if (!isTimeInPast(time)) {
+                          return (
+                            <option key={time} value={time}>
+                              {time}
+                            </option>
+                          );
+                        }
+                        return null;
+                      }).filter(Boolean)}
                     </select>
                   </div>
                   <div>
-                    <label htmlFor="dropoff_time" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700">
                       Drop-off Time *
                     </label>
                     <select
-                      id="dropoff_time"
                       name="dropoff_time"
                       required
                       value={formData.dropoff_time}
                       onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     >
                       <option value="">Select time</option>
-                      {Array.from({ length: 48 }, (_, i): JSX.Element => {
+                      {Array.from({ length: 48 }, (_, i) => {
                         const hour = Math.floor(i / 2);
                         const minute = i % 2 === 0 ? '00' : '30';
                         const time = `${hour.toString().padStart(2, '0')}:${minute}`;
-                        return (
-                          <option key={time} value={time}>
-                            {time}
-                          </option>
-                        );
-                      })}
+                        // Only show future times
+                        if (!isTimeInPast(time)) {
+                          return (
+                            <option key={time} value={time}>
+                              {time}
+                            </option>
+                          );
+                        }
+                        return null;
+                      }).filter(Boolean)}
                     </select>
                   </div>
                 </div>
