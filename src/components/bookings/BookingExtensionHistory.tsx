@@ -35,7 +35,7 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
         
         const { data, error } = await supabase
           .from('booking_extensions')
-          .select('*, profiles:created_by(email)')
+          .select('*')
           .eq('booking_id', bookingId)
           .order('created_at', { ascending: false });
           
@@ -90,7 +90,7 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
               <div>
                 <div className="font-medium">{formatDate(extension.created_at)}</div>
                 <div className="text-sm text-gray-500">
-                  By: {(extension as any).profiles?.email || 'User'}
+                  {extension.created_by ? `By: User ID ${extension.created_by.substring(0, 8)}...` : 'System'}
                 </div>
               </div>
               <div className="text-right">

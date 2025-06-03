@@ -503,6 +503,9 @@ export default function BookingModal({
         throw new Error('Customer not found');
       }
 
+      // Get the current user's email to use in the notification
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // Create booking with proper status and new booking ID format
       const { data: booking, error: bookingError } = await supabase
         .from('bookings')
@@ -531,7 +534,8 @@ export default function BookingModal({
           payment_status: formData.payment_status,
           paid_amount: parseFloat(formData.paid_amount),
           payment_mode: formData.payment_mode,
-          status: 'confirmed'
+          status: 'confirmed',
+          created_by: user?.id
         })
         .select()
         .single();
@@ -544,9 +548,6 @@ export default function BookingModal({
       if (!booking) {
         throw new Error('No booking data returned after creation');
       }
-
-      // Get the current user's email to use in the notification
-      const { data: { user } } = await supabase.auth.getUser();
       
       // Send notification to admin users about the new booking
       await notifyBookingEvent(

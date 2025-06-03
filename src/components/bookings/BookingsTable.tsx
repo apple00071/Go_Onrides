@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatCurrency } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
+import { EntityAuditInfo } from '@/components/ui/EntityAuditInfo';
 
 interface Booking {
   id: string;
@@ -18,6 +19,9 @@ interface Booking {
   payment_status: 'full' | 'partial' | 'pending';
   status: 'confirmed' | 'pending' | 'cancelled' | 'in_use' | 'completed';
   created_at: string;
+  updated_at: string;
+  created_by?: string | null;
+  updated_by?: string | null;
   paid_amount?: number;
 }
 
@@ -121,9 +125,20 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                 role="button"
               >
                   <td className="whitespace-nowrap px-6 py-4">
-                    <span className="text-sm font-medium text-gray-900">
-                    {booking.booking_id || booking.id}
-                    </span>
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium text-gray-900">
+                        {booking.booking_id || booking.id}
+                      </span>
+                      {booking.created_at && (
+                        <EntityAuditInfo 
+                          entityType="booking"
+                          createdAt={booking.created_at}
+                          updatedAt={booking.updated_at}
+                          createdBy={booking.created_by}
+                          updatedBy={booking.updated_by}
+                        />
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex flex-col">

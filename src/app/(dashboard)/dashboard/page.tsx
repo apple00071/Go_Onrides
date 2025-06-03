@@ -29,6 +29,7 @@ export default function DashboardPage() {
 
   const fetchDashboardStats = async () => {
     try {
+      console.log('Fetching dashboard stats...');
       const supabase = getSupabaseClient();
 
       // Get total bookings
@@ -41,43 +42,87 @@ export default function DashboardPage() {
         .from('bookings')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
+        
+      console.log(`Found ${totalBookings} total bookings and ${activeRentals} active rentals`);
 
-      // Get total income from completed bookings
-      const { data: completedBookings, error: bookingsError } = await supabase
-        .from('bookings')
-        .select(`
-          id,
-          booking_amount,
-          paid_amount,
-          payment_status
-        `)
-        .eq('payment_status', 'full');
+      // Get total income from the payments table - FIXED QUERY
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from('payments')
+        .select('id, amount, payment_status');
 
-      if (bookingsError) {
-        console.error('Error fetching completed bookings:', bookingsError);
-        throw bookingsError;
+      if (paymentsError) {
+        console.error('Error fetching payments:', paymentsError);
+        throw paymentsError;
       }
 
-      // Calculate total income from booking amounts only (excluding security deposits)
-      const totalIncome = completedBookings?.reduce((sum, booking) => {
-        const amount = typeof booking.booking_amount === 'string'
-          ? parseFloat(booking.booking_amount)
-          : booking.booking_amount;
-        
-        return !isNaN(amount) ? sum + amount : sum;
-      }, 0) || 0;
+      console.log('Raw payments data:', paymentsData);
 
-      console.log('Total income from bookings:', totalIncome);
+      // Calculate total income from all payments
+      let totalIncome = 0;
+      if (paymentsData) {
+        totalIncome = paymentsData.reduce((sum, payment) => {
+          // Ensure proper number conversion
+          let amount = 0;
+          if (typeof payment.amount === 'string') {
+            amount = parseFloat(payment.amount.replace(/[^0-9.-]+/g, ''));
+          } else if (typeof payment.amount === 'number') {
+            amount = payment.amount;
+          }
+
+          console.log(`Processing payment ${payment.id}:`, {
+            rawAmount: payment.amount,
+            parsedAmount: amount,
+            type: typeof payment.amount
+          });
+
+          return !isNaN(amount) ? sum + amount : sum;
+        }, 0);
+      }
+
+      console.log('Final calculated total income:', totalIncome);
 
       // Get pending payments total
       const { data: pendingBookings } = await supabase
         .from('bookings')
-        .select('booking_amount, security_deposit_amount, paid_amount')
-        .in('payment_status', ['pending', 'partial']);
+        .select('id, booking_amount, security_deposit_amount, paid_amount')
+        .or('payment_status.eq.pending,payment_status.eq.partial')
+        .not('status', 'eq', 'cancelled');
 
+      // Get all payments to ensure we have the most recent payment data
+      const { data: allPayments, error: allPaymentsError } = await supabase
+        .from('payments')
+        .select('booking_id, amount');
+      
+      if (allPaymentsError) {
+        console.error('Error fetching all payments:', allPaymentsError);
+      }
+      
+      // Create a map of booking_id to total paid amount
+      const paymentTotals = new Map<string, number>();
+      if (allPayments) {
+        allPayments.forEach(payment => {
+          const currentTotal = paymentTotals.get(payment.booking_id) || 0;
+          paymentTotals.set(payment.booking_id, currentTotal + payment.amount);
+        });
+      }
+      
       const pendingPayments = pendingBookings?.reduce((sum, booking) => {
-        const total = booking.booking_amount + booking.security_deposit_amount;
-        return sum + (total - booking.paid_amount);
+        try {
+          const bookingAmount = Number(booking.booking_amount) || 0;
+          const securityDeposit = Number(booking.security_deposit_amount) || 0;
+          const total = bookingAmount + securityDeposit;
+          
+          // Use actual payment data from payments table if available
+          const actualPaidAmount = paymentTotals.get(booking.id) || Number(booking.paid_amount) || 0;
+          
+          const remaining = total - actualPaidAmount;
+          console.log(`Booking ${booking.id}: Total=${total}, Paid=${actualPaidAmount}, Remaining=${remaining}`);
+          
+          return sum + (remaining > 0 ? remaining : 0);
+        } catch (err) {
+          console.error('Error calculating pending payments for booking:', booking.id, err);
+          return sum;
+        }
       }, 0) || 0;
 
       setStats({
@@ -97,14 +142,16 @@ export default function DashboardPage() {
     <div className="min-h-screen p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
-        <button
-          onClick={fetchDashboardStats}
-          disabled={loading}
-          className="inline-flex items-center px-3 py-2 border rounded-md text-sm font-medium border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-        >
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={fetchDashboardStats}
+            disabled={loading}
+            className="inline-flex items-center px-3 py-2 border rounded-md text-sm font-medium border-gray-300 text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

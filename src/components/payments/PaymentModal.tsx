@@ -158,15 +158,19 @@ export default function PaymentModal({
       const supabase = getSupabaseClient();
       const amount = parseFloat(formData.amount);
 
+      // Get current user for the notification
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // Create the payment record
       const { data: paymentData, error: paymentError } = await supabase
         .from('payments')
         .insert({
           booking_id: formData.booking_id,
-          amount: amount,
+          amount: Number(amount),
           payment_mode: formData.payment_mode,
           payment_status: 'completed',
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          created_by: user?.id
         })
         .select()
         .single();
@@ -195,9 +199,6 @@ export default function PaymentModal({
         console.error('Booking update error:', bookingError);
         throw bookingError;
       }
-      
-      // Get current user for the notification
-      const { data: { user } } = await supabase.auth.getUser();
       
       // Send notification to admin users about the payment
       if (paymentData && selectedBooking) {

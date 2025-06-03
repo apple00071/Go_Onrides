@@ -416,6 +416,9 @@ export default function EditBookingModal({
         throw new Error(`Failed to update customer: ${customerUpdateError.message}`);
       }
 
+      // Get the current user's email to use in the notification
+      const { data: { user } } = await supabase.auth.getUser();
+      
       // Update the booking
       const { data: updatedBooking, error: bookingError } = await supabase
         .from('bookings')
@@ -441,7 +444,8 @@ export default function EditBookingModal({
           payment_status: formData.payment_status,
           paid_amount: parseFloat(formData.paid_amount),
           payment_mode: formData.payment_mode,
-          status: formData.status
+          status: formData.status,
+          updated_by: user?.id
         })
         .eq('id', booking.id)
         .select()
@@ -452,9 +456,6 @@ export default function EditBookingModal({
         throw new Error(`Failed to update booking: ${bookingError.message}`);
       }
 
-      // Get the current user's email to use in the notification
-      const { data: { user } } = await supabase.auth.getUser();
-      
       // Send notification to admin users about the updated booking
       await notifyBookingEvent(
         'BOOKING_UPDATED',

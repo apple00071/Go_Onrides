@@ -12,6 +12,7 @@ import VehicleDamageHistory from '@/components/bookings/VehicleDamageHistory';
 import EditBookingModal from '@/components/bookings/EditBookingModal';
 import ExtendBookingModal from '@/components/bookings/ExtendBookingModal';
 import BookingExtensionHistory from '@/components/bookings/BookingExtensionHistory';
+import PaymentHistory from '@/components/payments/PaymentHistory';
 import { usePermissions } from '@/lib/usePermissions';
 import { notifyBookingEvent } from '@/lib/notification';
 
@@ -549,38 +550,7 @@ export default function BookingDetailsPage() {
             </div>
             <div className="pt-4 border-t">
               <h3 className="text-lg font-medium text-gray-900 mb-4">Payment History</h3>
-              {payments.length > 0 ? (
-                <div className="space-y-3">
-                  {payments.map((payment) => (
-                    <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {formatCurrency(payment.amount)}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {formatDate(payment.created_at)} at {new Date(payment.created_at).toLocaleTimeString()}
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <span className="text-sm capitalize text-gray-600">
-                          {payment.payment_mode}
-                        </span>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          payment.payment_status === 'completed' 
-                            ? 'bg-green-100 text-green-800' 
-                            : 'bg-yellow-100 text-yellow-800'
-                        }`}>
-                          {payment.payment_status}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500 text-center py-4">
-                  No payment history available
-                </div>
-              )}
+              <PaymentHistory bookingId={booking.id} />
             </div>
           </div>
 
