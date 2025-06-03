@@ -10,16 +10,18 @@ import {
   BarChart,
   Settings,
   LogOut,
-  Users
+  Users,
+  X
 } from 'lucide-react';
 import type { UserProfile } from '@/types/database';
 
 interface SidebarProps {
   user: UserProfile | null;
   isOpen: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ user, isOpen }: SidebarProps) {
+export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
 
   const navigation = [
@@ -58,11 +60,23 @@ export default function Sidebar({ user, isOpen }: SidebarProps) {
         md:translate-x-0
       `}
     >
-      <div className="flex h-16 shrink-0 items-center gap-2 border-b border-gray-200 px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-blue text-white">
-          GR
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 px-4">
+        <div className="flex items-center gap-2">
+          <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-blue text-white">
+            GR
+          </div>
+          <h1 className="text-lg font-semibold text-primary-text">Goon Riders</h1>
         </div>
-        <h1 className="text-lg font-semibold text-primary-text">Goon Riders</h1>
+        
+        {/* Close button for mobile */}
+        <button 
+          type="button"
+          className="md:hidden text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-blue rounded-md p-1"
+          onClick={onClose}
+          aria-label="Close sidebar"
+        >
+          <X className="h-5 w-5" />
+        </button>
       </div>
       
       <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
@@ -73,8 +87,10 @@ export default function Sidebar({ user, isOpen }: SidebarProps) {
               <Link
                 key={item.name}
                 href={item.href}
+                onClick={() => onClose && window.innerWidth < 768 ? onClose() : null}
                 className={`
-                  group flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors
+                  group flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors 
+                  min-h-[44px] touch-manipulation
                   ${active
                     ? 'bg-primary-blue/10 text-primary-blue'
                     : 'text-secondary-text hover:bg-gray-50 hover:text-primary-text'
@@ -96,7 +112,7 @@ export default function Sidebar({ user, isOpen }: SidebarProps) {
         <div className="mt-auto pt-4 border-t border-gray-200">
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-secondary-text hover:bg-gray-50 hover:text-primary-text transition-colors"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-secondary-text hover:bg-gray-50 hover:text-primary-text transition-colors min-h-[44px]"
           >
             <LogOut
               className="h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-primary-text transition-colors"

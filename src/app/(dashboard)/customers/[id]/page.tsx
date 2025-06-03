@@ -487,8 +487,15 @@ export default function CustomerDetailsPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {customer.bookings.map((booking) => (
-                      <tr key={booking.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      <tr 
+                        key={booking.id} 
+                        className="hover:bg-gray-50 cursor-pointer"
+                        onClick={() => router.push(`/dashboard/bookings/${booking.id}`)}
+                        onKeyDown={(e) => e.key === 'Enter' && router.push(`/dashboard/bookings/${booking.id}`)}
+                        tabIndex={0}
+                        role="button"
+                      >
+                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-blue-600 hover:text-blue-800">
                           {booking.booking_id}
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500">

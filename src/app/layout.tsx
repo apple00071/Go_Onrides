@@ -10,7 +10,7 @@ const inter = Inter({
 export const metadata = {
   title: 'Goon Riders',
   description: 'Vehicle rental management system',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
 };
 
 export const dynamic = 'force-dynamic';
@@ -24,7 +24,7 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full">
       <body className={cn('h-full antialiased', inter.className)}>
-        <div className="min-h-screen">
+        <div className="min-h-screen w-full">
         {children}
         </div>
       </body>

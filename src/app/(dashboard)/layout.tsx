@@ -132,13 +132,13 @@ export default function DashboardLayout({
                 setError(null);
                 setLoading(true);
               }}
-              className="mt-4 w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              className="mt-4 w-full min-h-[44px] px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
               Try Again
             </button>
             <button
               onClick={() => router.push('/login')}
-              className="mt-2 w-full px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
+              className="mt-2 w-full min-h-[44px] px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors"
             >
               Back to Login
             </button>
@@ -160,12 +160,13 @@ export default function DashboardLayout({
         <div 
           className="fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity md:hidden z-20"
           onClick={() => setIsSidebarOpen(false)}
+          aria-hidden="true"
         />
       )}
 
-      <div className="flex h-screen max-h-screen">
+      <div className="flex h-screen max-h-screen overflow-hidden">
         {/* Sidebar */}
-        <Sidebar user={user} isOpen={isSidebarOpen} />
+        <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
         {/* Main content */}
         <div className="flex-1 flex flex-col w-full max-w-full">
@@ -174,7 +175,7 @@ export default function DashboardLayout({
 
           {/* Main content area */}
           <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50">
-            <div className="px-4 sm:px-6 lg:px-8 py-8 w-full">
+            <div className="px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 w-full">
               {children}
             </div>
           </main>
