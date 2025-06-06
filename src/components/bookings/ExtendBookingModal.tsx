@@ -165,7 +165,7 @@ export default function ExtendBookingModal({
         booking.id,
         {
           bookingId: booking.booking_id,
-          actionBy: user?.email || 'Unknown User',
+          actionBy: user?.id || 'Unknown',
           previousEndDate: formatDate(booking.end_date),
           newEndDate: formatDate(formData.end_date),
           additionalAmount: additionalAmount.toFixed(2)

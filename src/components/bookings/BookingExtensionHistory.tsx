@@ -16,6 +16,12 @@ interface BookingExtension {
   reason: string | null;
   created_at: string;
   created_by: string | null;
+  user?: {
+    email: string;
+    user_metadata: {
+      full_name?: string;
+    };
+  };
 }
 
 interface BookingExtensionHistoryProps {
@@ -35,7 +41,13 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
         
         const { data, error } = await supabase
           .from('booking_extensions')
-          .select('*')
+          .select(`
+            *,
+            user:extended_user_data!created_by(
+              email,
+              user_metadata
+            )
+          `)
           .eq('booking_id', bookingId)
           .order('created_at', { ascending: false });
           
@@ -90,7 +102,7 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
               <div>
                 <div className="font-medium">{formatDate(extension.created_at)}</div>
                 <div className="text-sm text-gray-500">
-                  {extension.created_by ? `By: User ID ${extension.created_by.substring(0, 8)}...` : 'System'}
+                  By: {extension.user?.user_metadata?.full_name || extension.user?.email || 'System'}
                 </div>
               </div>
               <div className="text-right">

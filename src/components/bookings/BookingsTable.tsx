@@ -1,7 +1,7 @@
 import React from 'react';
 import { formatCurrency } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { EntityAuditInfo } from '@/components/ui/EntityAuditInfo';
+import { User, Clock } from 'lucide-react';
 
 interface Booking {
   id: string;
@@ -20,8 +20,16 @@ interface Booking {
   status: 'confirmed' | 'pending' | 'cancelled' | 'in_use' | 'completed';
   created_at: string;
   updated_at: string;
-  created_by?: string | null;
-  updated_by?: string | null;
+  created_by: string | null;
+  updated_by: string | null;
+  created_by_user?: {
+    email: string;
+    username: string;
+  };
+  updated_by_user?: {
+    email: string;
+    username: string;
+  };
   paid_amount?: number;
 }
 
@@ -59,6 +67,23 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
   const handleRowClick = (bookingId: string) => {
     router.push(`/dashboard/bookings/${bookingId}`);
   };
@@ -79,20 +104,20 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
             <tr className="bg-gray-50">
               <th scope="col" className="whitespace-nowrap px-6 py-3 text-left">
                 <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Booking ID
+                  Booking Details
                 </span>
               </th>
-              <th scope="col" className="whitespace-nowrap px-6 py-3 text-left">
+              <th scope="col" className="whitespace-nowrap px-6 py-3 text-left hidden md:table-cell">
                 <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
                   Customer
                 </span>
               </th>
-              <th scope="col" className="whitespace-nowrap px-6 py-3 text-left">
+              <th scope="col" className="whitespace-nowrap px-6 py-3 text-left hidden md:table-cell">
                 <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
                   Vehicle
                 </span>
               </th>
-              <th scope="col" className="whitespace-nowrap px-6 py-3 text-left">
+              <th scope="col" className="whitespace-nowrap px-6 py-3 text-left hidden lg:table-cell">
                 <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
                   Duration
                 </span>
@@ -100,11 +125,6 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
               <th scope="col" className="whitespace-nowrap px-6 py-3 text-left">
                 <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
                   Amount
-                </span>
-              </th>
-              <th scope="col" className="whitespace-nowrap px-6 py-3 text-left">
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-500">
-                  Payment
                 </span>
               </th>
               <th scope="col" className="whitespace-nowrap px-6 py-3 text-left">
@@ -124,72 +144,71 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                 tabIndex={0}
                 role="button"
               >
-                  <td className="whitespace-nowrap px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-900">
-                        {booking.booking_id || booking.id}
-                      </span>
-                      {booking.created_at && (
-                        <EntityAuditInfo 
-                          entityType="booking"
-                          createdAt={booking.created_at}
-                          updatedAt={booking.updated_at}
-                          createdBy={booking.created_by}
-                          updatedBy={booking.updated_by}
-                        />
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-900">
-                      {booking.customer_name}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                      {booking.customer_contact}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-900">
-                      {booking.vehicle_details.model}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                      {booking.vehicle_details.registration}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-gray-900">
-                      {new Date(booking.start_date).toLocaleDateString('en-IN')}
-                      </span>
-                      <span className="text-sm text-gray-500">
-                      to {new Date(booking.end_date).toLocaleDateString('en-IN')}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4">
+                <td className="whitespace-nowrap px-6 py-4">
+                  <div className="flex flex-col">
                     <span className="text-sm font-medium text-gray-900">
+                      #{booking.booking_id || booking.id.slice(0, 8)}
+                    </span>
+                    <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+                      <User className="h-3 w-3" />
+                      <span>{booking.created_by_user?.username || 'Unknown'}</span>
+                    </div>
+                    <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                      <Clock className="h-3 w-3" />
+                      <span>{formatDate(booking.created_at)}</span>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-6 py-4 hidden md:table-cell">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-900">
+                      {booking.customer_name}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {booking.customer_contact}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 hidden md:table-cell">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-900">
+                      {booking.vehicle_details.model}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      {booking.vehicle_details.registration}
+                    </span>
+                  </div>
+                </td>
+                <td className="px-6 py-4 hidden lg:table-cell">
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-900">
+                      {formatDate(booking.start_date)}
+                    </span>
+                    <span className="text-sm text-gray-500">
+                      to {formatDate(booking.end_date)}
+                    </span>
+                  </div>
+                </td>
+                <td className="whitespace-nowrap px-6 py-4">
+                  <span className="text-sm font-medium text-gray-900">
                     {formatCurrency(booking.booking_amount + booking.security_deposit_amount)}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4">
-                    <span
-                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(booking)}`}
-                    >
-                      {getPaymentStatusDisplay(booking)}
-                    </span>
-                  </td>
-                  <td className="whitespace-nowrap px-6 py-4">
+                  </span>
+                </td>
+                <td className="whitespace-nowrap px-6 py-4">
+                  <div className="flex flex-col gap-2">
                     <span
                       className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getStatusColor(booking.status)}`}
                     >
                       {booking.status}
                     </span>
-                  </td>
-                </tr>
+                    <span
+                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(booking)}`}
+                    >
+                      {getPaymentStatusDisplay(booking)}
+                    </span>
+                  </div>
+                </td>
+              </tr>
             ))}
           </tbody>
         </table>

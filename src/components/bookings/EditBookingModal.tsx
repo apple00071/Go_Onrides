@@ -463,7 +463,7 @@ export default function EditBookingModal({
         {
           customerName: formData.customer_name,
           bookingId: booking.booking_id,
-          actionBy: user?.email || 'Unknown User',
+          actionBy: user?.id || 'Unknown',
           vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
         }
       );

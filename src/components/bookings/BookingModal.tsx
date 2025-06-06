@@ -579,7 +579,7 @@ export default function BookingModal({
         {
           customerName: formData.customer_name,
           bookingId: bookingId,
-          actionBy: user?.email || 'Unknown User',
+          actionBy: user?.id || 'Unknown',
           vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
         }
       );

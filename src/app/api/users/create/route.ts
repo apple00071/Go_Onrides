@@ -6,7 +6,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 export async function POST(request: Request) {
   try {
     const requestData = await request.json();
-    const { email, password, role, permissions } = requestData;
+    const { email, username, password, role, permissions } = requestData;
 
     // First check if the requesting user is an admin using the normal client
     const supabase = createRouteHandlerClient({ cookies });
@@ -54,7 +54,8 @@ export async function POST(request: Request) {
       password,
       email_confirm: true,
       user_metadata: {
-        role
+        role,
+        username
       }
     });
 
@@ -72,6 +73,7 @@ export async function POST(request: Request) {
       .insert({
         id: userData.user.id,
         email,
+        username,
         role,
         permissions
       });

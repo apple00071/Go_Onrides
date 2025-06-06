@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Mail, Lock, Loader2 } from 'lucide-react';
+import { User, Lock, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 const LoginForm = () => {
@@ -11,7 +11,7 @@ const LoginForm = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    email: '',
+    username: '',
     password: ''
   });
 
@@ -21,61 +21,62 @@ const LoginForm = () => {
     setError(null);
 
     try {
-      const supabase = createClientComponentClient();
-      
-      // First sign in the user
-      const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-        email: formData.email,
-        password: formData.password
+      // First try username-based login through our API
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       });
 
-      if (signInError) throw signInError;
-      if (!authData?.session) throw new Error('No session created');
+      const data = await response.json();
 
-      // Then get the authenticated user data
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
-      
-      if (userError) throw userError;
-      if (!user) throw new Error('No authenticated user found');
+      if (!response.ok) {
+        // If username login fails, try direct email login as fallback
+        const supabase = createClientComponentClient();
+        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
+          email: formData.username, // Try using the username field as email
+          password: formData.password
+        });
 
-      // Get the user's profile
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user.id)
-        .single();
+        if (signInError) {
+          if (signInError.message.includes('Invalid login credentials')) {
+            throw new Error('Invalid username/email or password');
+          }
+          throw signInError;
+        }
 
-      if (profileError) throw profileError;
+        if (!authData?.session) throw new Error('No session created');
 
-      if (!profile) {
-        // Create default profile for new users
-        const defaultPermissions = {
-          createBooking: false,
-          viewBookings: true,
-          uploadDocuments: false,
-          viewDocuments: true,
-          managePayments: false,
-          accessReports: false
-        };
-
-        const { error: createError } = await supabase
+        // Get the user's profile
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .insert([{
-            id: user.id,
-            email: user.email,
-            role: 'worker',
-            permissions: defaultPermissions
-          }]);
+          .select('*')
+          .eq('id', authData.user.id)
+          .single();
 
-        if (createError) throw createError;
+        if (profileError) throw profileError;
 
-        router.push('/dashboard');
+        // Redirect based on role
+        const redirectPath = profile?.role === 'admin' ? '/dashboard/settings' : '/dashboard';
+        router.push(redirectPath);
         router.refresh();
         return;
       }
 
+      // If username login succeeds, get the profile and redirect
+      const supabase = createClientComponentClient();
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
       // Redirect based on role
-      const redirectPath = profile.role === 'admin' ? '/dashboard/settings' : '/dashboard';
+      const redirectPath = profile?.role === 'admin' ? '/dashboard/settings' : '/dashboard';
       router.push(redirectPath);
       router.refresh();
     } catch (err: unknown) {
@@ -85,12 +86,10 @@ const LoginForm = () => {
       if (err instanceof Error) {
         if (err.message?.includes('rate limit') || err.message?.includes('Too Many Requests')) {
           errorMessage = 'Too many login attempts. Please try again in a moment.';
-        } else if (err.message?.includes('Invalid login credentials')) {
-          errorMessage = 'Invalid email or password';
+        } else if (err.message?.includes('Invalid login credentials') || err.message?.includes('Invalid username/email')) {
+          errorMessage = 'Invalid username/email or password';
         } else if (err.message?.includes('No session created')) {
           errorMessage = 'Failed to create session. Please try again.';
-        } else if (err.message?.includes('No authenticated user found')) {
-          errorMessage = 'Authentication failed. Please try again.';
         }
       }
       
@@ -128,17 +127,17 @@ const LoginForm = () => {
       <div className="space-y-4">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Mail className="h-5 w-5 text-gray-400" />
+            <User className="h-5 w-5 text-gray-400" />
           </div>
           <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
+            id="username"
+            name="username"
+            type="text"
+            autoComplete="username"
             required
-            value={formData.email}
+            value={formData.username}
             onChange={handleChange}
-            placeholder="Email address"
+            placeholder="Username or Email"
             className="block w-full pl-10 rounded-lg border border-gray-300 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-blue focus:border-transparent sm:text-sm"
           />
         </div>

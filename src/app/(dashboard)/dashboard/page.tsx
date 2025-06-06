@@ -57,42 +57,32 @@ export default function DashboardPage() {
         
       console.log(`Found ${totalBookings} total bookings and ${activeRentals} active rentals`);
 
-      // Get total income from the payments table - FIXED QUERY
-      console.log('Fetching payments for total income calculation...');
-      const { data: paymentsData, error: paymentsError } = await supabase
-        .from('payments')
-        .select('*');
+      // Get total income from completed bookings
+      console.log('Fetching completed bookings for total income calculation...');
+      const { data: completedBookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('booking_amount, payment_status')
+        .eq('payment_status', 'full');
 
-      if (paymentsError) {
-        console.error('Error fetching payments:', paymentsError);
-        throw paymentsError;
+      if (bookingsError) {
+        console.error('Error fetching bookings:', bookingsError);
+        throw bookingsError;
       }
 
-      console.log('Raw payments data:', paymentsData);
-
-      // Calculate total income from all payments that have a completed status
+      // Calculate total income from completed bookings (only booking amount, not security deposit)
       let totalIncome = 0;
-      if (paymentsData && paymentsData.length > 0) {
-        totalIncome = paymentsData.reduce((sum, payment) => {
-          // Only include completed payments in total income
-          if (payment.payment_status !== 'completed') return sum;
-          
-          // Ensure proper number conversion
-          let amount = 0;
-          if (typeof payment.amount === 'string') {
-            amount = parseFloat(payment.amount.replace(/[^0-9.-]+/g, ''));
-          } else if (typeof payment.amount === 'number') {
-            amount = payment.amount;
-          }
+      if (completedBookings && completedBookings.length > 0) {
+        totalIncome = completedBookings.reduce((sum, booking) => {
+          const bookingAmount = typeof booking.booking_amount === 'string' 
+            ? parseFloat(booking.booking_amount) 
+            : booking.booking_amount;
 
-          console.log(`Processing payment ${payment.id}:`, {
-            rawAmount: payment.amount,
-            parsedAmount: amount,
-            status: payment.payment_status,
-            type: typeof payment.amount
+          console.log(`Processing booking income:`, {
+            bookingAmount,
+            type: typeof booking.booking_amount
           });
 
-          return !isNaN(amount) ? sum + amount : sum;
+          return !isNaN(bookingAmount) ? sum + bookingAmount : sum;
         }, 0);
       }
 

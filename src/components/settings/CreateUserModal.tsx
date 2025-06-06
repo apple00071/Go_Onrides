@@ -14,6 +14,7 @@ interface CreateUserModalProps {
 
 interface FormData {
   email: string;
+  username: string;
   password: string;
   role: 'admin' | 'worker';
   permissions: {
@@ -35,6 +36,7 @@ export default function CreateUserModal({
   const [error, setError] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     email: '',
+    username: '',
     password: '',
     role: 'worker',
     permissions: {
@@ -51,7 +53,17 @@ export default function CreateUserModal({
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => {
+      // If username is being changed, automatically update email to match
+      if (name === 'username') {
+        return {
+          ...prev,
+          [name]: value,
+          email: `${value}@goonriders.com`
+        };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const handlePermissionChange = (permission: keyof Permission) => {
@@ -132,20 +144,27 @@ export default function CreateUserModal({
             </div>
           )}
 
-          {/* Email */}
+          {/* Username */}
           <div>
             <label className="block text-sm font-medium text-gray-700">
-              Email *
+              Username *
             </label>
             <input
-              type="email"
-              name="email"
+              type="text"
+              name="username"
               required
-              value={formData.email}
+              value={formData.username}
               onChange={handleInputChange}
               className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
+
+          {/* Hidden Email field */}
+          <input
+            type="hidden"
+            name="email"
+            value={formData.email}
+          />
 
           {/* Password */}
           <div>

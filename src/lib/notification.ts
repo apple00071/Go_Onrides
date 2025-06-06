@@ -76,20 +76,42 @@ export async function notifyBookingEvent(
     newEndDate?: string;
     additionalAmount?: string;
   }
-) {
-  const title = getBookingEventTitle(type, details);
-  const message = getBookingEventMessage(type, details);
-  
-  const payload: CreateNotificationPayload = {
-    title,
-    message,
-    actionLink: `/dashboard/bookings/${bookingId}`,
-    referenceType: type,
-    referenceId: bookingId,
-    targetRoles: ['admin']
-  };
-  
-  return createNotification(payload);
+): Promise<boolean | undefined> {
+  try {
+    const supabase = getSupabaseClient();
+
+    // Get the user's profile to get their username
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('id', details.actionBy)
+      .single();
+
+    if (profileError) {
+      console.error('Error fetching user profile:', profileError);
+      // Fall back to 'Unknown user' if we can't get the username
+      details.actionBy = 'Unknown user';
+    } else {
+      details.actionBy = profile.username;
+    }
+
+    const title = getBookingEventTitle(type, details);
+    const message = getBookingEventMessage(type, details);
+    
+    const payload: CreateNotificationPayload = {
+      title,
+      message,
+      actionLink: `/dashboard/bookings/${bookingId}`,
+      referenceType: type,
+      referenceId: bookingId,
+      targetRoles: ['admin']
+    };
+    
+    return createNotification(payload);
+  } catch (error) {
+    console.error('Error creating booking notification:', error);
+    return undefined;
+  }
 }
 
 /**
@@ -186,22 +208,30 @@ export async function notifyDocumentUploaded(
  */
 async function createNotification(payload: CreateNotificationPayload): Promise<boolean> {
   try {
-    const response = await fetch('/api/notifications/create', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(payload)
-    });
-    
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create notification');
-    }
-    
+    const supabase = getSupabaseClient();
+
+    // Get current user's session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError) throw sessionError;
+    if (!session) throw new Error('No active session');
+
+    // Create the notification
+    const { error: notificationError } = await supabase
+      .from('notifications')
+      .insert({
+        title: payload.title,
+        message: payload.message,
+        action_link: payload.actionLink,
+        reference_type: payload.referenceType,
+        reference_id: payload.referenceId,
+        target_roles: payload.targetRoles || ['admin'],
+        created_by: session.user.id
+      });
+
+    if (notificationError) throw notificationError;
     return true;
   } catch (error) {
-    console.error('Failed to create notification:', error);
+    console.error('Error creating notification:', error);
     return false;
   }
 }
@@ -219,15 +249,15 @@ function getBookingEventTitle(
 ) {
   switch (type) {
     case 'BOOKING_CREATED':
-      return `New Booking Created: ${details.bookingId}`;
+      return `New Booking Created - ${details.bookingId}`;
     case 'BOOKING_UPDATED':
-      return `Booking Updated: ${details.bookingId}`;
+      return `Booking Updated - ${details.bookingId}`;
     case 'BOOKING_CANCELLED':
-      return `Booking Cancelled: ${details.bookingId}`;
+      return `Booking Cancelled - ${details.bookingId}`;
     case 'BOOKING_EXTENDED':
-      return `Booking Extended: ${details.bookingId}`;
+      return `Booking Extended - ${details.bookingId}`;
     default:
-      return 'Booking Update';
+      return 'Booking Event';
   }
 }
 
@@ -245,15 +275,15 @@ function getBookingEventMessage(
 ) {
   switch (type) {
     case 'BOOKING_CREATED':
-      return `A new booking (${details.bookingId}) has been created for ${details.customerName} for vehicle ${details.vehicleInfo} by ${details.actionBy}`;
+      return `A new booking (${details.bookingId}) has been created by ${details.actionBy} for ${details.customerName}. Vehicle: ${details.vehicleInfo}`;
     case 'BOOKING_UPDATED':
-      return `Booking ${details.bookingId} for ${details.customerName} has been updated by ${details.actionBy}`;
+      return `Booking ${details.bookingId} has been updated by ${details.actionBy}. Customer: ${details.customerName}, Vehicle: ${details.vehicleInfo}`;
     case 'BOOKING_CANCELLED':
-      return `Booking ${details.bookingId} for ${details.customerName} has been cancelled by ${details.actionBy}`;
+      return `Booking ${details.bookingId} has been cancelled by ${details.actionBy}. Customer: ${details.customerName}`;
     case 'BOOKING_EXTENDED':
-      return `Booking ${details.bookingId} has been extended from ${details.previousEndDate} to ${details.newEndDate} with additional amount ${details.additionalAmount || '0'} by ${details.actionBy}`;
+      return `Booking ${details.bookingId} has been extended by ${details.actionBy}. Previous end date: ${details.previousEndDate}, New end date: ${details.newEndDate}, Additional amount: ₹${details.additionalAmount}`;
     default:
-      return `Booking ${details.bookingId} has been modified`;
+      return 'A booking event has occurred.';
   }
 }
 

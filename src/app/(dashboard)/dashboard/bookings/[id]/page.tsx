@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -15,6 +15,7 @@ import BookingExtensionHistory from '@/components/bookings/BookingExtensionHisto
 import PaymentHistory from '@/components/payments/PaymentHistory';
 import { usePermissions } from '@/lib/usePermissions';
 import { notifyBookingEvent } from '@/lib/notification';
+import PaymentInformation from '@/components/bookings/PaymentInformation';
 
 // Rename the interface to avoid collision with imported EditBookingModal's BookingDetails
 interface BookingDetailsData {
@@ -42,30 +43,36 @@ interface BookingDetailsData {
   dropoff_time: string;
   booking_amount: number;
   security_deposit_amount: number;
-  payment_status: string;
+  payment_status: 'full' | 'partial' | 'pending';
   paid_amount: number;
-  payment_mode: string;
-  status: string;
+  payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
+  status: 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
   created_at: string;
-  documents: Array<{
-    id: string;
-    document_type: string;
-    document_url: string;
-    created_at: string;
-  }>;
+  updated_at: string;
+  created_by: string;
+  updated_by: string;
+  created_by_user?: {
+    email: string;
+    username: string;
+  };
+  updated_by_user?: {
+    email: string;
+    username: string;
+  };
+  documents: {
+    customer_photo?: string;
+    aadhar_front?: string;
+    aadhar_back?: string;
+    dl_front?: string;
+    dl_back?: string;
+  };
 }
 
 // Helper function to convert our booking data format to the format expected by EditBookingModal
 function convertToEditBookingFormat(booking: BookingDetailsData) {
-  // Convert array of document objects to object format with document types as keys
-  const docsObj: {[key: string]: string} = {};
-  booking.documents.forEach(doc => {
-    docsObj[doc.document_type] = doc.document_url;
-  });
-  
   return {
     ...booking,
-    documents: docsObj
+    documents: booking.documents
   };
 }
 
@@ -81,97 +88,53 @@ export default function BookingDetailsPage() {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
-  const { isAdmin, canEdit } = usePermissions();
+  const { isAdmin, canEdit, hasPermission } = usePermissions();
+
+  const refreshBookingData = async () => {
+    const supabase = getSupabaseClient();
+    const bookingIdentifier = decodeURIComponent(params.id as string);
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
+    
+    const { data: bookingData, error: bookingError } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
+      .single();
+
+    if (bookingError) throw bookingError;
+
+    const { data: customerData, error: customerError } = await supabase
+      .from('customers')
+      .select('documents')
+      .eq('id', bookingData.customer_id)
+      .single();
+
+    const transformedBooking: BookingDetailsData = {
+      ...bookingData,
+      status: bookingData.status as BookingDetailsData['status'],
+      payment_status: bookingData.payment_status as BookingDetailsData['payment_status'],
+      payment_mode: bookingData.payment_mode as BookingDetailsData['payment_mode'],
+      documents: customerData?.documents || {
+        customer_photo: '',
+        aadhar_front: '',
+        aadhar_back: '',
+        dl_front: '',
+        dl_back: ''
+      }
+    };
+
+    setBooking(transformedBooking);
+  };
 
   useEffect(() => {
     const fetchBookingDetails = async () => {
-      if (!params?.id) {
-        setError('No booking ID provided');
-        setLoading(false);
-        return;
-      }
-
       try {
-        const supabase = getSupabaseClient();
-        const bookingIdentifier = decodeURIComponent(params.id as string);
-
-        // Check if the identifier is a UUID or a booking reference number
-        const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
-
-        console.log('Fetching booking with identifier:', bookingIdentifier);
-        
-        // First, get the booking details
-        const { data: bookingData, error: bookingError } = await supabase
-          .from('bookings')
-          .select('*')
-          .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
-          .single();
-
-        if (bookingError) {
-          console.error('Booking fetch error:', bookingError);
-          throw new Error(bookingError.message || 'Failed to fetch booking details');
-        }
-
-        if (!bookingData) {
-          throw new Error('Booking not found');
-        }
-
-        console.log('Found booking:', bookingData);
-
-        // Get customer documents
-        const { data: customerData, error: customerError } = await supabase
-          .from('customers')
-          .select('documents')
-          .eq('id', bookingData.customer_id)
-          .single();
-
-        console.log('Customer documents query result:', { customerData, customerError });
-
-        if (customerError) {
-          console.error('Customer documents fetch error:', customerError);
-          // Don't throw here, just log the error
-        }
-
-        // Get payment history
-        const { data: paymentData, error: paymentError } = await supabase
-          .from('payments')
-          .select('*')
-          .eq('booking_id', bookingData.id)
-          .order('created_at', { ascending: false });
-
-        if (paymentError) {
-          console.error('Payment history fetch error:', paymentError);
-          // Don't throw here, just log the error
-        }
-
-        // Transform the documents data to match our interface
-        const transformedDocuments = customerData?.documents ? 
-          Object.entries(customerData.documents)
-            .filter(([_, url]) => url) // Filter out empty URLs
-            .map(([type, url]) => ({
-              id: type, // Use the document type as ID
-              document_type: type,
-              document_url: url as string,
-              created_at: bookingData.created_at // Use booking creation date as we don't have document creation date
-            })) : [];
-
-        const bookingWithDocs: BookingDetailsData = {
-          ...bookingData,
-          documents: transformedDocuments
-        };
-
-        console.log('Setting booking state with:', bookingWithDocs);
-
-        setBooking(bookingWithDocs);
-        if (paymentData) {
-          setPayments(paymentData);
-        }
+        setLoading(true);
+        await refreshBookingData();
         setError(null);
       } catch (error) {
-        console.error('Error fetching booking:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Failed to fetch booking details';
-        setError(errorMessage);
-        toast.error(errorMessage);
+        console.error('Error fetching booking details:', error);
+        setError(error instanceof Error ? error.message : 'An error occurred');
       } finally {
         setLoading(false);
       }
@@ -180,7 +143,7 @@ export default function BookingDetailsPage() {
     fetchBookingDetails();
   }, [params?.id]);
 
-  const handleStatusChange = async (newStatus: string) => {
+  const handleStatusChange = async (newStatus: BookingDetailsData['status']) => {
     if (!booking) return;
 
     if (newStatus === 'completed') {
@@ -211,30 +174,7 @@ export default function BookingDetailsPage() {
     // Refresh the data
     setLoading(true);
     try {
-      const supabase = getSupabaseClient();
-      const bookingIdentifier = Array.isArray(params.id) ? params.id[0] : params.id;
-      
-      // Fetch updated booking data
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('id', bookingIdentifier)
-        .single();
-
-      if (bookingError) throw bookingError;
-
-      // Fetch updated payment data
-      const { data: paymentData, error: paymentError } = await supabase
-        .from('payments')
-        .select('*')
-        .eq('booking_id', bookingIdentifier)
-        .order('created_at', { ascending: false });
-
-      if (paymentError) throw paymentError;
-
-      // Update state with new data
-      setBooking(bookingData);
-      setPayments(paymentData || []);
+      await refreshBookingData();
       toast.success('Booking completed and data refreshed');
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -250,47 +190,9 @@ export default function BookingDetailsPage() {
   };
 
   const handleEditComplete = async () => {
-    // Refresh the booking data after edit
     setLoading(true);
     try {
-      const supabase = getSupabaseClient();
-      const bookingIdentifier = decodeURIComponent(params.id as string);
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
-      
-      // Fetch updated booking data
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
-        .single();
-
-      if (bookingError) throw bookingError;
-
-      // Get customer documents
-      const { data: customerData, error: customerError } = await supabase
-        .from('customers')
-        .select('documents')
-        .eq('id', bookingData.customer_id)
-        .single();
-
-      // Transform the documents data to match our interface
-      const transformedDocuments = customerData?.documents ? 
-        Object.entries(customerData.documents)
-          .filter(([_, url]) => url) // Filter out empty URLs
-          .map(([type, url]) => ({
-            id: type, // Use the document type as ID
-            document_type: type,
-            document_url: url as string,
-            created_at: bookingData.created_at // Use booking creation date as we don't have document creation date
-          })) : [];
-
-      // Create the booking object with the correct types
-      const bookingWithDocs: BookingDetailsData = {
-        ...bookingData,
-        documents: transformedDocuments
-      };
-
-      setBooking(bookingWithDocs);
+      await refreshBookingData();
       toast.success('Booking updated successfully');
     } catch (error) {
       console.error('Error refreshing booking data:', error);
@@ -302,47 +204,9 @@ export default function BookingDetailsPage() {
   };
 
   const handleExtendComplete = async () => {
-    // Refresh the booking data after extension
     setLoading(true);
     try {
-      const supabase = getSupabaseClient();
-      const bookingIdentifier = decodeURIComponent(params.id as string);
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
-      
-      // Fetch updated booking data
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
-        .single();
-
-      if (bookingError) throw bookingError;
-
-      // Get customer documents
-      const { data: customerData, error: customerError } = await supabase
-        .from('customers')
-        .select('documents')
-        .eq('id', bookingData.customer_id)
-        .single();
-
-      // Transform the documents data to match our interface
-      const transformedDocuments = customerData?.documents ? 
-        Object.entries(customerData.documents)
-          .filter(([_, url]) => url) // Filter out empty URLs
-          .map(([type, url]) => ({
-            id: type, // Use the document type as ID
-            document_type: type,
-            document_url: url as string,
-            created_at: bookingData.created_at // Use booking creation date as we don't have document creation date
-          })) : [];
-
-      // Create the booking object with the correct types
-      const bookingWithDocs: BookingDetailsData = {
-        ...bookingData,
-        documents: transformedDocuments
-      };
-
-      setBooking(bookingWithDocs);
+      await refreshBookingData();
       toast.success('Booking extended successfully');
     } catch (error) {
       console.error('Error refreshing booking data:', error);
@@ -350,6 +214,19 @@ export default function BookingDetailsPage() {
     } finally {
       setLoading(false);
       setShowExtendModal(false);
+    }
+  };
+
+  const handlePaymentCreated = async () => {
+    setLoading(true);
+    try {
+      await refreshBookingData();
+      toast.success('Payment recorded successfully');
+    } catch (error) {
+      console.error('Error refreshing booking data:', error);
+      toast.error('Failed to refresh booking data');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -386,7 +263,7 @@ export default function BookingDetailsPage() {
     in_use: 'bg-green-100 text-green-800',
     completed: 'bg-gray-100 text-gray-800',
     cancelled: 'bg-red-100 text-red-800'
-  };
+  } as const;
 
   const totalAmount = booking.booking_amount + booking.security_deposit_amount;
   const remainingAmount = totalAmount - booking.paid_amount;
@@ -395,10 +272,10 @@ export default function BookingDetailsPage() {
   console.log('Current booking state:', booking);
 
   return (
-    <div className="flex flex-col min-h-screen bg-gray-50">
-      {/* Header - Fixed at top */}
-      <div className="sticky top-0 bg-gray-50 z-10 p-6 border-b">
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen p-6">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+        <div className="flex items-center gap-4">
           <button
             onClick={() => router.back()}
             className="flex items-center text-gray-600 hover:text-gray-900"
@@ -406,86 +283,118 @@ export default function BookingDetailsPage() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Bookings
           </button>
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-500">
-              Created on {formatDate(booking.created_at)}
-            </span>
-            
-            {/* Extend Booking button - available to everyone */}
-            {booking && booking.status !== 'completed' && booking.status !== 'cancelled' && (
-              <button
-                onClick={() => setShowExtendModal(true)}
-                className="flex items-center px-3 py-1 text-sm font-medium text-green-700 bg-green-50 rounded-md hover:bg-green-100"
-              >
-                <CalendarPlus className="h-3.5 w-3.5 mr-1" />
-                Extend Booking
-              </button>
-            )}
-            
-            {/* Edit Booking button - admin only */}
-            {isAdmin && (
-              <button
-                onClick={() => setShowEditModal(true)}
-                className="flex items-center px-3 py-1 text-sm font-medium text-blue-700 bg-blue-50 rounded-md hover:bg-blue-100"
-              >
-                <PenSquare className="h-3.5 w-3.5 mr-1" />
-                Edit Booking
-              </button>
-            )}
-            
-            <select
-              value={booking.status}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              className={`px-3 py-1 rounded-full text-sm font-medium ${statusColors[booking.status as keyof typeof statusColors]}`}
+          <h1 className="text-2xl font-semibold text-gray-900">
+            Booking #{booking?.booking_id || booking?.id?.slice(0, 8)}
+          </h1>
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          {booking?.status === 'in_use' && hasPermission('manageBookings') && (
+            <button
+              onClick={() => setShowCompleteModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
-              <option value="pending">Pending</option>
-              <option value="confirmed">Confirmed</option>
-              <option value="in_use">In Use</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
+              Complete Booking
+            </button>
+          )}
+          {hasPermission('manageBookings') && (
+            <button
+              onClick={() => setShowEditModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <PenSquare className="h-4 w-4 mr-2" />
+              Edit
+            </button>
+          )}
+          {(booking?.status === 'confirmed' || booking?.status === 'in_use') && hasPermission('manageBookings') && (
+            <button
+              onClick={() => setShowExtendModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              <CalendarPlus className="h-4 w-4 mr-2" />
+              Extend
+            </button>
+          )}
         </div>
       </div>
 
-      {/* Main Content - Scrollable */}
-      <div className="flex-1 p-6 overflow-y-auto">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {/* Main Content */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Left Column - Booking and Vehicle Info */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Booking Status */}
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+              <div>
+                <div className="flex items-center gap-3">
+                  <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium capitalize ${statusColors[booking?.status || 'pending']}`}>
+                    {booking?.status}
+                  </span>
+                  {hasPermission('manageBookings') && booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                    <select
+                      value={booking.status}
+                      onChange={(e) => handleStatusChange(e.target.value as BookingDetailsData['status'])}
+                      className="text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="confirmed">Confirmed</option>
+                      <option value="in_use">In Use</option>
+                      <option value="completed">Completed</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                  )}
+                </div>
+                <p className="mt-2 text-sm text-gray-500">
+                  Created by {booking?.created_by_user?.username || 'Unknown'} on {formatDate(booking?.created_at || '')}
+                </p>
+                {booking?.updated_by_user && booking.updated_at !== booking.created_at && (
+                  <p className="text-sm text-gray-500">
+                    Last updated by {booking.updated_by_user.username} on {formatDate(booking.updated_at)}
+                  </p>
+                )}
+              </div>
+              <div className="text-right">
+                <p className="text-lg font-semibold text-gray-900">
+                  {formatCurrency(totalAmount)}
+                </p>
+                <p className="text-sm text-gray-500">
+                  {booking?.paid_amount ? `Paid: ${formatCurrency(booking.paid_amount)}` : 'No payment recorded'}
+                </p>
+                {remainingAmount > 0 && (
+                  <p className="text-sm text-red-600">
+                    Remaining: {formatCurrency(remainingAmount)}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Booking Information */}
           <div className="bg-white rounded-lg shadow p-6 space-y-4">
             <h2 className="text-xl font-semibold text-gray-900">Booking Information</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-500">Booking ID</label>
-                <p className="font-medium">{booking.booking_id || booking.id}</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm text-gray-500">Vehicle</label>
-                <p className="font-medium">{booking.vehicle_details.model}</p>
-                <p className="text-sm text-gray-500">{booking.vehicle_details.registration}</p>
+                <p className="font-medium">{booking?.vehicle_details.model}</p>
+                <p className="text-sm text-gray-500">{booking?.vehicle_details.registration}</p>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-gray-500">Start Date</label>
+                <label className="text-sm text-gray-500">Duration</label>
                 <div className="flex items-center">
                   <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="font-medium">{formatDate(booking.start_date)}</p>
+                  <p className="font-medium">{formatDate(booking?.start_date || '')}</p>
                 </div>
                 <div className="flex items-center mt-1">
                   <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="text-sm">{booking.pickup_time}</p>
+                  <p className="text-sm">{booking?.pickup_time}</p>
                 </div>
-              </div>
-              <div>
-                <label className="text-sm text-gray-500">End Date</label>
-                <div className="flex items-center">
+                <div className="flex items-center mt-2">
                   <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="font-medium">{formatDate(booking.end_date)}</p>
+                  <p className="font-medium">{formatDate(booking?.end_date || '')}</p>
                 </div>
                 <div className="flex items-center mt-1">
                   <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="text-sm">{booking.dropoff_time}</p>
+                  <p className="text-sm">{booking?.dropoff_time}</p>
                 </div>
               </div>
             </div>
@@ -494,174 +403,114 @@ export default function BookingDetailsPage() {
           {/* Customer Information */}
           <div className="bg-white rounded-lg shadow p-6 space-y-4">
             <h2 className="text-xl font-semibold text-gray-900">Customer Information</h2>
-            <div className="space-y-3">
-              <div className="flex items-start">
-                <User className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
-                <div>
-                  <p className="font-medium">{booking.customer_name}</p>
-                  <p className="text-sm text-gray-500">{booking.customer_contact}</p>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm text-gray-500">Name</label>
+                <p className="font-medium">{booking?.customer_name}</p>
               </div>
-              <div className="flex items-start">
-                <Phone className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
-                <div>
-                  <p className="font-medium">Emergency Contact</p>
-                  <p className="text-sm">{booking.emergency_contact_name}</p>
-                  <p className="text-sm text-gray-500">{booking.emergency_contact_phone}</p>
+              <div>
+                <label className="text-sm text-gray-500">Contact</label>
+                <div className="flex items-center">
+                  <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                  <p className="font-medium">{booking?.customer_contact}</p>
                 </div>
+                {booking?.customer_email && (
+                  <div className="flex items-center mt-1">
+                    <Mail className="h-4 w-4 mr-2 text-gray-400" />
+                    <p className="text-sm">{booking.customer_email}</p>
+                  </div>
+                )}
               </div>
-              <div className="flex items-start">
-                <MapPin className="h-5 w-5 mr-3 text-gray-400 mt-0.5" />
-                <div>
-                  <p className="font-medium">Address</p>
-                  <p className="text-sm">Temporary: {booking.temp_address}</p>
-                  <p className="text-sm text-gray-500">Permanent: {booking.perm_address}</p>
-                </div>
+              <div>
+                <label className="text-sm text-gray-500">Emergency Contact</label>
+                <p className="font-medium">{booking?.emergency_contact_name}</p>
+                <p className="text-sm text-gray-500">{booking?.emergency_contact_phone}</p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500">Address</label>
+                <p className="font-medium">Temporary</p>
+                <p className="text-sm text-gray-500">{booking?.temp_address}</p>
+                <p className="font-medium mt-2">Permanent</p>
+                <p className="text-sm text-gray-500">{booking?.perm_address}</p>
               </div>
             </div>
           </div>
 
           {/* Payment Information */}
-          <div className="bg-white rounded-lg shadow p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-gray-900">Payment Information</h2>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm text-gray-500">Booking Amount</label>
-                <p className="font-medium">{formatCurrency(booking.booking_amount)}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-500">Security Deposit</label>
-                <p className="font-medium">{formatCurrency(booking.security_deposit_amount)}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-500">Total Amount</label>
-                <p className="font-medium">{formatCurrency(totalAmount)}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-500">Paid Amount</label>
-                <p className="font-medium">{formatCurrency(booking.paid_amount)}</p>
-              </div>
-              <div>
-                <label className="text-sm text-gray-500">Remaining Amount</label>
-                <p className="font-medium text-blue-600">
-                  {formatCurrency(remainingAmount)}
-                </p>
-              </div>
-            </div>
-            <div className="mt-8">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Payment History</h3>
-              <PaymentHistory bookingId={booking.id} />
-            </div>
-          </div>
+          <PaymentInformation 
+            booking={booking} 
+            onPaymentCreated={handlePaymentCreated}
+          />
 
-          {/* Documents Information */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Documents</h2>
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <div>
-                  <label className="text-sm text-gray-500">Aadhar Number</label>
-                  <p className="font-medium">{booking.aadhar_number}</p>
-                </div>
-                <div>
-                  <label className="text-sm text-gray-500">Driving License</label>
-                  <p className="font-medium">{booking.dl_number}</p>
-                  <p className="text-sm text-gray-500">Expires on {formatDate(booking.dl_expiry_date)}</p>
-                </div>
-              </div>
-
-              {booking.documents && booking.documents.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                  {booking.documents.map((doc) => (
-                    <div key={doc.id} className="space-y-2">
-                      <label className="text-sm font-medium text-gray-700">
-                        {doc.document_type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                      </label>
-                      <button
-                        onClick={() => handleImageClick(doc.document_url, doc.document_type)}
-                        className="relative aspect-[3/2] w-full overflow-hidden rounded-lg bg-gray-100 hover:opacity-90 transition-opacity"
-                      >
-                        <Image
-                          src={doc.document_url}
-                          alt={doc.document_type}
-                          fill
-                          className="object-cover"
-                          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                        />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-sm text-gray-500 mt-4">
-                  No documents available
-                  {booking.documents ? ` (${booking.documents.length} documents found)` : ' (documents array is undefined)'}
-                </div>
-              )}
+          {/* Documents */}
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold mb-4">Documents</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {booking?.documents && Object.entries(booking.documents).map(([key, url]) => (
+                url ? (
+                  <div key={key} className="relative">
+                    <button
+                      onClick={() => handleImageClick(url, key.replace(/_/g, ' ').toUpperCase())}
+                      className="w-full aspect-[3/2] relative rounded-lg overflow-hidden border border-gray-200 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <Image
+                        src={url}
+                        alt={key.replace(/_/g, ' ')}
+                        fill
+                        className="object-cover"
+                      />
+                    </button>
+                    <p className="mt-1 text-sm text-gray-600 text-center">
+                      {key.replace(/_/g, ' ').toUpperCase()}
+                    </p>
+                  </div>
+                ) : null
+              ))}
             </div>
           </div>
         </div>
 
-        {/* Add Vehicle Damage History section - only show for completed bookings */}
-        {booking.status === 'completed' && (
-          <div className="mt-6">
-            <VehicleDamageHistory bookingId={booking.id} />
+        {/* Right Column - History and Actions */}
+        <div className="space-y-6">
+          {/* Payment History */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Payment History</h2>
+              <PaymentHistory bookingId={booking?.id || ''} />
+            </div>
           </div>
-        )}
 
-        {/* Extension History Section */}
-        <div className="bg-white rounded-lg shadow p-6 space-y-4 mt-6">
-          <BookingExtensionHistory bookingId={booking?.id || ''} />
+          {/* Extension History */}
+          <div className="bg-white rounded-lg shadow">
+            <BookingExtensionHistory bookingId={booking?.id || ''} />
+          </div>
+
+          {/* Vehicle Damage History */}
+          <div className="bg-white rounded-lg shadow">
+            <VehicleDamageHistory bookingId={booking?.id || ''} />
+          </div>
         </div>
       </div>
 
-      {/* Image Preview Modal */}
-      {selectedImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75">
-          <div className="relative max-w-4xl w-full mx-4">
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute -top-10 right-0 text-white hover:text-gray-300"
-            >
-              <X className="h-6 w-6" />
-            </button>
-            <div className="relative aspect-[3/2] w-full">
-              <Image
-                src={selectedImage}
-                alt={selectedImageLabel}
-                fill
-                className="object-contain"
-                sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Complete Booking Modal */}
+      {/* Modals */}
       {showCompleteModal && booking && (
         <CompleteBookingModal
           isOpen={showCompleteModal}
-          onClose={() => {
-            setShowCompleteModal(false);
-            // Reset status back to previous if modal is closed
-            setBooking(prev => prev ? { ...prev, status: prev.status } : null);
-          }}
+          onClose={() => setShowCompleteModal(false)}
           onComplete={handleCompleteSuccess}
           bookingId={booking.id}
-          totalAmount={booking.booking_amount + booking.security_deposit_amount}
+          totalAmount={totalAmount}
           paidAmount={booking.paid_amount}
           securityDeposit={booking.security_deposit_amount}
         />
       )}
-      
-      {/* Replace the placeholder edit modal with this */}
+
       {showEditModal && booking && (
         <EditBookingModal
           isOpen={showEditModal}
           onClose={() => setShowEditModal(false)}
           onBookingUpdated={handleEditComplete}
-          booking={convertToEditBookingFormat(booking)}
+          booking={booking}
         />
       )}
 

@@ -4,111 +4,61 @@ import { useState, useEffect } from 'react';
 import { getSupabaseClient } from './supabase';
 import type { Permission } from '@/types/database';
 
-interface UsePermissionsResult {
+export interface UsePermissionsResult {
   isAdmin: boolean;
-  permissions: Permission | null;
+  canEdit: boolean;
+  hasPermission: (permission: string) => boolean;
+  permissions: Record<string, boolean>;
   loading: boolean;
-  canCreate: (resource: keyof Permission) => boolean;
-  canEdit: (resource: string) => boolean;
-  canDelete: (resource: string) => boolean;
-  canView: (resource: keyof Permission) => boolean;
 }
 
 export function usePermissions(): UsePermissionsResult {
-  const [role, setRole] = useState<string | null>(null);
-  const [permissions, setPermissions] = useState<Permission | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [canEdit, setCanEdit] = useState(false);
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchPermissions() {
-      try {
-        const supabase = getSupabaseClient();
-        const { data: { session } } = await supabase.auth.getSession();
-
-        if (!session) {
-          setLoading(false);
-          return;
-        }
-
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('role, permissions')
-          .eq('id', session.user.id)
-          .single();
-
-        if (error) {
-          console.error('Error fetching permissions:', error);
-          return;
-        }
-
-        setRole(data?.role);
-        setPermissions(data?.permissions);
-      } catch (error) {
-        console.error('Error in permissions hook:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchPermissions();
+    checkPermissions();
   }, []);
 
-  // Check if user is admin
-  const isAdmin = role === 'admin';
+  const checkPermissions = async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
 
-  // Function to check if user can create a specific resource
-  const canCreate = (resource: keyof Permission): boolean => {
-    if (loading) return false;
-    if (isAdmin) return true;
+      if (!session) {
+        setLoading(false);
+        return;
+      }
 
-    switch (resource) {
-      case 'createBooking':
-        return !!permissions?.createBooking;
-      case 'uploadDocuments':
-        return !!permissions?.uploadDocuments;
-      case 'managePayments':
-        return !!permissions?.managePayments;
-      default:
-        return false;
+      const { data: profile, error } = await supabase
+        .from('profiles')
+        .select('role, permissions')
+        .eq('id', session.user.id)
+        .single();
+
+      if (error) throw error;
+
+      setIsAdmin(profile?.role === 'admin');
+      setCanEdit(profile?.role === 'admin' || (profile?.permissions?.editBookings === true));
+      setPermissions(profile?.permissions || {});
+    } catch (error) {
+      console.error('Error checking permissions:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  // Function to check if user can edit a resource (only admins)
-  const canEdit = (resource: string): boolean => {
-    if (loading) return false;
-    return isAdmin;
-  };
-
-  // Function to check if user can delete a resource (only admins)
-  const canDelete = (resource: string): boolean => {
-    if (loading) return false;
-    return isAdmin;
-  };
-
-  // Function to check if user can view a specific resource
-  const canView = (resource: keyof Permission): boolean => {
-    if (loading) return false;
-    if (isAdmin) return true;
-
-    switch (resource) {
-      case 'viewBookings':
-        return !!permissions?.viewBookings;
-      case 'viewDocuments':
-        return !!permissions?.viewDocuments;
-      case 'accessReports':
-        return !!permissions?.accessReports;
-      default:
-        return false;
-    }
+  const hasPermission = (permission: string): boolean => {
+    return isAdmin || permissions[permission] === true;
   };
 
   return {
     isAdmin,
-    permissions,
-    loading,
-    canCreate,
     canEdit,
-    canDelete,
-    canView
+    hasPermission,
+    permissions,
+    loading
   };
 } 

@@ -82,6 +82,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
+  const [totalIncome, setTotalIncome] = useState(0);
   const [bookingStats, setBookingStats] = useState<BookingStats>({
     total: 0,
     active: 0,
@@ -112,25 +113,19 @@ export default function ReportsPage() {
     try {
       const supabase = getSupabaseClient();
 
-      // Get total income from completed bookings to match dashboard calculation
+      // Get total income from completed bookings
       const { data: completedBookings, error: completedBookingsError } = await supabase
         .from('bookings')
-        .select(`
-          id,
-          booking_amount,
-          paid_amount,
-          payment_status,
-          created_at
-        `)
+        .select('booking_amount, payment_status, created_at')
         .eq('payment_status', 'full')
         .gte('created_at', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('created_at', format(dateRange.to, 'yyyy-MM-dd'));
 
       if (completedBookingsError) throw new Error(`Failed to fetch completed bookings: ${completedBookingsError.message}`);
 
-      // Calculate total income from booking amounts only (excluding security deposits)
-      // and organize by date for the chart
-      const revenuePeriods = new Map<string, number>();
+      // Calculate total income from completed bookings (only booking amount, not security deposit)
+      let calculatedTotalIncome = 0;
+      const revenueByDate = new Map<string, number>();
       
       // Initialize periods with 0 revenue based on selected timeframe
       let intervalData: Date[] = [];
@@ -163,10 +158,10 @@ export default function ReportsPage() {
       // Initialize all periods with 0 revenue
       intervalData.forEach(date => {
         const periodKey = format(date, formatString);
-        revenuePeriods.set(periodKey, 0);
+        revenueByDate.set(periodKey, 0);
       });
 
-      // Sum up revenue by period
+      // Sum up revenue by period from completed bookings
       (completedBookings || []).forEach(booking => {
         let periodKey = '';
         const bookingDate = new Date(booking.created_at);
@@ -189,22 +184,27 @@ export default function ReportsPage() {
             break;
         }
 
-        if (periodKey && revenuePeriods.has(periodKey)) {
-          const amount = typeof booking.booking_amount === 'string'
+        if (periodKey && revenueByDate.has(periodKey)) {
+          const bookingAmount = typeof booking.booking_amount === 'string'
             ? parseFloat(booking.booking_amount)
             : booking.booking_amount;
-          
-          if (!isNaN(amount)) {
-            revenuePeriods.set(
+
+          if (!isNaN(bookingAmount)) {
+            revenueByDate.set(
               periodKey, 
-              (revenuePeriods.get(periodKey) || 0) + amount
+              (revenueByDate.get(periodKey) || 0) + bookingAmount
             );
+            // Add to total income
+            calculatedTotalIncome += bookingAmount;
           }
         }
       });
 
+      // Set total income
+      setTotalIncome(calculatedTotalIncome);
+
       // Convert the map to array for the chart
-      const revenueArray = Array.from(revenuePeriods.entries()).map(([date, revenue]) => ({
+      const revenueArray = Array.from(revenueByDate.entries()).map(([date, revenue]) => ({
         date,
         revenue
       }));
@@ -212,13 +212,13 @@ export default function ReportsPage() {
       setRevenueData(revenueArray);
 
       // Fetch booking statistics
-      const { data: bookings, error: bookingsError } = await supabase
+      const { data: bookings, error: statsError } = await supabase
         .from('bookings')
         .select('status, booking_amount, customer_id, created_at')
         .gte('created_at', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('created_at', format(dateRange.to, 'yyyy-MM-dd'));
 
-      if (bookingsError) throw new Error(`Failed to fetch bookings: ${bookingsError.message}`);
+      if (statsError) throw new Error(`Failed to fetch booking statistics: ${statsError.message}`);
 
       // Process booking stats
       const stats = (bookings || []).reduce((acc: BookingStats, booking) => {
@@ -423,7 +423,7 @@ export default function ReportsPage() {
     },
     {
       name: 'Total Income',
-      value: formatCurrency(revenueData.reduce((sum, item) => sum + item.revenue, 0)),
+      value: formatCurrency(totalIncome),
       icon: RupeeIcon,
       change: 'From all completed bookings',
       changeType: 'positive'

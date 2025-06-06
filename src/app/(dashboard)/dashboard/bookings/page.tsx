@@ -24,12 +24,23 @@ interface Booking {
   payment_status: 'full' | 'partial' | 'pending';
   status: 'confirmed' | 'pending' | 'cancelled' | 'in_use' | 'completed';
   created_at: string;
+  updated_at: string;
+  created_by: string | null;
+  updated_by: string | null;
+  created_by_user?: {
+    email: string;
+    username: string;
+  };
+  updated_by_user?: {
+    email: string;
+    username: string;
+  };
 }
 
 export default function BookingsPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -40,22 +51,49 @@ export default function BookingsPage() {
   const fetchBookings = async () => {
     try {
       const supabase = getSupabaseClient();
-      const { data, error } = await supabase
+      
+      const { data: bookingsData, error } = await supabase
         .from('bookings')
-        .select('*')
+        .select(`
+          *,
+          created_by_user:profiles!bookings_created_by_fkey(
+            email,
+            username
+          ),
+          updated_by_user:profiles!bookings_updated_by_fkey(
+            email,
+            username
+          )
+        `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setBookings(data || []);
+      if (error) {
+        throw error;
+      }
+
+      setBookings(bookingsData || []);
     } catch (error) {
       console.error('Error fetching bookings:', error);
-      toast.error('Failed to fetch bookings');
+      toast.error('Failed to load bookings');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const filteredBookings = bookings.filter(booking => {
+    const matchesSearch = searchTerm === '' || 
+      booking.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.customer_contact.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.vehicle_details.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      booking.vehicle_details.registration.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (booking.booking_id || booking.id).toString().toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesFilter = filterStatus === 'all' || booking.status === filterStatus;
+
+    return matchesSearch && matchesFilter;
+  });
+
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.target.value);
   };
 
@@ -63,19 +101,17 @@ export default function BookingsPage() {
     setFilterStatus(e.target.value);
   };
 
-  const filteredBookings = bookings.filter((booking) => {
-    const matchesSearch = booking.customer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         booking.customer_contact?.includes(searchTerm) ||
-                         booking.booking_id?.toLowerCase().includes(searchTerm.toLowerCase());
-
-    const matchesFilter = filterStatus === 'all' || booking.status === filterStatus;
-
-    return matchesSearch && matchesFilter;
-  });
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <h1 className="text-2xl font-semibold text-gray-900">Bookings</h1>
         <button
           onClick={() => router.push('/dashboard/bookings/new')}
@@ -86,49 +122,44 @@ export default function BookingsPage() {
         </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-4 border-b border-gray-200">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                  type="text"
-                  placeholder="Search bookings..."
-                  value={searchTerm}
-                  onChange={handleSearch}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
-              </div>
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="w-full md:w-96">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
             </div>
-            <div className="sm:w-48">
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Filter className="h-5 w-5 text-gray-400" />
-          </div>
-                <select
-                  value={filterStatus}
-                  onChange={handleFilterChange}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                >
-                  <option value="all">All Status</option>
-                  <option value="pending">Pending</option>
-                  <option value="confirmed">Confirmed</option>
-                  <option value="in_use">In Use</option>
-                  <option value="completed">Completed</option>
-                  <option value="cancelled">Cancelled</option>
-                </select>
-              </div>
-            </div>
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={handleSearchChange}
+              placeholder="Search bookings..."
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            />
           </div>
         </div>
 
-        <BookingsTable 
-          bookings={filteredBookings}
-        />
+        <div className="w-full md:w-48">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Filter className="h-5 w-5 text-gray-400" />
+            </div>
+            <select
+              value={filterStatus}
+              onChange={handleFilterChange}
+              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="in_use">In Use</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
+        </div>
       </div>
+
+      <BookingsTable bookings={filteredBookings} />
     </div>
   );
 } 

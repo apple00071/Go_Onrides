@@ -101,10 +101,11 @@ BEGIN
     -- Set role to rls_restricted to bypass RLS for initial profile creation
     SET LOCAL role = 'rls_restricted';
     
-    INSERT INTO public.profiles (id, email, role, permissions)
+    INSERT INTO public.profiles (id, email, username, role, permissions)
     VALUES (
         new.id,
         new.email,
+        SPLIT_PART(new.email, '@', 1), -- Set username from email
         'worker',
         jsonb_build_object(
             'createBooking', false,

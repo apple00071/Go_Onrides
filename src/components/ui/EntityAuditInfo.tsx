@@ -14,113 +14,66 @@ interface EntityAuditInfoProps {
   updatedBy?: string | null;
 }
 
-export function EntityAuditInfo({ entityType, createdAt, updatedAt, createdBy, updatedBy }: EntityAuditInfoProps) {
-  const [creatorName, setCreatorName] = useState<string | null>(null);
-  const [updaterName, setUpdaterName] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+interface UserInfo {
+  username: string;
+}
 
-  const wasUpdated = updatedAt && new Date(updatedAt).getTime() > new Date(createdAt).getTime();
+export function EntityAuditInfo({
+  entityType,
+  createdAt,
+  updatedAt,
+  createdBy,
+  updatedBy
+}: EntityAuditInfoProps) {
+  const [creatorInfo, setCreatorInfo] = useState<UserInfo | null>(null);
+  const [updaterInfo, setUpdaterInfo] = useState<UserInfo | null>(null);
 
   useEffect(() => {
-    const fetchUserDetails = async () => {
-      try {
-        const supabase = getSupabaseClient();
-        
-        // Fetch creator details if createdBy exists
-        if (createdBy) {
-          const { data: creatorData, error: creatorError } = await supabase
-            .from('users')
-            .select('email, first_name, last_name')
-            .eq('id', createdBy)
-            .single();
+    const fetchUserInfo = async () => {
+      const supabase = getSupabaseClient();
 
-          if (creatorData && !creatorError) {
-            if (creatorData.first_name && creatorData.last_name) {
-              setCreatorName(`${creatorData.first_name} ${creatorData.last_name}`);
-            } else {
-              setCreatorName(creatorData.email);
-            }
-          }
-        }
-        
-        // Fetch updater details if updatedBy exists and is different from createdBy
-        if (updatedBy && updatedBy !== createdBy) {
-          const { data: updaterData, error: updaterError } = await supabase
-            .from('users')
-            .select('email, first_name, last_name')
-            .eq('id', updatedBy)
-            .single();
+      if (createdBy) {
+        const { data: creatorData } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', createdBy)
+          .single();
+        if (creatorData) setCreatorInfo(creatorData);
+      }
 
-          if (updaterData && !updaterError) {
-            if (updaterData.first_name && updaterData.last_name) {
-              setUpdaterName(`${updaterData.first_name} ${updaterData.last_name}`);
-            } else {
-              setUpdaterName(updaterData.email);
-            }
-          }
-        }
-        
-        setIsLoading(false);
-      } catch (error) {
-        console.error('Error fetching user details:', error);
-        setIsLoading(false);
+      if (updatedBy) {
+        const { data: updaterData } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', updatedBy)
+          .single();
+        if (updaterData) setUpdaterInfo(updaterData);
       }
     };
 
-    if (createdBy || updatedBy) {
-      fetchUserDetails();
-    } else {
-      setIsLoading(false);
-    }
+    fetchUserInfo();
   }, [createdBy, updatedBy]);
 
-  if (isLoading) {
-    return <div className="text-xs text-gray-400">Loading...</div>;
-  }
-
   return (
-    <div className="text-xs text-gray-500">
+    <div className="flex items-center gap-1 text-xs text-gray-500">
       <TooltipProvider>
-        <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger>
-              <div className="flex items-center">
-                <User size={14} className="mr-1 text-gray-400" />
-                {creatorName || 'Unknown user'}
-              </div>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Created {formatTime(createdAt)}</p>
-            </TooltipContent>
-          </Tooltip>
-          
-          {wasUpdated && updaterName && (
-            <>
-              <span className="mx-1">•</span>
-              <Tooltip>
-                <TooltipTrigger>
-                  <div className="flex items-center">
-                    <span className="text-xs italic">Updated by {updaterName}</span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Last updated {formatTime(updatedAt)}</p>
-                </TooltipContent>
-              </Tooltip>
-            </>
-          )}
-        </div>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className="flex items-center gap-1">
+              <User className="h-3 w-3" />
+              <span>
+                {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
+              </span>
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Created {creatorInfo?.username ? `by ${creatorInfo.username}` : ''}</p>
+            {updaterInfo?.username && (
+              <p>Last updated by {updaterInfo.username}</p>
+            )}
+          </TooltipContent>
+        </Tooltip>
       </TooltipProvider>
     </div>
   );
-}
-
-// Helper function to format time
-function formatTime(dateString: string): string {
-  try {
-    const date = new Date(dateString);
-    return `${formatDistanceToNow(date, { addSuffix: true })} (${date.toLocaleString()})`;
-  } catch (error) {
-    return 'Invalid date';
-  }
 } 

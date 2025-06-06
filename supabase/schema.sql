@@ -10,6 +10,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
+  username TEXT UNIQUE NOT NULL,
   role user_role NOT NULL DEFAULT 'worker',
   permissions JSONB NOT NULL DEFAULT '{
     "createBooking": false,
