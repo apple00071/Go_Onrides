@@ -3,7 +3,11 @@ import { type ClassValue, clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 export function getISTDate(date: string | Date = new Date()) {
-  return new Date(new Date(date).toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+  const inputDate = new Date(date);
+  // IST is UTC+5:30
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const utc = inputDate.getTime() + (inputDate.getTimezoneOffset() * 60 * 1000);
+  return new Date(utc + istOffset);
 }
 
 export function formatDate(date: string | Date): string {

@@ -57,32 +57,33 @@ export default function DashboardPage() {
         
       console.log(`Found ${totalBookings} total bookings and ${activeRentals} active rentals`);
 
-      // Get total income from completed bookings
-      console.log('Fetching completed bookings for total income calculation...');
-      const { data: completedBookings, error: bookingsError } = await supabase
-        .from('bookings')
-        .select('booking_amount, payment_status')
-        .eq('payment_status', 'full');
+      // Get total income from completed payments
+      console.log('Fetching payments for total income calculation...');
+      const { data: completedPayments, error: paymentsError } = await supabase
+        .from('payments')
+        .select('amount, payment_status')
+        .eq('payment_status', 'completed');
 
-      if (bookingsError) {
-        console.error('Error fetching bookings:', bookingsError);
-        throw bookingsError;
+      if (paymentsError) {
+        console.error('Error fetching payments:', paymentsError);
+        throw paymentsError;
       }
 
-      // Calculate total income from completed bookings (only booking amount, not security deposit)
+      // Calculate total income from completed payments
       let totalIncome = 0;
-      if (completedBookings && completedBookings.length > 0) {
-        totalIncome = completedBookings.reduce((sum, booking) => {
-          const bookingAmount = typeof booking.booking_amount === 'string' 
-            ? parseFloat(booking.booking_amount) 
-            : booking.booking_amount;
+      if (completedPayments && completedPayments.length > 0) {
+        totalIncome = completedPayments.reduce((sum, payment) => {
+          const amount = typeof payment.amount === 'string' 
+            ? parseFloat(payment.amount) 
+            : payment.amount;
 
-          console.log(`Processing booking income:`, {
-            bookingAmount,
-            type: typeof booking.booking_amount
+          console.log(`Processing payment amount:`, {
+            amount,
+            type: typeof payment.amount,
+            status: payment.payment_status
           });
 
-          return !isNaN(bookingAmount) ? sum + bookingAmount : sum;
+          return !isNaN(amount) ? sum + amount : sum;
         }, 0);
       }
 

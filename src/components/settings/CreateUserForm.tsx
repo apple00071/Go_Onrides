@@ -12,8 +12,6 @@ interface FormData {
   permissions: {
     createBooking: boolean;
     viewBookings: boolean;
-    uploadDocuments: boolean;
-    viewDocuments: boolean;
     managePayments: boolean;
     accessReports: boolean;
   };
@@ -29,8 +27,6 @@ export default function CreateUserForm() {
     permissions: {
       createBooking: false,
       viewBookings: true,
-      uploadDocuments: false,
-      viewDocuments: true,
       managePayments: false,
       accessReports: false
     }
@@ -115,8 +111,6 @@ export default function CreateUserForm() {
         permissions: {
           createBooking: false,
           viewBookings: true,
-          uploadDocuments: false,
-          viewDocuments: true,
           managePayments: false,
           accessReports: false
         }
@@ -223,24 +217,6 @@ export default function CreateUserForm() {
               className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
             />
             <span className="ml-2 text-sm text-gray-700">View Bookings</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={formData.permissions.uploadDocuments}
-              onChange={() => handlePermissionChange('uploadDocuments')}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-            />
-            <span className="ml-2 text-sm text-gray-700">Upload Documents</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={formData.permissions.viewDocuments}
-              onChange={() => handlePermissionChange('viewDocuments')}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-            />
-            <span className="ml-2 text-sm text-gray-700">View Documents</span>
           </label>
           <label className="flex items-center">
             <input

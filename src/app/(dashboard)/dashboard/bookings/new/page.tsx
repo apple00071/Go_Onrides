@@ -369,14 +369,8 @@ export default function NewBookingPage() {
     try {
       const supabase = getSupabaseClient();
 
-      // Validate signature and terms
-      if (!formData.signature) {
-        throw new Error('Please provide your signature');
-      }
-
-      if (!formData.terms_accepted) {
-        throw new Error('Please accept the terms and conditions');
-      }
+      // Generate a new booking ID
+      const bookingId = await generateBookingId(supabase);
 
       // Validate required fields based on customer type
       if (!isExistingCustomer) {
@@ -390,65 +384,12 @@ export default function NewBookingPage() {
         }
       }
 
-      // Validate fields required for all bookings
-      if (!formData.vehicle_details.model || !formData.vehicle_details.registration ||
-          !formData.start_date || !formData.end_date ||
-          !formData.pickup_time || !formData.dropoff_time ||
-          !formData.booking_amount || !formData.security_deposit_amount) {
-        throw new Error('Please fill in all required booking fields');
-      }
-
-      // Additional date validations before submission
-      if (!isExistingCustomer) {
-        const dob = new Date(formData.date_of_birth);
-        const today = new Date();
-        if (dob > today) {
-          throw new Error('Date of birth cannot be in the future');
-        }
-
-        const dlExpiry = new Date(formData.dl_expiry_date);
-        const oneMonthAgo = new Date();
-        oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-        if (dlExpiry < oneMonthAgo) {
-          throw new Error('Driving license should not be expired for more than a month');
-        }
-      }
-
-      // Validate required documents for new customers
-      if (!isExistingCustomer) {
-        const requiredDocuments: DocumentType[] = ['customer_photo', 'aadhar_front', 'aadhar_back', 'dl_front', 'dl_back'];
-        const missingDocuments = requiredDocuments.filter(doc => !formData.documents[doc]);
-        
-        if (missingDocuments.length > 0) {
-          throw new Error(`Please upload all required documents: ${missingDocuments.map(doc => doc.replace('_', ' ')).join(', ')}`);
-        }
-      }
-
-      // Payment validations
-      const totalAmount = parseFloat(formData.total_amount);
-      const paidAmount = parseFloat(formData.paid_amount);
-
-      if (formData.payment_status === 'full' && paidAmount !== totalAmount) {
-        throw new Error('Paid amount must equal total amount for full payment');
-      }
-
-      if (formData.payment_status === 'partial' && paidAmount >= totalAmount) {
-        throw new Error('Paid amount must be less than total amount for partial payment');
-      }
-
-      if (paidAmount < 0) {
-        throw new Error('Paid amount cannot be negative');
-      }
-
-      // Generate the booking ID
-      const bookingId = await generateBookingId(supabase);
-
-      // First, check if customer exists or create new customer
+      // First, check if customer exists
       let customerId: string;
       const { data: existingCustomers, error: customerCheckError } = await supabase
         .from('customers')
         .select('id')
-        .eq('aadhar_number', formData.aadhar_number)
+        .eq('phone', formData.customer_contact)
         .limit(1);
 
       if (customerCheckError) {
@@ -456,15 +397,15 @@ export default function NewBookingPage() {
       }
 
       if (existingCustomers && existingCustomers.length > 0) {
+        // Use existing customer
         customerId = existingCustomers[0].id;
         
-        // Create new customer
-        const { data: newCustomer, error: customerCreateError } = await supabase
+        // Update existing customer information if needed
+        const { error: customerUpdateError } = await supabase
           .from('customers')
-          .insert({
+          .update({
             name: formData.customer_name,
             email: formData.customer_email,
-            phone: formData.customer_contact,
             emergency_contact_name: formData.emergency_contact_name,
             emergency_contact_phone: formData.emergency_contact_phone,
             emergency_contact_relationship: 'emergency',
@@ -476,41 +417,14 @@ export default function NewBookingPage() {
             perm_address_street: formData.perm_address,
             documents: formData.documents
           })
-          .select('id')
-          .single();
+          .eq('id', customerId);
 
-        if (customerCreateError || !newCustomer) {
-          console.error('Customer creation error:', customerCreateError);
-          throw new Error(`Failed to create customer: ${customerCreateError?.message}`);
-        }
-
-        // Update existing customer if needed
-        if (!isExistingCustomer) {
-          const { error: customerUpdateError } = await supabase
-            .from('customers')
-            .update({
-              name: formData.customer_name,
-              email: formData.customer_email,
-              emergency_contact_name: formData.emergency_contact_name,
-              emergency_contact_phone: formData.emergency_contact_phone,
-              emergency_contact_relationship: 'emergency',
-              dob: formData.date_of_birth,
-              aadhar_number: formData.aadhar_number,
-              dl_number: formData.dl_number,
-              dl_expiry_date: formData.dl_expiry_date,
-              temp_address_street: formData.temp_address,
-              perm_address_street: formData.perm_address,
-              documents: formData.documents
-            })
-            .eq('id', customerId);
-
-          if (customerUpdateError) {
-            console.error('Customer update error:', customerUpdateError);
-            throw new Error(`Failed to update customer: ${customerUpdateError.message}`);
-          }
+        if (customerUpdateError) {
+          console.error('Customer update error:', customerUpdateError);
+          throw new Error(`Failed to update customer: ${customerUpdateError.message}`);
         }
       } else {
-        // Create new customer
+        // Create new customer only if no existing customer found
         const { data: newCustomer, error: customerCreateError } = await supabase
           .from('customers')
           .insert({
@@ -539,23 +453,15 @@ export default function NewBookingPage() {
         customerId = newCustomer.id;
       }
 
-      // Create booking with proper status and new booking ID format
-      const { data: booking, error: bookingError } = await supabase
+      // Create the booking
+      const { error: bookingError } = await supabase
         .from('bookings')
         .insert({
-          booking_id: bookingId,
+          id: bookingId,
           customer_id: customerId,
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
           customer_email: formData.customer_email,
-          emergency_contact_name: formData.emergency_contact_name,
-          emergency_contact_phone: formData.emergency_contact_phone,
-          aadhar_number: formData.aadhar_number,
-          date_of_birth: formData.date_of_birth,
-          dl_number: formData.dl_number,
-          dl_expiry_date: formData.dl_expiry_date,
-          temp_address: formData.temp_address,
-          perm_address: formData.perm_address,
           vehicle_details: formData.vehicle_details,
           start_date: formData.start_date,
           end_date: formData.end_date,
@@ -564,21 +470,31 @@ export default function NewBookingPage() {
           booking_amount: parseFloat(formData.booking_amount),
           security_deposit_amount: parseFloat(formData.security_deposit_amount),
           total_amount: parseFloat(formData.total_amount),
-          payment_status: formData.payment_status,
           paid_amount: parseFloat(formData.paid_amount),
+          payment_status: formData.payment_status,
           payment_mode: formData.payment_mode,
-          status: 'confirmed'
-        })
-        .select()
-        .single();
+          status: formData.status,
+          created_by: (await supabase.auth.getUser()).data.user?.id
+        });
 
       if (bookingError) {
-        console.error('Booking creation error details:', bookingError);
         throw new Error(`Failed to create booking: ${bookingError.message}`);
       }
 
-      if (!booking) {
-        throw new Error('No booking data returned after creation');
+      // Store the signature in the booking_signatures table
+      if (formData.signature) {
+        const { error: signatureError } = await supabase
+          .from('booking_signatures')
+          .insert({
+            booking_id: bookingId,
+            signature_data: formData.signature,
+            created_at: new Date().toISOString()
+          });
+
+        if (signatureError) {
+          console.error('Signature error details:', signatureError);
+          throw new Error(`Failed to save signature: ${signatureError.message}`);
+        }
       }
 
       // Create initial payment record if paid amount is greater than 0
@@ -586,7 +502,7 @@ export default function NewBookingPage() {
         const { error: paymentError } = await supabase
           .from('payments')
           .insert({
-            booking_id: booking.id,
+            booking_id: bookingId,
             amount: parseFloat(formData.paid_amount),
             payment_mode: formData.payment_mode,
             payment_status: 'completed',

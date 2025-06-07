@@ -6,7 +6,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { notifyBookingEvent } from '@/lib/notification';
-import { formatDate } from '@/lib/utils';
+import { formatDate, getISTDate } from '@/lib/utils';
 
 interface BookingExtensionDetails {
   id: string;
@@ -38,48 +38,123 @@ export default function ExtendBookingModal({
 }: ExtendBookingModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasInteracted, setHasInteracted] = useState(false);
 
-  // Create form data
-  const initialFormData = useMemo<FormData>(() => ({
-    end_date: booking?.end_date || '',
-    dropoff_time: booking?.dropoff_time || '',
-    additional_amount: '0',
-    extension_reason: ''
-  }), [booking]);
+  // Calculate minimum end date based on current date in IST
+  const minEndDate = useMemo(() => {
+    const todayIST = getISTDate();
+    todayIST.setHours(0, 0, 0, 0);
+    return todayIST.toISOString().split('T')[0];
+  }, []);
 
-  const [formData, setFormData] = useState<FormData>(initialFormData);
-  
-  // Reset form when modal opens/closes or booking changes
-  useEffect(() => {
-    if (isOpen && booking) {
-      setFormData(initialFormData);
-      setError(null);
-    }
-  }, [isOpen, initialFormData, booking]);
-
-  // Calculate minimum end date based on current end date
-  const minEndDate = booking?.end_date || new Date().toISOString().split('T')[0];
-
-  // Calculate maximum end date (30 days from current end date)
+  // Calculate maximum end date (30 days from today if current end date is in past, otherwise from current end date)
   const maxEndDate = useMemo(() => {
-    const date = booking?.end_date ? new Date(booking.end_date) : new Date();
+    const todayIST = getISTDate();
+    todayIST.setHours(0, 0, 0, 0);
+    
+    const currentEndDate = getISTDate(booking?.end_date);
+    currentEndDate.setHours(0, 0, 0, 0);
+    
+    // If current end date is in the past, calculate 30 days from today
+    const baseDate = currentEndDate < todayIST ? todayIST : currentEndDate;
+    const date = new Date(baseDate);
     date.setDate(date.getDate() + 30);
     return date.toISOString().split('T')[0];
   }, [booking?.end_date]);
+
+  // Get current time rounded up to the next 30-minute slot in IST
+  const getCurrentTime = () => {
+    const now = getISTDate();
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    
+    // Round up to the next 30-minute slot
+    if (minutes > 30) {
+      return `${(hours + 1).toString().padStart(2, '0')}:00`;
+    } else if (minutes > 0) {
+      return `${hours.toString().padStart(2, '0')}:30`;
+    }
+    return `${hours.toString().padStart(2, '0')}:00`;
+  };
+
+  // Check if a time is in the past for today
+  const isTimeInPast = (time: string) => {
+    if (!time || !formData.end_date) return false;
+    
+    const todayIST = getISTDate();
+    const selectedDate = getISTDate(formData.end_date);
+    
+    // Only check for past times if the selected date is today
+    const todayStr = todayIST.toISOString().split('T')[0];
+    const selectedStr = selectedDate.toISOString().split('T')[0];
+    
+    if (selectedStr !== todayStr) {
+      return false;
+    }
+    
+    const currentTime = getCurrentTime();
+    return time <= currentTime;
+  };
+
+  // Generate available time slots
+  const getAvailableTimeSlots = () => {
+    // If no date is selected, show all time slots
+    if (!formData.end_date) {
+      return Array.from({ length: 48 }, (_, i) => {
+        const hour = Math.floor(i / 2);
+        const minute = i % 2 === 0 ? '00' : '30';
+        return `${hour.toString().padStart(2, '0')}:${minute}`;
+      });
+    }
+
+    return Array.from({ length: 48 }, (_, i) => {
+      const hour = Math.floor(i / 2);
+      const minute = i % 2 === 0 ? '00' : '30';
+      const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+      
+      // Only show future times if date is today
+      if (!isTimeInPast(time)) {
+        return time;
+      }
+      return null;
+    }).filter(Boolean) as string[];
+  };
+
+  // Initialize form data with empty values
+  const initialFormData = useMemo<FormData>(() => ({
+    end_date: '',
+    dropoff_time: '',
+    additional_amount: '0',
+    extension_reason: ''
+  }), []);
+
+  const [formData, setFormData] = useState<FormData>(initialFormData);
+  
+  // Reset form and interaction state when modal opens
+  useEffect(() => {
+    if (isOpen && booking) {
+      setFormData(initialFormData);
+      setHasInteracted(false);
+      setError(null);
+    }
+  }, [isOpen, booking, initialFormData]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
     const { name, value } = e.target;
+    setHasInteracted(true);
     setError(null);
     
     // Date validation
     if (name === 'end_date') {
-      const selectedDate = new Date(value);
-      const currentEndDate = new Date(booking.end_date);
+      const selectedDate = getISTDate(value);
+      const todayIST = getISTDate();
+      todayIST.setHours(0, 0, 0, 0);
+      selectedDate.setHours(0, 0, 0, 0);
       
-      if (selectedDate < currentEndDate) {
-        setError('New end date cannot be earlier than the current end date');
+      if (selectedDate < todayIST) {
+        setError('New end date cannot be in the past');
         return;
       }
 
@@ -88,6 +163,29 @@ export default function ExtendBookingModal({
         setError('Maximum extension is 30 days from the current end date');
         return;
       }
+
+      // Reset dropoff time if it would be in the past
+      if (formData.dropoff_time && isTimeInPast(formData.dropoff_time)) {
+        setFormData(prev => ({ 
+          ...prev, 
+          [name]: value,
+          dropoff_time: '' // Reset time when date changes and current time would be invalid
+        }));
+        return;
+      }
+
+      setFormData(prev => ({ ...prev, [name]: value }));
+      return;
+    }
+
+    // Time validation
+    if (name === 'dropoff_time') {
+      if (isTimeInPast(value)) {
+        setError('Drop-off time cannot be in the past');
+        return;
+      }
+      setFormData(prev => ({ ...prev, [name]: value }));
+      return;
     }
 
     // Amount validation
@@ -104,20 +202,31 @@ export default function ExtendBookingModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validate form data before proceeding
+    if (!formData.end_date || !formData.dropoff_time) {
+      setError('Please fill in all required fields');
+      return;
+    }
+
+    // Validate that the selected date and time are not in the past
+    const selectedDateTime = getISTDate(`${formData.end_date}T${formData.dropoff_time}`);
+    const nowIST = getISTDate();
+    if (selectedDateTime <= nowIST) {
+      setError('Selected date and time cannot be in the past');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
     try {
       const supabase = getSupabaseClient();
 
-      // Validate form data
-      if (!formData.end_date || !formData.dropoff_time) {
-        throw new Error('Please fill in all required fields');
-      }
-
-      // Ensure the end date is after or equal to the current end date
-      if (new Date(formData.end_date) < new Date(booking.end_date)) {
-        throw new Error('New end date must be after the current end date');
+      // Get the current user's session
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('No authenticated user found');
       }
 
       const additionalAmount = parseFloat(formData.additional_amount) || 0;
@@ -132,11 +241,11 @@ export default function ExtendBookingModal({
           new_end_date: formData.end_date,
           new_dropoff_time: formData.dropoff_time,
           additional_amount: additionalAmount,
-          reason: formData.extension_reason
+          reason: formData.extension_reason,
+          created_by: user.id // Add the created_by field with the current user's ID
         });
 
       if (extensionError) {
-        console.error('Extension logging error:', extensionError);
         throw new Error(`Failed to log extension: ${extensionError.message}`);
       }
 
@@ -147,37 +256,36 @@ export default function ExtendBookingModal({
         .update({
           end_date: formData.end_date,
           dropoff_time: formData.dropoff_time,
-          booking_amount: newBookingAmount
+          booking_amount: newBookingAmount,
+          updated_by: user.id // Also update the updated_by field in the booking
         })
         .eq('id', booking.id);
 
       if (bookingError) {
-        console.error('Booking update error:', bookingError);
         throw new Error(`Failed to update booking: ${bookingError.message}`);
       }
 
-      // Get the current user's email to use in the notification
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      // Send notification about the booking extension
+      // Notify about the booking extension
       await notifyBookingEvent(
         'BOOKING_EXTENDED',
         booking.id,
         {
+          customerName: booking.booking_id,
           bookingId: booking.booking_id,
-          actionBy: user?.id || 'Unknown',
+          actionBy: user.id,
           previousEndDate: formatDate(booking.end_date),
           newEndDate: formatDate(formData.end_date),
           additionalAmount: additionalAmount.toFixed(2)
         }
       );
 
-      toast.success('Booking extended successfully!');
+      toast.success('Booking extended successfully');
       onBookingExtended();
       onClose();
     } catch (error) {
       console.error('Error extending booking:', error);
       setError(error instanceof Error ? error.message : 'Failed to extend booking');
+      toast.error('Failed to extend booking');
     } finally {
       setLoading(false);
     }
@@ -201,7 +309,7 @@ export default function ExtendBookingModal({
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {error && (
+          {hasInteracted && error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
               {error}
             </div>
@@ -232,6 +340,7 @@ export default function ExtendBookingModal({
               min={minEndDate}
               max={maxEndDate}
               value={formData.end_date}
+              placeholder="Select a date"
               onChange={handleInputChange}
               className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
@@ -250,16 +359,11 @@ export default function ExtendBookingModal({
               className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               <option value="">Select time</option>
-              {Array.from({ length: 48 }, (_, i) => {
-                const hour = Math.floor(i / 2);
-                const minute = i % 2 === 0 ? '00' : '30';
-                const time = `${hour.toString().padStart(2, '0')}:${minute}`;
-                return (
-                  <option key={time} value={time}>
-                    {time}
-                  </option>
-                );
-              })}
+              {getAvailableTimeSlots().map(time => (
+                <option key={time} value={time}>
+                  {time}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -288,15 +392,15 @@ export default function ExtendBookingModal({
             </label>
             <textarea
               name="extension_reason"
+              rows={3}
               value={formData.extension_reason}
               onChange={handleInputChange}
-              rows={3}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="Explain why the booking is being extended"
+              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             />
           </div>
 
-          <div className="flex justify-end space-x-4 pt-4">
+          <div className="flex justify-end space-x-3">
             <button
               type="button"
               onClick={onClose}
@@ -307,7 +411,7 @@ export default function ExtendBookingModal({
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Extending...' : 'Extend Booking'}
             </button>

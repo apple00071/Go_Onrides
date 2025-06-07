@@ -431,7 +431,7 @@ export default function BookingModal({
         throw new Error('Paid amount cannot be negative');
       }
 
-      // First, check if customer exists or create new customer
+      // First, check if customer exists
       let customerId: string;
       const { data: existingCustomers, error: customerCheckError } = await supabase
         .from('customers')
@@ -444,35 +444,34 @@ export default function BookingModal({
       }
 
       if (existingCustomers && existingCustomers.length > 0) {
+        // Use existing customer
         customerId = existingCustomers[0].id;
         
-        // Update existing customer if needed
-        if (!isExistingCustomer) {
-          const { error: customerUpdateError } = await supabase
-            .from('customers')
-            .update({
-              name: formData.customer_name,
-              email: formData.customer_email,
-              emergency_contact_name: formData.emergency_contact_name,
-              emergency_contact_phone: formData.emergency_contact_phone,
-              emergency_contact_relationship: 'emergency',
-              dob: formData.date_of_birth,
-              aadhar_number: formData.aadhar_number,
-              dl_number: formData.dl_number,
-              dl_expiry_date: formData.dl_expiry_date,
-              temp_address_street: formData.temp_address,
-              perm_address_street: formData.perm_address,
-              documents: formData.documents
-            })
-            .eq('id', customerId);
+        // Update existing customer information if needed
+        const { error: customerUpdateError } = await supabase
+          .from('customers')
+          .update({
+            name: formData.customer_name,
+            email: formData.customer_email,
+            emergency_contact_name: formData.emergency_contact_name,
+            emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_relationship: 'emergency',
+            dob: formData.date_of_birth,
+            aadhar_number: formData.aadhar_number,
+            dl_number: formData.dl_number,
+            dl_expiry_date: formData.dl_expiry_date,
+            temp_address_street: formData.temp_address,
+            perm_address_street: formData.perm_address,
+            documents: formData.documents
+          })
+          .eq('id', customerId);
 
-          if (customerUpdateError) {
-            console.error('Customer update error:', customerUpdateError);
-            throw new Error(`Failed to update customer: ${customerUpdateError.message}`);
-          }
+        if (customerUpdateError) {
+          console.error('Customer update error:', customerUpdateError);
+          throw new Error(`Failed to update customer: ${customerUpdateError.message}`);
         }
-      } else if (!isExistingCustomer) {
-        // Create new customer
+      } else {
+        // Create new customer only if no existing customer found
         const { data: newCustomer, error: customerCreateError } = await supabase
           .from('customers')
           .insert({
@@ -499,8 +498,6 @@ export default function BookingModal({
         }
 
         customerId = newCustomer.id;
-      } else {
-        throw new Error('Customer not found');
       }
 
       // Get the current user's email to use in the notification

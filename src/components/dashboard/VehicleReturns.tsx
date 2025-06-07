@@ -33,6 +33,19 @@ export default function VehicleReturns() {
   });
   const [loading, setLoading] = useState(true);
 
+  // Helper function to combine date and time
+  const combineDateAndTime = (date: string, time: string) => {
+    const [year, month, day] = date.split('-');
+    const [hours, minutes] = time.split(':');
+    return new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hours),
+      parseInt(minutes)
+    ).toISOString();
+  };
+
   useEffect(() => {
     fetchVehicleReturns();
   }, []);
@@ -56,14 +69,15 @@ export default function VehicleReturns() {
       if (error) throw error;
 
       const categorizedReturns = (data || []).reduce((acc: any, booking) => {
-        const endDate = getISTDate(booking.end_date);
-        endDate.setHours(0, 0, 0, 0);
+        const endDateTime = getISTDate(combineDateAndTime(booking.end_date, booking.dropoff_time));
+        const endDateStart = new Date(endDateTime);
+        endDateStart.setHours(0, 0, 0, 0);
 
-        if (endDate < today) {
+        if (endDateTime < getISTDate()) {
           acc.overdue.push(booking);
-        } else if (endDate.getTime() === today.getTime()) {
+        } else if (endDateStart.getTime() === today.getTime()) {
           acc.today.push(booking);
-        } else if (endDate.getTime() === tomorrow.getTime()) {
+        } else if (endDateStart.getTime() === tomorrow.getTime()) {
           acc.upcoming.push(booking);
         }
         return acc;
@@ -118,11 +132,11 @@ export default function VehicleReturns() {
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    {booking.customer_name} • Due: {formatDateTime(booking.end_date)}
+                    {booking.customer_name} • Due: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-red-600">
-                  {Math.ceil((getISTDate().getTime() - getISTDate(booking.end_date).getTime()) / (1000 * 60 * 60 * 24))} days overdue
+                  {Math.ceil((getISTDate().getTime() - getISTDate(combineDateAndTime(booking.end_date, booking.dropoff_time)).getTime()) / (1000 * 60 * 60 * 24))} days overdue
                 </div>
               </div>
             ))}
@@ -144,7 +158,7 @@ export default function VehicleReturns() {
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    {booking.customer_name} • Return by: {formatDateTime(booking.end_date)}
+                    {booking.customer_name} • Return by: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-blue-600">
@@ -170,7 +184,7 @@ export default function VehicleReturns() {
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    {booking.customer_name} • Return by: {formatDateTime(booking.end_date)}
+                    {booking.customer_name} • Return by: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-green-600">

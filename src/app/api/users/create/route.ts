@@ -8,6 +8,13 @@ export async function POST(request: Request) {
     const requestData = await request.json();
     const { email, username, password, role, permissions } = requestData;
 
+    if (!username || !password || !role) {
+      return NextResponse.json(
+        { error: 'Username, password and role are required' },
+        { status: 400 }
+      );
+    }
+
     // First check if the requesting user is an admin using the normal client
     const supabase = createRouteHandlerClient({ cookies });
     
@@ -33,6 +40,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { error: 'Not authorized' },
         { status: 403 }
+      );
+    }
+
+    // Check if username already exists
+    const { data: existingUser, error: existingUserError } = await supabase
+      .from('profiles')
+      .select('username')
+      .eq('username', username)
+      .single();
+
+    if (existingUser) {
+      return NextResponse.json(
+        { error: 'Username already exists' },
+        { status: 400 }
       );
     }
 
@@ -86,7 +107,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       message: 'User created successfully',
-      user: userData.user
+      user: {
+        id: userData.user.id,
+        username,
+        role
+      }
     });
   } catch (error) {
     console.error('Error creating user:', error);

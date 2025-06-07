@@ -21,7 +21,9 @@ const LoginForm = () => {
     setError(null);
 
     try {
-      // First try username-based login through our API
+      const supabase = createClientComponentClient();
+
+      // First try username-based login through our API to get the email
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -33,63 +35,30 @@ const LoginForm = () => {
       const data = await response.json();
 
       if (!response.ok) {
-        // If username login fails, try direct email login as fallback
-        const supabase = createClientComponentClient();
-        const { data: authData, error: signInError } = await supabase.auth.signInWithPassword({
-          email: formData.username, // Try using the username field as email
-          password: formData.password
-        });
-
-        if (signInError) {
-          if (signInError.message.includes('Invalid login credentials')) {
-            throw new Error('Invalid username/email or password');
-          }
-          throw signInError;
-        }
-
-        if (!authData?.session) throw new Error('No session created');
-
-        // Get the user's profile
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', authData.user.id)
-          .single();
-
-        if (profileError) throw profileError;
-
-        // Redirect based on role
-        const redirectPath = profile?.role === 'admin' ? '/dashboard/settings' : '/dashboard';
-        router.push(redirectPath);
-        router.refresh();
-        return;
+        throw new Error(data.error || 'Failed to login');
       }
 
-      // If username login succeeds, get the profile and redirect
-      const supabase = createClientComponentClient();
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', data.user.id)
-        .single();
+      // Now sign in directly with Supabase using the email
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: data.user.email || data.user.username + '@goonriders.com',
+        password: formData.password
+      });
 
-      if (profileError) throw profileError;
+      if (signInError) throw signInError;
 
       // Redirect based on role
-      const redirectPath = profile?.role === 'admin' ? '/dashboard/settings' : '/dashboard';
+      const redirectPath = data.user.role === 'admin' ? '/dashboard/settings' : '/dashboard';
       router.push(redirectPath);
       router.refresh();
-    } catch (err: unknown) {
+    } catch (err) {
       console.error('Login error:', err);
       let errorMessage = 'An error occurred during login';
       
       if (err instanceof Error) {
         if (err.message?.includes('rate limit') || err.message?.includes('Too Many Requests')) {
           errorMessage = 'Too many login attempts. Please try again in a moment.';
-        } else if (err.message?.includes('Invalid login credentials') || err.message?.includes('Invalid username/email')) {
+        } else if (err.message?.includes('Invalid credentials')) {
           errorMessage = 'Invalid username/email or password';
-        } else if (err.message?.includes('No session created')) {
-          errorMessage = 'Failed to create session. Please try again.';
         }
       }
       
@@ -137,7 +106,7 @@ const LoginForm = () => {
             required
             value={formData.username}
             onChange={handleChange}
-            placeholder="Username or Email"
+            placeholder="Username"
             className="block w-full pl-10 rounded-lg border border-gray-300 py-3 text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-primary-blue focus:border-transparent sm:text-sm"
           />
         </div>

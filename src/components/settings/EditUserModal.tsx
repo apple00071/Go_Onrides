@@ -3,6 +3,8 @@ import { X, Check } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import type { UserProfile, Permission } from '@/types/database';
 
+type Role = 'admin' | 'worker';
+
 type EditUserModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -10,20 +12,16 @@ type EditUserModalProps = {
   onUserUpdated: () => void;
 };
 
-const availableRoles = ['admin', 'manager', 'worker'];
+const availableRoles: Role[] = ['admin', 'worker'];
 const availablePermissions: { [key: string]: string } = {
   createBooking: 'Create Booking',
   viewBookings: 'View Bookings',
-  editBookings: 'Edit Bookings',
-  uploadDocuments: 'Upload Documents',
-  viewDocuments: 'View Documents',
-  editDocuments: 'Edit Documents',
   managePayments: 'Manage Payments',
   accessReports: 'Access Reports',
 };
 
 const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalProps) => {
-  const [role, setRole] = useState(user.role);
+  const [role, setRole] = useState<Role>(user.role);
   const [permissions, setPermissions] = useState<Permission>(user.permissions || {});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -136,7 +134,7 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
             <label className="block text-sm font-medium text-gray-700">Role</label>
             <select
               value={role}
-              onChange={(e) => setRole(e.target.value)}
+              onChange={(e) => setRole(e.target.value as Role)}
               className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
             >
               {availableRoles.map((role) => (

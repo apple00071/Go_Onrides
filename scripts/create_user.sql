@@ -20,8 +20,6 @@ BEGIN
             jsonb_build_object(
                 'createBooking', true,
                 'viewBookings', true,
-                'uploadDocuments', true,
-                'viewDocuments', true,
                 'managePayments', true,
                 'accessReports', true
             )
@@ -29,8 +27,6 @@ BEGIN
             jsonb_build_object(
                 'createBooking', false,
                 'viewBookings', true,
-                'uploadDocuments', false,
-                'viewDocuments', true,
                 'managePayments', false,
                 'accessReports', false
             )

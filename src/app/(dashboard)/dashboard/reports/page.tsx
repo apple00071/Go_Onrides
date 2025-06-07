@@ -78,7 +78,7 @@ const formatCurrency = (amount: number) => {
 };
 
 export default function ReportsPage() {
-  const { canView, isAdmin } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
@@ -113,17 +113,17 @@ export default function ReportsPage() {
     try {
       const supabase = getSupabaseClient();
 
-      // Get total income from completed bookings
-      const { data: completedBookings, error: completedBookingsError } = await supabase
-        .from('bookings')
-        .select('booking_amount, payment_status, created_at')
-        .eq('payment_status', 'full')
+      // Get total income from completed payments
+      const { data: completedPayments, error: paymentsError } = await supabase
+        .from('payments')
+        .select('amount, created_at')
+        .eq('payment_status', 'completed')
         .gte('created_at', format(dateRange.from, 'yyyy-MM-dd'))
         .lte('created_at', format(dateRange.to, 'yyyy-MM-dd'));
 
-      if (completedBookingsError) throw new Error(`Failed to fetch completed bookings: ${completedBookingsError.message}`);
+      if (paymentsError) throw new Error(`Failed to fetch completed payments: ${paymentsError.message}`);
 
-      // Calculate total income from completed bookings (only booking amount, not security deposit)
+      // Calculate total income from completed payments
       let calculatedTotalIncome = 0;
       const revenueByDate = new Map<string, number>();
       
@@ -161,41 +161,41 @@ export default function ReportsPage() {
         revenueByDate.set(periodKey, 0);
       });
 
-      // Sum up revenue by period from completed bookings
-      (completedBookings || []).forEach(booking => {
+      // Sum up revenue by period from completed payments
+      (completedPayments || []).forEach(payment => {
         let periodKey = '';
-        const bookingDate = new Date(booking.created_at);
+        const paymentDate = new Date(payment.created_at);
         
         switch (revenuePeriod) {
           case 'daily':
-            periodKey = format(bookingDate, 'MMM dd');
+            periodKey = format(paymentDate, 'MMM dd');
             break;
           case 'weekly':
-            // Find the start of the week containing this booking
+            // Find the start of the week containing this payment
             intervalData.forEach(weekStart => {
-              if (bookingDate >= weekStart && 
-                  bookingDate < addDays(weekStart, 7)) {
+              if (paymentDate >= weekStart && 
+                  paymentDate < addDays(weekStart, 7)) {
                 periodKey = format(weekStart, "'Week of' MMM dd");
               }
             });
             break;
           case 'monthly':
-            periodKey = format(bookingDate, 'MMM yyyy');
+            periodKey = format(paymentDate, 'MMM yyyy');
             break;
         }
 
         if (periodKey && revenueByDate.has(periodKey)) {
-          const bookingAmount = typeof booking.booking_amount === 'string'
-            ? parseFloat(booking.booking_amount)
-            : booking.booking_amount;
+          const amount = typeof payment.amount === 'string'
+            ? parseFloat(payment.amount)
+            : payment.amount;
 
-          if (!isNaN(bookingAmount)) {
+          if (!isNaN(amount)) {
             revenueByDate.set(
               periodKey, 
-              (revenueByDate.get(periodKey) || 0) + bookingAmount
+              (revenueByDate.get(periodKey) || 0) + amount
             );
             // Add to total income
-            calculatedTotalIncome += bookingAmount;
+            calculatedTotalIncome += amount;
           }
         }
       });
@@ -408,6 +408,13 @@ export default function ReportsPage() {
 
   const stats = [
     {
+      name: 'Total Income',
+      value: formatCurrency(totalIncome),
+      icon: RupeeIcon,
+      change: 'From all completed payments',
+      changeType: 'positive'
+    },
+    {
       name: 'Total Bookings',
       value: bookingStats.total,
       icon: Calendar,
@@ -422,13 +429,6 @@ export default function ReportsPage() {
       changeType: 'neutral'
     },
     {
-      name: 'Total Income',
-      value: formatCurrency(totalIncome),
-      icon: RupeeIcon,
-      change: 'From all completed bookings',
-      changeType: 'positive'
-    },
-    {
       name: 'Total Customers',
       value: customerMetrics.total_customers,
       icon: Users,
@@ -438,7 +438,7 @@ export default function ReportsPage() {
   ];
 
   // Check if user has permission to access reports
-  if (!canView('accessReports')) {
+  if (!hasPermission('accessReports')) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-center">

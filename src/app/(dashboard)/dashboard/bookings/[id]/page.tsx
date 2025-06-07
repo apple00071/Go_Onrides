@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -16,6 +16,7 @@ import PaymentHistory from '@/components/payments/PaymentHistory';
 import { usePermissions } from '@/lib/usePermissions';
 import { notifyBookingEvent } from '@/lib/notification';
 import PaymentInformation from '@/components/bookings/PaymentInformation';
+import { generateInvoice } from '@/lib/generateInvoice';
 
 // Rename the interface to avoid collision with imported EditBookingModal's BookingDetails
 interface BookingDetailsData {
@@ -88,58 +89,80 @@ export default function BookingDetailsPage() {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
+  const [signature, setSignature] = useState<string | null>(null);
   const { isAdmin, canEdit, hasPermission } = usePermissions();
 
-  const refreshBookingData = async () => {
-    const supabase = getSupabaseClient();
-    const bookingIdentifier = decodeURIComponent(params.id as string);
-    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
-    
-    const { data: bookingData, error: bookingError } = await supabase
-      .from('bookings')
-      .select('*')
-      .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
-      .single();
+  const fetchBookingDetails = async () => {
+    try {
+      setLoading(true);
+      const supabase = getSupabaseClient();
+      const bookingIdentifier = decodeURIComponent(params.id as string);
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
+      
+      // Fetch booking details
+      const { data: bookingData, error: bookingError } = await supabase
+        .from('bookings')
+        .select(`
+          *,
+          created_by_user:profiles!bookings_created_by_fkey(
+            email,
+            username
+          ),
+          updated_by_user:profiles!bookings_updated_by_fkey(
+            email,
+            username
+          )
+        `)
+        .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
+        .single();
 
-    if (bookingError) throw bookingError;
+      if (bookingError) throw bookingError;
 
-    const { data: customerData, error: customerError } = await supabase
-      .from('customers')
-      .select('documents')
-      .eq('id', bookingData.customer_id)
-      .single();
+      // Fetch customer documents
+      const { data: customerData, error: customerError } = await supabase
+        .from('customers')
+        .select('documents')
+        .eq('id', bookingData.customer_id)
+        .single();
 
-    const transformedBooking: BookingDetailsData = {
-      ...bookingData,
-      status: bookingData.status as BookingDetailsData['status'],
-      payment_status: bookingData.payment_status as BookingDetailsData['payment_status'],
-      payment_mode: bookingData.payment_mode as BookingDetailsData['payment_mode'],
-      documents: customerData?.documents || {
-        customer_photo: '',
-        aadhar_front: '',
-        aadhar_back: '',
-        dl_front: '',
-        dl_back: ''
+      // Fetch signature
+      const { data: signatureData, error: signatureError } = await supabase
+        .from('booking_signatures')
+        .select('signature_data')
+        .eq('booking_id', bookingData.id)
+        .single();
+
+      if (signatureError && !signatureError.message.includes('No rows found')) {
+        console.error('Error fetching signature:', signatureError);
+      } else if (signatureData) {
+        setSignature(signatureData.signature_data);
       }
-    };
 
-    setBooking(transformedBooking);
+      const transformedBooking: BookingDetailsData = {
+        ...bookingData,
+        status: bookingData.status as BookingDetailsData['status'],
+        payment_status: bookingData.payment_status as BookingDetailsData['payment_status'],
+        payment_mode: bookingData.payment_mode as BookingDetailsData['payment_mode'],
+        documents: customerData?.documents || {
+          customer_photo: '',
+          aadhar_front: '',
+          aadhar_back: '',
+          dl_front: '',
+          dl_back: ''
+        }
+      };
+
+      setBooking(transformedBooking);
+      setError(null);
+    } catch (error) {
+      console.error('Error fetching booking details:', error);
+      setError(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
-    const fetchBookingDetails = async () => {
-      try {
-        setLoading(true);
-        await refreshBookingData();
-        setError(null);
-      } catch (error) {
-        console.error('Error fetching booking details:', error);
-        setError(error instanceof Error ? error.message : 'An error occurred');
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchBookingDetails();
   }, [params?.id]);
 
@@ -174,7 +197,7 @@ export default function BookingDetailsPage() {
     // Refresh the data
     setLoading(true);
     try {
-      await refreshBookingData();
+      await fetchBookingDetails();
       toast.success('Booking completed and data refreshed');
     } catch (error) {
       console.error('Error refreshing data:', error);
@@ -192,7 +215,7 @@ export default function BookingDetailsPage() {
   const handleEditComplete = async () => {
     setLoading(true);
     try {
-      await refreshBookingData();
+      await fetchBookingDetails();
       toast.success('Booking updated successfully');
     } catch (error) {
       console.error('Error refreshing booking data:', error);
@@ -206,7 +229,7 @@ export default function BookingDetailsPage() {
   const handleExtendComplete = async () => {
     setLoading(true);
     try {
-      await refreshBookingData();
+      await fetchBookingDetails();
       toast.success('Booking extended successfully');
     } catch (error) {
       console.error('Error refreshing booking data:', error);
@@ -220,13 +243,42 @@ export default function BookingDetailsPage() {
   const handlePaymentCreated = async () => {
     setLoading(true);
     try {
-      await refreshBookingData();
+      await fetchBookingDetails();
       toast.success('Payment recorded successfully');
     } catch (error) {
       console.error('Error refreshing booking data:', error);
       toast.error('Failed to refresh booking data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownloadInvoice = async () => {
+    try {
+      if (!booking) {
+        toast.error('Booking details not available');
+        return;
+      }
+
+      const pdfBlob = await generateInvoice({
+        ...booking,
+        signature: signature || undefined
+      });
+      
+      // Create a download link
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${booking.booking_id}.pdf`);
+      
+      // Append to body, click and cleanup
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Error downloading invoice:', error);
+      toast.error('Failed to download invoice');
     }
   };
 
@@ -436,11 +488,41 @@ export default function BookingDetailsPage() {
             </div>
           </div>
 
-          {/* Payment Information */}
-          <PaymentInformation 
-            booking={booking} 
-            onPaymentCreated={handlePaymentCreated}
-          />
+          {/* Customer Signature Section */}
+          {signature && (
+            <div className="bg-white rounded-lg shadow p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">Customer Signature</h2>
+              </div>
+              <div className="border rounded-lg p-4">
+                <img
+                  src={signature}
+                  alt="Customer Signature"
+                  className="max-w-full h-auto"
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Payment Information with Invoice Download */}
+          <div className="bg-white rounded-lg shadow">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold text-gray-900">Payment Information</h2>
+                <button
+                  onClick={handleDownloadInvoice}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Invoice
+                </button>
+              </div>
+              <PaymentInformation 
+                booking={booking} 
+                onPaymentCreated={handlePaymentCreated}
+              />
+            </div>
+          </div>
 
           {/* Documents */}
           <div className="mt-8">
@@ -457,6 +539,7 @@ export default function BookingDetailsPage() {
                         src={url}
                         alt={key.replace(/_/g, ' ')}
                         fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
                         className="object-cover"
                       />
                     </button>
@@ -481,12 +564,12 @@ export default function BookingDetailsPage() {
           </div>
 
           {/* Extension History */}
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white rounded-lg shadow p-6">
             <BookingExtensionHistory bookingId={booking?.id || ''} />
           </div>
 
           {/* Vehicle Damage History */}
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white rounded-lg shadow p-6">
             <VehicleDamageHistory bookingId={booking?.id || ''} />
           </div>
         </div>

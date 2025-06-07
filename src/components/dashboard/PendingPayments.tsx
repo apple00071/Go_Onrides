@@ -32,42 +32,60 @@ export default function PendingPayments() {
     try {
       const supabase = getSupabaseClient();
       
-      // Get active bookings (not cancelled or completed)
+      console.log('Fetching pending payments...');
+      
+      // Get bookings that are not cancelled or completed and have pending payments
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
-        .select('*')
-        .or('status.eq.confirmed,status.eq.in_use,status.eq.pending')
-        .not('status', 'eq', 'cancelled')
+        .select(`
+          id,
+          booking_id,
+          customer_name,
+          vehicle_details,
+          booking_amount,
+          security_deposit_amount,
+          paid_amount,
+          payment_status,
+          status
+        `)
+        .or('payment_status.eq.pending,payment_status.eq.partial')
+        .in('status', ['confirmed', 'in_use', 'pending'])
         .order('created_at', { ascending: false });
+
+      console.log('Bookings data:', bookingsData);
+      console.log('Bookings error:', bookingsError);
 
       if (bookingsError) {
         console.error('Bookings fetch error:', bookingsError);
         throw bookingsError;
       }
 
-      // Get all payments from the payments table to ensure we have the most recent payment data
+      // Get all payments to ensure we have the most recent payment data
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
         .select('booking_id, amount, created_at')
         .order('created_at', { ascending: false });
       
+      console.log('Payments data:', paymentsData);
+      console.log('Payments error:', paymentsError);
+
       if (paymentsError) {
         console.error('Payments fetch error:', paymentsError);
         throw paymentsError;
       }
-      
-      console.log('Fetched payments:', paymentsData?.length || 0);
       
       // Create a map of booking_id to total paid amount
       const paymentTotals = new Map<string, number>();
       if (paymentsData) {
         paymentsData.forEach(payment => {
           const currentTotal = paymentTotals.get(payment.booking_id) || 0;
-          paymentTotals.set(payment.booking_id, currentTotal + Number(payment.amount));
+          const paymentAmount = Number(payment.amount) || 0;
+          paymentTotals.set(payment.booking_id, currentTotal + paymentAmount);
+          console.log(`Adding payment for booking ${payment.booking_id}: ${paymentAmount} (Total: ${currentTotal + paymentAmount})`);
         });
       }
-      
-      console.log('Payment totals map:', Array.from(paymentTotals.entries()));
+
+      console.log('Payment totals:', Object.fromEntries(paymentTotals));
 
       const pendingPayments = (bookingsData || []).filter(booking => {
         try {
@@ -75,13 +93,19 @@ export default function PendingPayments() {
           const securityDeposit = Number(booking.security_deposit_amount) || 0;
           const totalRequired = bookingAmount + securityDeposit;
           
-          // Check if we have payment data from the payments table
+          // Get actual paid amount from payments table
           const actualPaidAmount = paymentTotals.get(booking.id) || Number(booking.paid_amount) || 0;
           
-          // Update the booking paid_amount with the actual total from payments table
-          booking.paid_amount = actualPaidAmount;
+          console.log(`Processing booking ${booking.booking_id}:`, {
+            bookingAmount,
+            securityDeposit,
+            totalRequired,
+            actualPaidAmount,
+            isPending: actualPaidAmount < totalRequired
+          });
           
-          console.log(`Booking ${booking.id} (${booking.booking_id}): Total=${totalRequired}, Paid=${actualPaidAmount}`);
+          // Update the booking paid_amount with the actual total
+          booking.paid_amount = actualPaidAmount;
           
           return actualPaidAmount < totalRequired;
         } catch (err) {
@@ -90,6 +114,7 @@ export default function PendingPayments() {
         }
       });
 
+      console.log('Final pending payments:', pendingPayments);
       setPayments(pendingPayments);
     } catch (error) {
       console.error('Error fetching pending payments:', error);
@@ -125,8 +150,8 @@ export default function PendingPayments() {
       <div className="p-4">
         <div className="space-y-3">
           {payments.map((booking) => {
-            const totalAmount = booking.booking_amount + booking.security_deposit_amount;
-            const remainingAmount = totalAmount - booking.paid_amount;
+            const totalAmount = Number(booking.booking_amount) + Number(booking.security_deposit_amount);
+            const remainingAmount = totalAmount - Number(booking.paid_amount);
             
             return (
               <Link 
@@ -137,7 +162,7 @@ export default function PendingPayments() {
                 <div className="flex items-center justify-between p-3 bg-yellow-50 rounded-lg hover:bg-yellow-100 transition-colors">
                   <div>
                     <div className="text-sm font-medium text-gray-900">
-                      {booking.vehicle_details.model} ({booking.vehicle_details.registration})
+                      {booking.vehicle_details?.model} ({booking.vehicle_details?.registration})
                     </div>
                     <div className="text-xs text-gray-500">
                       {booking.customer_name} • {booking.booking_id}

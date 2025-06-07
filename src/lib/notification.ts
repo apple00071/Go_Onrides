@@ -215,20 +215,34 @@ async function createNotification(payload: CreateNotificationPayload): Promise<b
     if (sessionError) throw sessionError;
     if (!session) throw new Error('No active session');
 
-    // Create the notification
-    const { error: notificationError } = await supabase
-      .from('notifications')
-      .insert({
-        title: payload.title,
-        message: payload.message,
-        action_link: payload.actionLink,
-        reference_type: payload.referenceType,
-        reference_id: payload.referenceId,
-        target_roles: payload.targetRoles || ['admin'],
-        created_by: session.user.id
-      });
+    // Get admin users
+    const { data: adminUsers, error: adminError } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin');
 
-    if (notificationError) throw notificationError;
+    if (adminError) throw adminError;
+
+    // Create notifications for each admin
+    const notifications = adminUsers.map(admin => ({
+      user_id: admin.id,
+      title: payload.title,
+      message: payload.message,
+      action_link: payload.actionLink,
+      reference_type: payload.referenceType,
+      reference_id: payload.referenceId,
+      type: payload.referenceType,
+      data: payload,
+      target_roles: payload.targetRoles || ['admin'],
+      created_by: session.user.id,
+      is_read: false
+    }));
+
+    const { error: insertError } = await supabase
+      .from('notifications')
+      .insert(notifications);
+
+    if (insertError) throw insertError;
     return true;
   } catch (error) {
     console.error('Error creating notification:', error);

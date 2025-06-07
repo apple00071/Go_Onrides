@@ -16,11 +16,9 @@ interface BookingExtension {
   reason: string | null;
   created_at: string;
   created_by: string | null;
-  user?: {
+  created_by_user?: {
     email: string;
-    user_metadata: {
-      full_name?: string;
-    };
+    username: string;
   };
 }
 
@@ -39,21 +37,42 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
         setLoading(true);
         const supabase = getSupabaseClient();
         
-        const { data, error } = await supabase
+        // First get the extensions
+        const { data: extensionsData, error: extensionsError } = await supabase
           .from('booking_extensions')
-          .select(`
-            *,
-            user:extended_user_data!created_by(
-              email,
-              user_metadata
-            )
-          `)
+          .select('*')
           .eq('booking_id', bookingId)
           .order('created_at', { ascending: false });
           
-        if (error) throw error;
+        if (extensionsError) throw extensionsError;
+
+        // Then get the user information for each extension
+        const extensionsWithUsers = await Promise.all(
+          (extensionsData || []).map(async (extension) => {
+            if (!extension.created_by) return extension;
+
+            const { data: userData, error: userError } = await supabase
+              .from('profiles')
+              .select('email, username')
+              .eq('id', extension.created_by)
+              .single();
+
+            if (userError) {
+              console.error('Error fetching user data:', userError);
+              return {
+                ...extension,
+                created_by_user: undefined
+              };
+            }
+
+            return {
+              ...extension,
+              created_by_user: userData
+            };
+          })
+        );
         
-        setExtensions(data || []);
+        setExtensions(extensionsWithUsers || []);
       } catch (err) {
         console.error('Error fetching booking extensions:', err);
         setError('Failed to load extension history');
@@ -102,7 +121,7 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
               <div>
                 <div className="font-medium">{formatDate(extension.created_at)}</div>
                 <div className="text-sm text-gray-500">
-                  By: {extension.user?.user_metadata?.full_name || extension.user?.email || 'System'}
+                  Extended by {extension.created_by_user?.username || 'Unknown'}
                 </div>
               </div>
               <div className="text-right">

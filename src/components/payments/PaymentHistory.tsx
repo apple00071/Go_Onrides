@@ -15,6 +15,14 @@ interface Payment {
   updated_at: string;
   created_by: string | null;
   updated_by: string | null;
+  created_by_user?: {
+    email: string;
+    username: string;
+  };
+  updated_by_user?: {
+    email: string;
+    username: string;
+  };
 }
 
 interface PaymentHistoryProps {
@@ -80,7 +88,7 @@ export default function PaymentHistory({ bookingId }: PaymentHistoryProps) {
       
       console.log('Fetching payments for booking ID:', dbBookingId);
       
-      // Query the payments table with the booking ID
+      // First get the payments
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
         .select('*')
@@ -91,14 +99,32 @@ export default function PaymentHistory({ bookingId }: PaymentHistoryProps) {
         console.error('Error fetching payments for booking:', paymentsError);
         throw paymentsError;
       }
+
+      // Then get the user information for each payment
+      const paymentsWithUsers = await Promise.all(
+        (paymentsData || []).map(async (payment) => {
+          if (!payment.created_by) return payment;
+
+          const { data: userData, error: userError } = await supabase
+            .from('profiles')
+            .select('email, username')
+            .eq('id', payment.created_by)
+            .single();
+
+          return {
+            ...payment,
+            created_by_user: userData || undefined
+          };
+        })
+      );
       
-      console.log('Payments found for booking:', paymentsData);
+      console.log('Payments found for booking:', paymentsWithUsers);
       
-      if (!paymentsData || paymentsData.length === 0) {
+      if (!paymentsWithUsers || paymentsWithUsers.length === 0) {
         console.log('No payments found for booking ID:', dbBookingId);
       }
       
-      setPayments(paymentsData || []);
+      setPayments(paymentsWithUsers || []);
       setError(null);
     } catch (error) {
       console.error('Error fetching payments for booking:', error);
@@ -144,13 +170,9 @@ export default function PaymentHistory({ bookingId }: PaymentHistoryProps) {
             <div className="text-xs text-gray-500">
               {formatDate(payment.created_at)} at {new Date(payment.created_at).toLocaleTimeString()}
             </div>
-            <EntityAuditInfo
-              entityType="payment"
-              createdAt={payment.created_at}
-              updatedAt={payment.updated_at}
-              createdBy={payment.created_by}
-              updatedBy={payment.updated_by}
-            />
+            <div className="text-xs text-gray-500">
+              Added by {payment.created_by_user?.username || 'Unknown'}
+            </div>
           </div>
           <div>
             <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
