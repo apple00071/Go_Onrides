@@ -6,7 +6,10 @@ import type { Permission } from '@/types/database';
 
 export interface UsePermissionsResult {
   isAdmin: boolean;
-  canEdit: boolean;
+  canEdit: (resource: string) => boolean;
+  canCreate: (resource: keyof Permission) => boolean;
+  canDelete: (resource: string) => boolean;
+  canView: (resource: keyof Permission) => boolean;
   hasPermission: (permission: string) => boolean;
   permissions: Record<string, boolean>;
   loading: boolean;
@@ -14,7 +17,6 @@ export interface UsePermissionsResult {
 
 export function usePermissions(): UsePermissionsResult {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [canEdit, setCanEdit] = useState(false);
   const [permissions, setPermissions] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
@@ -41,7 +43,6 @@ export function usePermissions(): UsePermissionsResult {
       if (error) throw error;
 
       setIsAdmin(profile?.role === 'admin');
-      setCanEdit(profile?.role === 'admin' || (profile?.permissions?.editBookings === true));
       setPermissions(profile?.permissions || {});
     } catch (error) {
       console.error('Error checking permissions:', error);
@@ -54,9 +55,28 @@ export function usePermissions(): UsePermissionsResult {
     return isAdmin || permissions[permission] === true;
   };
 
+  const canCreate = (resource: keyof Permission): boolean => {
+    return isAdmin || permissions[resource] === true;
+  };
+
+  const canEdit = (resource: string): boolean => {
+    return isAdmin || permissions[`edit${resource.charAt(0).toUpperCase()}${resource.slice(1)}`] === true;
+  };
+
+  const canDelete = (resource: string): boolean => {
+    return isAdmin || permissions[`delete${resource.charAt(0).toUpperCase()}${resource.slice(1)}`] === true;
+  };
+
+  const canView = (resource: keyof Permission): boolean => {
+    return isAdmin || permissions[resource] === true;
+  };
+
   return {
     isAdmin,
+    canCreate,
     canEdit,
+    canDelete,
+    canView,
     hasPermission,
     permissions,
     loading
