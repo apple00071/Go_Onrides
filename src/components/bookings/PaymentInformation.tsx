@@ -74,7 +74,6 @@ export default function PaymentInformation({ booking, onPaymentCreated }: Paymen
     <div className="bg-white rounded-lg shadow">
       <div className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-semibold text-gray-900">Payment Information</h2>
           {booking.status !== 'completed' && booking.status !== 'cancelled' && remainingAmount > 0 && (
             <button
               onClick={handleNewPayment}
@@ -137,6 +136,17 @@ export default function PaymentInformation({ booking, onPaymentCreated }: Paymen
                 {booking.payment_status.charAt(0).toUpperCase() + booking.payment_status.slice(1)}
               </span>
             </div>
+            {booking.payment_mode && (
+              <div>
+                <label className="text-sm text-gray-500">Payment Mode</label>
+                <div className="flex items-center mt-1">
+                  <CreditCard className="h-4 w-4 mr-1 text-gray-500" />
+                  <span className="text-sm font-medium">
+                    {booking.payment_mode.charAt(0).toUpperCase() + booking.payment_mode.slice(1)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

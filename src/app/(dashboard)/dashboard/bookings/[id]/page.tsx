@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download } from 'lucide-react';
@@ -18,7 +18,6 @@ import { notifyBookingEvent } from '@/lib/notification';
 import PaymentInformation from '@/components/bookings/PaymentInformation';
 import { generateInvoice } from '@/lib/generateInvoice';
 
-// Rename the interface to avoid collision with imported EditBookingModal's BookingDetails
 interface BookingDetailsData {
   id: string;
   booking_id: string;
@@ -47,7 +46,7 @@ interface BookingDetailsData {
   payment_status: 'full' | 'partial' | 'pending';
   paid_amount: number;
   payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
-  status: 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
+  status: BookingStatus;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -67,7 +66,20 @@ interface BookingDetailsData {
     dl_front?: string;
     dl_back?: string;
   };
+  signature_url?: string;
 }
+
+type BookingStatus = 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
+type PaymentStatus = 'full' | 'partial' | 'pending';
+type PaymentMode = 'cash' | 'upi' | 'card' | 'bank_transfer';
+
+const STATUS_COLORS = {
+  pending: 'bg-yellow-100 text-yellow-800',
+  confirmed: 'bg-blue-100 text-blue-800',
+  in_use: 'bg-green-100 text-green-800',
+  completed: 'bg-gray-100 text-gray-800',
+  cancelled: 'bg-red-100 text-red-800'
+} as const;
 
 // Helper function to convert our booking data format to the format expected by EditBookingModal
 function convertToEditBookingFormat(booking: BookingDetailsData) {
@@ -130,9 +142,9 @@ export default function BookingDetailsPage() {
         .from('booking_signatures')
         .select('signature_data')
         .eq('booking_id', bookingData.id)
-        .single();
+        .maybeSingle();
 
-      if (signatureError && !signatureError.message.includes('No rows found')) {
+      if (signatureError) {
         console.error('Error fetching signature:', signatureError);
       } else if (signatureData) {
         setSignature(signatureData.signature_data);
@@ -140,7 +152,7 @@ export default function BookingDetailsPage() {
 
       const transformedBooking: BookingDetailsData = {
         ...bookingData,
-        status: bookingData.status as BookingDetailsData['status'],
+        status: bookingData.status as BookingStatus,
         payment_status: bookingData.payment_status as BookingDetailsData['payment_status'],
         payment_mode: bookingData.payment_mode as BookingDetailsData['payment_mode'],
         documents: customerData?.documents || {
@@ -166,7 +178,7 @@ export default function BookingDetailsPage() {
     fetchBookingDetails();
   }, [params?.id]);
 
-  const handleStatusChange = async (newStatus: BookingDetailsData['status']) => {
+  const handleStatusChange = async (newStatus: BookingStatus) => {
     if (!booking) return;
 
     if (newStatus === 'completed') {
@@ -309,19 +321,14 @@ export default function BookingDetailsPage() {
     );
   }
 
-  const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-800',
-    confirmed: 'bg-blue-100 text-blue-800',
-    in_use: 'bg-green-100 text-green-800',
-    completed: 'bg-gray-100 text-gray-800',
-    cancelled: 'bg-red-100 text-red-800'
-  } as const;
-
   const totalAmount = booking.booking_amount + booking.security_deposit_amount;
   const remainingAmount = totalAmount - booking.paid_amount;
 
   // Add debug logging in render
   console.log('Current booking state:', booking);
+
+  // For the image props, ensure documentUrl is a string
+  const documentUrl = typeof booking?.documents === 'string' ? booking.documents : '/placeholder-image.jpg';
 
   return (
     <div className="min-h-screen p-6">
@@ -379,13 +386,13 @@ export default function BookingDetailsPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
               <div>
                 <div className="flex items-center gap-3">
-                  <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium capitalize ${statusColors[booking?.status || 'pending']}`}>
+                  <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium capitalize ${STATUS_COLORS[booking?.status || 'pending']}`}>
                     {booking?.status}
                   </span>
                   {hasPermission('manageBookings') && booking.status !== 'completed' && booking.status !== 'cancelled' && (
                     <select
                       value={booking.status}
-                      onChange={(e) => handleStatusChange(e.target.value as BookingDetailsData['status'])}
+                      onChange={(e) => handleStatusChange(e.target.value as BookingStatus)}
                       className="text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="pending">Pending</option>
@@ -458,13 +465,13 @@ export default function BookingDetailsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm text-gray-500">Name</label>
-                <p className="font-medium">{booking?.customer_name}</p>
+                <p className="font-medium">{booking?.customer_name || 'N/A'}</p>
               </div>
               <div>
                 <label className="text-sm text-gray-500">Contact</label>
                 <div className="flex items-center">
                   <Phone className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="font-medium">{booking?.customer_contact}</p>
+                  <p className="font-medium">{booking?.customer_contact || 'N/A'}</p>
                 </div>
                 {booking?.customer_email && (
                   <div className="flex items-center mt-1">
@@ -474,16 +481,32 @@ export default function BookingDetailsPage() {
                 )}
               </div>
               <div>
-                <label className="text-sm text-gray-500">Emergency Contact</label>
-                <p className="font-medium">{booking?.emergency_contact_name}</p>
-                <p className="text-sm text-gray-500">{booking?.emergency_contact_phone}</p>
+                <label className="text-sm text-gray-500">Aadhar Number</label>
+                <p className="font-medium">{booking?.aadhar_number || 'N/A'}</p>
               </div>
               <div>
-                <label className="text-sm text-gray-500">Address</label>
-                <p className="font-medium">Temporary</p>
-                <p className="text-sm text-gray-500">{booking?.temp_address}</p>
-                <p className="font-medium mt-2">Permanent</p>
-                <p className="text-sm text-gray-500">{booking?.perm_address}</p>
+                <label className="text-sm text-gray-500">Date of Birth</label>
+                <p className="font-medium">{booking?.date_of_birth ? new Date(booking.date_of_birth).toLocaleDateString() : 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500">Driving License Number</label>
+                <p className="font-medium">{booking?.dl_number || 'N/A'}</p>
+                {booking?.dl_expiry_date && (
+                  <p className="text-sm text-gray-500">Expires: {new Date(booking.dl_expiry_date).toLocaleDateString()}</p>
+                )}
+              </div>
+              <div>
+                <label className="text-sm text-gray-500">Emergency Contact</label>
+                <p className="font-medium">{booking?.emergency_contact_name || 'N/A'}</p>
+                <p className="text-sm text-gray-500">{booking?.emergency_contact_phone || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500">Temporary Address</label>
+                <p className="font-medium">{booking?.temp_address || 'N/A'}</p>
+              </div>
+              <div>
+                <label className="text-sm text-gray-500">Permanent Address</label>
+                <p className="font-medium">{booking?.perm_address || 'N/A'}</p>
               </div>
             </div>
           </div>

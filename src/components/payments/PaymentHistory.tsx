@@ -1,190 +1,135 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { EntityAuditInfo } from '@/components/ui/EntityAuditInfo';
+import { usePermissions } from '@/lib/usePermissions';
+import { format, formatDistanceToNow } from 'date-fns';
+import { User } from 'lucide-react';
 
 interface Payment {
   id: string;
   booking_id: string;
   amount: number;
-  payment_mode: string;
-  payment_status: string;
+  payment_mode: PaymentMode;
+  payment_status: PaymentStatus;
   created_at: string;
-  updated_at: string;
-  created_by: string | null;
-  updated_by: string | null;
-  created_by_user?: {
-    email: string;
-    username: string;
-  };
-  updated_by_user?: {
-    email: string;
-    username: string;
-  };
+  user: {
+    full_name: string | null;
+    email: string | null;
+  } | null;
 }
 
-interface PaymentHistoryProps {
-  bookingId: string;
-}
+type PaymentMode = 'CASH' | 'CARD' | 'UPI' | 'BANK_TRANSFER';
+type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
 
-export default function PaymentHistory({ bookingId }: PaymentHistoryProps) {
+export default function PaymentHistory({ bookingId }: { bookingId: string }) {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { isAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
 
   useEffect(() => {
-    fetchPaymentHistory();
-  }, [bookingId]);
+    if (!permissionsLoading) {
+      fetchPayments();
+    }
+  }, [bookingId, permissionsLoading]);
 
-  const fetchPaymentHistory = async () => {
-    if (!bookingId) return;
-    
+  const fetchPayments = async () => {
     try {
       setLoading(true);
+      setError(null);
+
       const supabase = getSupabaseClient();
       
-      console.log('Fetching payment history for booking:', bookingId);
-      
-      // First, get booking details to make sure we have the correct ID
-      const { data: bookingData, error: bookingError } = await supabase
-        .from('bookings')
-        .select('id, booking_id')
-        .eq('id', bookingId)
-        .single();
-      
-      if (bookingError) {
-        console.log('Error fetching booking by ID, trying booking_id field instead:', bookingError);
-        
-        // Try to find by booking_id field instead
-        const { data: altBookingData, error: altBookingError } = await supabase
-          .from('bookings')
-          .select('id, booking_id')
-          .eq('booking_id', bookingId)
-          .single();
-        
-        if (altBookingError) {
-          console.error('Could not find booking with either id or booking_id:', bookingId);
-          throw new Error('Booking not found');
-        }
-        
-        console.log('Found booking by booking_id field:', altBookingData);
-        fetchPaymentsForBooking(altBookingData.id);
-      } else {
-        console.log('Found booking by id:', bookingData);
-        fetchPaymentsForBooking(bookingData.id);
+      // Log permissions state
+      console.log('Permission check:', {
+        isAdmin,
+        hasManagePayments: hasPermission('managePayments')
+      });
+
+      if (!isAdmin && !hasPermission('managePayments')) {
+        throw new Error('You do not have permission to view payments');
       }
-    } catch (error) {
-      console.error('Error in payment history:', error);
-      setError('Failed to load payment history');
-      setLoading(false);
-    }
-  };
-  
-  const fetchPaymentsForBooking = async (dbBookingId: string) => {
-    try {
-      const supabase = getSupabaseClient();
-      
-      console.log('Fetching payments for booking ID:', dbBookingId);
-      
-      // First get the payments
+
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
-        .select('*')
-        .eq('booking_id', dbBookingId)
+        .select(`
+          id,
+          booking_id,
+          amount,
+          payment_mode,
+          payment_status,
+          created_at
+        `)
+        .eq('booking_id', bookingId)
         .order('created_at', { ascending: false });
-      
+
       if (paymentsError) {
-        console.error('Error fetching payments for booking:', paymentsError);
+        console.error('Error fetching payments:', paymentsError);
         throw paymentsError;
       }
 
-      // Then get the user information for each payment
-      const paymentsWithUsers = await Promise.all(
-        (paymentsData || []).map(async (payment) => {
-          if (!payment.created_by) return payment;
+      console.log('Payments found:', paymentsData);
+      
+      // Transform the data to match the Payment interface
+      const transformedPayments: Payment[] = (paymentsData || []).map((payment: any) => ({
+        id: payment.id,
+        booking_id: payment.booking_id,
+        amount: payment.amount,
+        payment_mode: payment.payment_mode as PaymentMode,
+        payment_status: payment.payment_status as PaymentStatus,
+        created_at: payment.created_at,
+        user: null // No user data available from the current schema
+      }));
 
-          const { data: userData, error: userError } = await supabase
-            .from('profiles')
-            .select('email, username')
-            .eq('id', payment.created_by)
-            .single();
-
-          return {
-            ...payment,
-            created_by_user: userData || undefined
-          };
-        })
-      );
-      
-      console.log('Payments found for booking:', paymentsWithUsers);
-      
-      if (!paymentsWithUsers || paymentsWithUsers.length === 0) {
-        console.log('No payments found for booking ID:', dbBookingId);
-      }
-      
-      setPayments(paymentsWithUsers || []);
-      setError(null);
-    } catch (error) {
-      console.error('Error fetching payments for booking:', error);
-      setError('Failed to load payment history');
+      setPayments(transformedPayments);
+    } catch (err) {
+      console.error('Error in fetchPayments:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch payments');
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="animate-pulse">
-        <div className="h-16 bg-gray-100 rounded-md mb-2"></div>
-        <div className="h-16 bg-gray-100 rounded-md"></div>
-      </div>
-    );
+    return <div className="text-center py-4">Loading payment history...</div>;
   }
 
   if (error) {
-    return (
-      <div className="text-red-500 text-sm py-2">
-        {error}
-      </div>
-    );
+    return <div className="text-red-500 py-4">{error}</div>;
   }
 
-  if (payments.length === 0) {
-    return (
-      <div className="text-sm text-gray-500 text-center py-4">
-        No payment history available
-      </div>
-    );
+  if (!payments.length) {
+    return <div className="text-gray-500 py-4">No payment history found.</div>;
   }
 
   return (
-    <div className="space-y-3">
-      {payments.map((payment) => (
-        <div key={payment.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-          <div className="flex-grow">
-            <div className="text-sm font-medium text-gray-900">
-              {formatCurrency(payment.amount)} via {payment.payment_mode}
-            </div>
-            <div className="text-xs text-gray-500">
-              {formatDate(payment.created_at)} at {new Date(payment.created_at).toLocaleTimeString()}
-            </div>
-            <div className="text-xs text-gray-500">
-              Added by {payment.created_by_user?.username || 'Unknown'}
+    <div className="bg-white rounded-lg p-6">
+      <div className="space-y-4">
+        {payments.map((payment) => (
+          <div key={payment.id} className="bg-gray-50 rounded-lg p-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <div className="text-lg font-medium">
+                  ₹{payment.amount} via {payment.payment_mode.toLowerCase()}
+                </div>
+                <div className="text-gray-500 text-sm">
+                  {format(new Date(payment.created_at), 'MMMM d, yyyy \'at\' h:mm:ss a')}
+                </div>
+                <div className="flex items-center mt-1 text-sm text-gray-500">
+                  <User className="h-3.5 w-3.5 mr-1" />
+                  {formatDistanceToNow(new Date(payment.created_at), { addSuffix: true })}
+                </div>
+              </div>
+              <div>
+                <span className="px-3 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                  {payment.payment_status.toLowerCase()}
+                </span>
+              </div>
             </div>
           </div>
-          <div>
-            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-              payment.payment_status === 'completed' 
-                ? 'bg-green-100 text-green-800' 
-                : 'bg-yellow-100 text-yellow-800'
-            }`}>
-              {payment.payment_status}
-            </span>
-          </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 } 

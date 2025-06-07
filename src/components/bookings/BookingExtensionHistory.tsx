@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { formatDate, formatCurrency } from '@/lib/utils';
-import { CalendarClock } from 'lucide-react';
+import { format } from 'date-fns';
 
 interface BookingExtension {
   id: string;
@@ -104,45 +103,53 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
   
   if (extensions.length === 0) {
     return (
-      <div className="p-6 text-center text-gray-500 border border-gray-200 rounded-lg bg-gray-50">
-        <CalendarClock className="h-8 w-8 mx-auto text-gray-400 mb-2" />
+      <div className="p-4 text-center text-gray-500">
         <p>No extension history available for this booking</p>
       </div>
     );
   }
   
+  // Format the time string to display in the desired format (HH:MM)
+  const formatTimeString = (timeStr: string) => {
+    // Extract hours and minutes from the time string (assuming format like "HH:MM:SS")
+    const match = timeStr.match(/(\d{1,2}):(\d{2})/);
+    if (match) {
+      const [_, hours, minutes] = match;
+      return `(${hours}:${minutes})`;
+    }
+    return timeStr;
+  };
+  
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-medium text-gray-900">Extension History</h3>
-      <div className="space-y-3">
+      <h2 className="text-xl font-semibold">Extension History</h2>
+      <div className="space-y-4">
         {extensions.map((extension) => (
-          <div key={extension.id} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
+          <div key={extension.id} className="bg-white border border-gray-100 rounded-lg p-4 shadow-sm">
             <div className="flex justify-between items-start">
               <div>
-                <div className="font-medium">{formatDate(extension.created_at)}</div>
-                <div className="text-sm text-gray-500">
-                  Extended by {extension.created_by_user?.username || 'Unknown'}
+                <div className="text-base font-medium">
+                  {format(new Date(extension.created_at), 'MMMM d, yyyy')}
+                </div>
+                <div className="text-gray-500 text-sm mt-1">
+                  By: {extension.created_by_user?.username || 'System'}
+                </div>
+                
+                <div className="mt-3 text-sm">
+                  <div className="mb-1">
+                    <span className="text-gray-500">From:</span> {format(new Date(extension.previous_end_date), 'MMMM d, yyyy')} {formatTimeString(extension.previous_dropoff_time)}
+                  </div>
+                  <div>
+                    <span className="text-gray-500">To:</span> {format(new Date(extension.new_end_date), 'MMMM d, yyyy')} {formatTimeString(extension.new_dropoff_time)}
+                  </div>
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-medium text-green-600">
-                  {formatCurrency(extension.additional_amount)}
+                <div className="font-medium text-green-600 text-lg">
+                  ₹{extension.additional_amount.toLocaleString('en-IN')}
                 </div>
               </div>
             </div>
-            <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-              <div>
-                <span className="text-gray-500">From:</span> {formatDate(extension.previous_end_date)} ({extension.previous_dropoff_time})
-              </div>
-              <div>
-                <span className="text-gray-500">To:</span> {formatDate(extension.new_end_date)} ({extension.new_dropoff_time})
-              </div>
-            </div>
-            {extension.reason && (
-              <div className="mt-2 text-sm text-gray-600 border-t border-gray-100 pt-2">
-                <span className="font-medium">Reason:</span> {extension.reason}
-              </div>
-            )}
           </div>
         ))}
       </div>

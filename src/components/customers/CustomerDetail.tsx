@@ -12,8 +12,21 @@ interface Customer {
   name: string
   email: string
   phone: string
+  dob: string | null
+  aadhar_number: string | null
+  dl_number: string | null
+  dl_expiry_date: string | null
   temp_address_street: string
+  temp_address_city: string | null
+  temp_address_state: string | null
+  temp_address_pincode: string | null
   perm_address_street: string
+  perm_address_city: string | null
+  perm_address_state: string | null
+  perm_address_pincode: string | null
+  emergency_contact_name: string | null
+  emergency_contact_phone: string | null
+  emergency_contact_relationship: string | null
   created_at: string
   documents: {
     customer_photo?: string;
@@ -154,36 +167,108 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <div className="px-6 py-4 space-y-4">
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">Name</h3>
-            <p className="mt-1 text-lg text-gray-900">{customer.name}</p>
+          {/* Personal Information */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Name</h3>
+              <p className="mt-1 text-lg text-gray-900">{customer.name}</p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Date of Birth</h3>
+              <p className="mt-1 text-lg text-gray-900">
+                {customer.dob ? new Date(customer.dob).toLocaleDateString() : 'N/A'}
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Email</h3>
+              <p className="mt-1 text-lg text-gray-900">{customer.email || 'N/A'}</p>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Phone</h3>
+              <p className="mt-1 text-lg text-gray-900">{customer.phone}</p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Aadhar Number</h3>
+              <p className="mt-1 text-lg text-gray-900">{customer.aadhar_number || 'N/A'}</p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-gray-500">Driving License</h3>
+              <p className="mt-1 text-lg text-gray-900">{customer.dl_number || 'N/A'}</p>
+              {customer.dl_expiry_date && (
+                <p className="text-sm text-gray-600">
+                  Expires: {new Date(customer.dl_expiry_date).toLocaleDateString()}
+                </p>
+              )}
+            </div>
           </div>
-          
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">Email</h3>
-            <p className="mt-1 text-lg text-gray-900">{customer.email || 'N/A'}</p>
+
+          {/* Emergency Contact */}
+          <div className="border-t pt-4">
+            <h3 className="text-sm font-medium text-gray-500">Emergency Contact</h3>
+            {customer.emergency_contact_name ? (
+              <div className="mt-1 space-y-1">
+                <p className="text-lg text-gray-900">{customer.emergency_contact_name}</p>
+                <p className="text-sm text-gray-600">
+                  {customer.emergency_contact_phone}
+                  {customer.emergency_contact_relationship && (
+                    <span className="ml-2">({customer.emergency_contact_relationship})</span>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <p className="mt-1 text-lg text-gray-500">N/A</p>
+            )}
           </div>
-          
-          <div>
-            <h3 className="text-sm font-medium text-gray-500">Phone</h3>
-            <p className="mt-1 text-lg text-gray-900">{customer.phone}</p>
+
+          {/* Addresses */}
+          <div className="border-t pt-4 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-sm font-medium text-gray-500">Temporary Address</h4>
+              {customer.temp_address_street ? (
+                <div className="mt-1 space-y-1">
+                  <p className="text-lg text-gray-900">{customer.temp_address_street}</p>
+                  <p className="text-sm text-gray-600">
+                    {[
+                      customer.temp_address_city,
+                      customer.temp_address_state,
+                      customer.temp_address_pincode
+                    ].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1 text-lg text-gray-500">N/A</p>
+              )}
+            </div>
+
+            <div>
+              <h4 className="text-sm font-medium text-gray-500">Permanent Address</h4>
+              {customer.perm_address_street ? (
+                <div className="mt-1 space-y-1">
+                  <p className="text-lg text-gray-900">{customer.perm_address_street}</p>
+                  <p className="text-sm text-gray-600">
+                    {[
+                      customer.perm_address_city,
+                      customer.perm_address_state,
+                      customer.perm_address_pincode
+                    ].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-1 text-lg text-gray-500">N/A</p>
+              )}
+            </div>
           </div>
-          
-          <div>
+
+          <div className="border-t pt-4">
             <h3 className="text-sm font-medium text-gray-500">Customer Since</h3>
             <p className="mt-1 text-lg text-gray-900">
               {new Date(customer.created_at).toLocaleDateString()}
             </p>
-          </div>
-
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-gray-500">Temporary Address</h4>
-            <p className="mt-1 text-sm text-gray-900">{customer.temp_address_street || 'N/A'}</p>
-          </div>
-
-          <div className="mt-4">
-            <h4 className="text-sm font-medium text-gray-500">Permanent Address</h4>
-            <p className="mt-1 text-sm text-gray-900">{customer.perm_address_street || 'N/A'}</p>
           </div>
         </div>
       </div>

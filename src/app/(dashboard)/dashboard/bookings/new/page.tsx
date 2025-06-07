@@ -60,7 +60,6 @@ export default function NewBookingPage() {
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const [signaturePad, setSignaturePad] = useState<SignaturePadType | null>(null);
 
-  // Memoize the initial form data
   const initialFormData = useMemo<FormData>(() => ({
     customer_name: '',
     customer_contact: '',
@@ -101,38 +100,24 @@ export default function NewBookingPage() {
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
 
-  // Get current time rounded up to the next 30-minute slot
   const getCurrentTime = () => {
     const now = new Date();
     const hours = now.getHours();
     const minutes = now.getMinutes();
-    
-    // Round up to the next 30-minute slot
-    if (minutes > 30) {
-      // If minutes > 30, round up to the next hour
-      return `${(hours + 1).toString().padStart(2, '0')}:00`;
-    } else if (minutes > 0) {
-      // If minutes > 0 but <= 30, round up to the next 30-minute mark
-      return `${hours.toString().padStart(2, '0')}:30`;
-    }
-    // If minutes = 0, use current hour
-    return `${hours.toString().padStart(2, '0')}:00`;
+    return `${hours.toString().padStart(2, '0')}:${minutes < 30 ? '30' : '00'}`;
   };
 
-  // Check if a time is in the past for today
   const isTimeInPast = (time: string) => {
     if (!time) return false;
     const today = new Date().toISOString().split('T')[0];
     if (formData.start_date !== today) return false;
-    
     const currentTime = getCurrentTime();
-    return time <= currentTime; // Changed from < to <= to include current time slot
+    return time <= currentTime;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
 
-    // Handle nested object updates
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
       if (parent === 'vehicle_details') {
@@ -147,92 +132,8 @@ export default function NewBookingPage() {
     } else {
       setFormData(prev => ({ ...prev, [name]: value }));
     }
-
-    // Clear any previous error
-    setError(null);
-
-    // Validate specific fields
-    if (name === 'customer_contact') {
-      if (!/^\d{10}$/.test(value)) {
-        setError('Customer contact must be a 10-digit number');
-      }
-    } else if (name === 'customer_email') {
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-        setError('Please enter a valid email address');
-      }
-    } else if (name === 'emergency_contact_phone') {
-      if (!/^\d{10}$/.test(value)) {
-        setError('Emergency contact must be a 10-digit number');
-      }
-    } else if (name === 'aadhar_number') {
-      if (!/^\d{12}$/.test(value)) {
-        setError('Aadhar number must be a 12-digit number');
-      }
-    } else if (name === 'dl_number') {
-      if (value.length < 8) {
-        setError('Driving license number must be at least 8 characters');
-      }
-    } else if (name === 'dl_expiry_date') {
-      const expiryDate = new Date(value);
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-      if (expiryDate < oneMonthAgo) {
-        setError('Driving license should not be expired for more than a month');
-      }
-    } else if (name === 'date_of_birth') {
-      const dob = new Date(value);
-      const today = new Date();
-      if (dob > today) {
-        setError('Date of birth cannot be in the future');
-      }
-    } else if (name === 'start_date') {
-      const startDate = new Date(value);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (startDate < today) {
-        setError('Start date cannot be in the past');
-      }
-      // Reset pickup time if it would be in the past
-      if (formData.pickup_time && isTimeInPast(formData.pickup_time)) {
-        setFormData(prev => ({ ...prev, pickup_time: '' }));
-      }
-    } else if (name === 'end_date') {
-      const endDate = new Date(value);
-      const startDate = new Date(formData.start_date);
-      if (endDate < startDate) {
-        setError('End date cannot be before start date');
-      }
-    } else if (name === 'pickup_time') {
-      if (isTimeInPast(value)) {
-        setError('Pickup time cannot be in the past');
-        return;
-      }
-      if (formData.start_date === formData.end_date && formData.dropoff_time && value >= formData.dropoff_time) {
-        setError('Pickup time must be before drop-off time on same day bookings');
-      }
-    } else if (name === 'dropoff_time') {
-      if (isTimeInPast(value)) {
-        setError('Drop-off time cannot be in the past');
-        return;
-      }
-      if (formData.start_date === formData.end_date && formData.pickup_time && value <= formData.pickup_time) {
-        setError('Drop-off time must be after pickup time on same day bookings');
-      }
-    } else if (name === 'booking_amount' || name === 'security_deposit_amount' || name === 'paid_amount') {
-      const amount = parseFloat(value);
-      if (amount < 0) {
-        setError('Amount cannot be negative');
-      }
-      if (name === 'paid_amount') {
-        const totalAmount = parseFloat(formData.total_amount);
-        if (amount > totalAmount) {
-          setError('Paid amount cannot exceed total amount');
-        }
-      }
-    }
   };
 
-  // Calculate total amount when booking amount or security deposit changes
   useEffect(() => {
     const bookingAmt = parseFloat(formData.booking_amount) || 0;
     const securityAmt = parseFloat(formData.security_deposit_amount) || 0;
@@ -240,7 +141,6 @@ export default function NewBookingPage() {
     setFormData(prev => ({ ...prev, total_amount: total.toString() }));
   }, [formData.booking_amount, formData.security_deposit_amount]);
 
-  // Update paid amount when payment status changes to full
   useEffect(() => {
     if (formData.payment_status === 'full') {
       setFormData(prev => ({ ...prev, paid_amount: formData.total_amount }));
@@ -249,13 +149,11 @@ export default function NewBookingPage() {
     }
   }, [formData.payment_status, formData.total_amount]);
 
-  // Check for existing customer documents when Aadhar number changes
   useEffect(() => {
     const checkExistingCustomer = async () => {
       if (formData.aadhar_number.length === 12) {
         const supabase = getSupabaseClient();
         
-        // First find the customer by Aadhar number
         const { data: customers, error: customerError } = await supabase
           .from('customers')
           .select('*')
@@ -270,7 +168,6 @@ export default function NewBookingPage() {
         if (customers && customers.length > 0) {
           const customer = customers[0];
           setIsExistingCustomer(true);
-          // Pre-fill form data with existing customer info
           setFormData(prev => ({
             ...prev,
             customer_name: customer.name,
@@ -294,7 +191,6 @@ export default function NewBookingPage() {
           toast.success('Found existing customer - form pre-filled');
         } else {
           setIsExistingCustomer(false);
-          // Reset form data except Aadhar number
           const { aadhar_number } = formData;
           setFormData({
             ...initialFormData,
@@ -307,30 +203,21 @@ export default function NewBookingPage() {
     checkExistingCustomer();
   }, [formData.aadhar_number, initialFormData]);
 
-  // Get today's date in YYYY-MM-DD format for date inputs
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
-  
-  // Calculate maximum date for DOB (18 years ago)
   const maxDOB = useMemo(() => {
     const date = new Date();
     date.setFullYear(date.getFullYear() - 18);
     return date.toISOString().split('T')[0];
   }, []);
   
-  // Calculate minimum date for DL expiry (today)
   const minDLExpiry = today;
-
-  // Calculate minimum end date based on start date
   const minEndDate = formData.start_date || today;
-
-  // Calculate maximum start date (1 year from today)
   const maxStartDate = useMemo(() => {
     const date = new Date();
     date.setFullYear(date.getFullYear() + 1);
     return date.toISOString().split('T')[0];
   }, []);
 
-  // Calculate maximum end date (30 days from start date)
   const maxEndDate = useMemo(() => {
     const date = formData.start_date ? new Date(formData.start_date) : new Date();
     date.setDate(date.getDate() + 30);
@@ -368,13 +255,9 @@ export default function NewBookingPage() {
 
     try {
       const supabase = getSupabaseClient();
-
-      // Generate a new booking ID
       const bookingId = await generateBookingId(supabase);
 
-      // Validate required fields based on customer type
       if (!isExistingCustomer) {
-        // Validate all fields for new customers
         if (!formData.customer_name || !formData.customer_contact || !formData.customer_email ||
             !formData.emergency_contact_name || !formData.emergency_contact_phone ||
             !formData.aadhar_number || !formData.date_of_birth ||
@@ -384,7 +267,6 @@ export default function NewBookingPage() {
         }
       }
 
-      // First, check if customer exists
       let customerId: string;
       const { data: existingCustomers, error: customerCheckError } = await supabase
         .from('customers')
@@ -397,10 +279,8 @@ export default function NewBookingPage() {
       }
 
       if (existingCustomers && existingCustomers.length > 0) {
-        // Use existing customer
         customerId = existingCustomers[0].id;
         
-        // Update existing customer information if needed
         const { error: customerUpdateError } = await supabase
           .from('customers')
           .update({
@@ -420,11 +300,9 @@ export default function NewBookingPage() {
           .eq('id', customerId);
 
         if (customerUpdateError) {
-          console.error('Customer update error:', customerUpdateError);
           throw new Error(`Failed to update customer: ${customerUpdateError.message}`);
         }
       } else {
-        // Create new customer only if no existing customer found
         const { data: newCustomer, error: customerCreateError } = await supabase
           .from('customers')
           .insert({
@@ -446,18 +324,16 @@ export default function NewBookingPage() {
           .single();
 
         if (customerCreateError || !newCustomer) {
-          console.error('Customer creation error:', customerCreateError);
           throw new Error(`Failed to create customer: ${customerCreateError?.message}`);
         }
 
         customerId = newCustomer.id;
       }
 
-      // Create the booking
-      const { error: bookingError } = await supabase
+      const { data: newBooking, error: bookingError } = await supabase
         .from('bookings')
         .insert({
-          id: bookingId,
+          booking_id: bookingId,
           customer_id: customerId,
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
@@ -475,34 +351,33 @@ export default function NewBookingPage() {
           payment_mode: formData.payment_mode,
           status: formData.status,
           created_by: (await supabase.auth.getUser()).data.user?.id
-        });
+        })
+        .select('id')
+        .single();
 
-      if (bookingError) {
-        throw new Error(`Failed to create booking: ${bookingError.message}`);
+      if (bookingError || !newBooking) {
+        throw new Error(`Failed to create booking: ${bookingError?.message}`);
       }
 
-      // Store the signature in the booking_signatures table
       if (formData.signature) {
         const { error: signatureError } = await supabase
           .from('booking_signatures')
           .insert({
-            booking_id: bookingId,
+            booking_id: newBooking.id,
             signature_data: formData.signature,
             created_at: new Date().toISOString()
           });
 
         if (signatureError) {
           console.error('Signature error details:', signatureError);
-          throw new Error(`Failed to save signature: ${signatureError.message}`);
         }
       }
 
-      // Create initial payment record if paid amount is greater than 0
       if (parseFloat(formData.paid_amount) > 0) {
         const { error: paymentError } = await supabase
           .from('payments')
           .insert({
-            booking_id: bookingId,
+            booking_id: newBooking.id,
             amount: parseFloat(formData.paid_amount),
             payment_mode: formData.payment_mode,
             payment_status: 'completed',
@@ -512,7 +387,6 @@ export default function NewBookingPage() {
 
         if (paymentError) {
           console.error('Payment creation error:', paymentError);
-          // Don't throw error here, just log it since booking is already created
         }
       }
 
@@ -533,9 +407,8 @@ export default function NewBookingPage() {
           <button
             onClick={() => router.back()}
             className="flex items-center text-gray-600 hover:text-gray-900"
-            aria-label="Back to Bookings"
           >
-            <ArrowLeft className="h-4 w-4 mr-2" aria-hidden="true" />
+            <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Bookings
           </button>
         </div>
@@ -547,9 +420,9 @@ export default function NewBookingPage() {
             </h1>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6" aria-label="Booking Form">
+          <form onSubmit={handleSubmit} className="p-6">
             {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md mb-6" role="alert">
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md mb-6">
                 {error}
               </div>
             )}
@@ -1103,14 +976,14 @@ export default function NewBookingPage() {
               <button
                 type="button"
                 onClick={() => router.back()}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50"
               >
                 {loading ? 'Creating...' : 'Create Booking'}
               </button>
