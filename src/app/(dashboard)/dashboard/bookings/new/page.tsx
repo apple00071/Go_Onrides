@@ -285,16 +285,16 @@ export default function NewBookingPage() {
           .from('customers')
           .update({
             name: formData.customer_name,
-            email: formData.customer_email,
+            email: formData.customer_email || null,
             emergency_contact_name: formData.emergency_contact_name,
             emergency_contact_phone: formData.emergency_contact_phone,
             emergency_contact_relationship: 'emergency',
-            dob: formData.date_of_birth,
+            dob: formData.date_of_birth || null,
             aadhar_number: formData.aadhar_number,
             dl_number: formData.dl_number,
-            dl_expiry_date: formData.dl_expiry_date,
-            temp_address_street: formData.temp_address,
-            perm_address_street: formData.perm_address,
+            dl_expiry_date: formData.dl_expiry_date || null,
+            temp_address_street: formData.temp_address || '',
+            perm_address_street: formData.perm_address || '',
             documents: formData.documents
           })
           .eq('id', customerId);
@@ -307,17 +307,17 @@ export default function NewBookingPage() {
           .from('customers')
           .insert({
             name: formData.customer_name,
-            email: formData.customer_email,
+            email: formData.customer_email || null,
             phone: formData.customer_contact,
             emergency_contact_name: formData.emergency_contact_name,
             emergency_contact_phone: formData.emergency_contact_phone,
             emergency_contact_relationship: 'emergency',
-            dob: formData.date_of_birth,
+            dob: formData.date_of_birth || null,
             aadhar_number: formData.aadhar_number,
             dl_number: formData.dl_number,
-            dl_expiry_date: formData.dl_expiry_date,
-            temp_address_street: formData.temp_address,
-            perm_address_street: formData.perm_address,
+            dl_expiry_date: formData.dl_expiry_date || null,
+            temp_address_street: formData.temp_address || '',
+            perm_address_street: formData.perm_address || '',
             documents: formData.documents
           })
           .select('id')
@@ -337,7 +337,15 @@ export default function NewBookingPage() {
           customer_id: customerId,
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
-          customer_email: formData.customer_email,
+          customer_email: formData.customer_email || null,
+          emergency_contact_name: formData.emergency_contact_name,
+          emergency_contact_phone: formData.emergency_contact_phone,
+          aadhar_number: formData.aadhar_number,
+          date_of_birth: formData.date_of_birth || null,
+          dl_number: formData.dl_number,
+          dl_expiry_date: formData.dl_expiry_date || null,
+          temp_address: formData.temp_address || '',
+          perm_address: formData.perm_address || '',
           vehicle_details: formData.vehicle_details,
           start_date: formData.start_date,
           end_date: formData.end_date,

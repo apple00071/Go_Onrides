@@ -86,9 +86,9 @@ export async function generateBookingId(supabase: SupabaseClient): Promise<strin
       .from('bookings')
       .select('booking_id')
       .eq('booking_id', bookingId)
-      .single();
+      .maybeSingle(); // Use maybeSingle instead of single to avoid 406 error
 
-    if (verifyError && verifyError.code !== 'PGRST116') { // Ignore "no rows returned" error
+    if (verifyError) {
       console.error('Verification error:', verifyError);
       throw new Error(`Failed to verify booking ID: ${verifyError.message || 'Unknown error occurred'}`);
     }
@@ -101,7 +101,7 @@ export async function generateBookingId(supabase: SupabaseClient): Promise<strin
     return bookingId;
   } catch (error) {
     console.error('Error in generateBookingId:', error);
-    throw new Error(`Failed to generate booking ID: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);    
+    throw new Error(`Failed to generate booking ID: ${error instanceof Error ? error.message : 'Unknown error occurred'}`);
   }
 }
 
