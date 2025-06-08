@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { User } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
 
@@ -62,7 +62,7 @@ export function EntityAuditInfo({
             <div className="flex items-center gap-1">
               <User className="h-3 w-3" />
               <span>
-                {formatDistanceToNow(new Date(createdAt), { addSuffix: true })}
+                {format(new Date(createdAt), 'MMM d, yyyy h:mm a')}
               </span>
             </div>
           </TooltipTrigger>

@@ -136,17 +136,6 @@ export default function PaymentInformation({ booking, onPaymentCreated }: Paymen
                 {booking.payment_status.charAt(0).toUpperCase() + booking.payment_status.slice(1)}
               </span>
             </div>
-            {booking.payment_mode && (
-              <div>
-                <label className="text-sm text-gray-500">Payment Mode</label>
-                <div className="flex items-center mt-1">
-                  <CreditCard className="h-4 w-4 mr-1 text-gray-500" />
-                  <span className="text-sm font-medium">
-                    {booking.payment_mode.charAt(0).toUpperCase() + booking.payment_mode.slice(1)}
-                  </span>
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -156,6 +145,7 @@ export default function PaymentInformation({ booking, onPaymentCreated }: Paymen
           isOpen={showPaymentModal}
           onClose={() => setShowPaymentModal(false)}
           onPaymentCreated={handlePaymentCreated}
+          initialBookingId={booking.id}
         />
       )}
     </div>

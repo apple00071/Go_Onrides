@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import { fetchNotifications, markNotificationsAsRead } from '@/lib/notification';
 import { Notification } from '@/types/notifications';
-import { formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import Link from 'next/link';
 
 export default function NotificationBell() {
@@ -137,7 +137,7 @@ export default function NotificationBell() {
                     <div className="flex justify-between items-start">
                       <p className="text-sm font-medium text-gray-900">{notification.title}</p>
                       <span className="text-xs text-gray-500">
-                        {formatDistanceToNow(new Date(notification.created_at), { addSuffix: true })}
+                        {format(new Date(notification.created_at), 'MMM d, yyyy h:mm a')}
                       </span>
                     </div>
                     <p className="text-xs text-gray-600 mt-1">{notification.message}</p>

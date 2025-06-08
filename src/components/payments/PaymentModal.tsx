@@ -28,29 +28,47 @@ interface PaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   onPaymentCreated: () => void;
+  initialBookingId?: string;
 }
 
 export default function PaymentModal({
   isOpen,
   onClose,
-  onPaymentCreated
+  onPaymentCreated,
+  initialBookingId
 }: PaymentModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bookings, setBookings] = useState<BookingWithPayments[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<BookingWithPayments | null>(null);
   const [formData, setFormData] = useState({
-    booking_id: '',
+    booking_id: initialBookingId || '',
     amount: '',
-    payment_mode: 'cash',
-    payment_date: new Date().toISOString().split('T')[0]
+    payment_mode: 'cash'
   });
 
   useEffect(() => {
     if (isOpen) {
-      fetchBookings();
+      console.log('Modal opened with initialBookingId:', initialBookingId);
+      fetchBookings().then(() => {
+        // If initialBookingId is provided, select that booking
+        if (initialBookingId) {
+          console.log('Setting initial booking:', initialBookingId);
+          const booking = bookings.find(b => b.id === initialBookingId);
+          if (booking) {
+            console.log('Found initial booking:', booking);
+            setSelectedBooking(booking);
+            setFormData(prev => ({
+              ...prev,
+              booking_id: initialBookingId
+            }));
+          } else {
+            console.log('Initial booking not found in bookings list');
+          }
+        }
+      });
     }
-  }, [isOpen]);
+  }, [isOpen, initialBookingId, bookings]);
 
   const fetchBookings = async () => {
     try {
@@ -72,9 +90,8 @@ export default function PaymentModal({
           status,
           total_amount
         `)
-        .in('status', ['confirmed', 'in_use', 'pending'])
-        .in('payment_status', ['pending', 'partial'])
-        .order('created_at', { ascending: false });
+        .eq('id', initialBookingId)
+        .single();
 
       if (bookingsError) {
         console.error('Booking fetch error:', bookingsError);
@@ -83,44 +100,41 @@ export default function PaymentModal({
 
       console.log('Raw bookings data:', bookingsData);
 
-      if (!bookingsData || bookingsData.length === 0) {
-        console.log('No bookings found');
+      if (!bookingsData) {
+        console.log('No booking found');
         setBookings([]);
         return;
       }
 
-      // Process bookings to calculate remaining amounts
-      const processedBookings = bookingsData.map(booking => {
-        const totalAmount = Number(booking.booking_amount) + Number(booking.security_deposit_amount);
-        const paidAmount = Number(booking.paid_amount) || 0;
-        const remainingAmount = totalAmount - paidAmount;
+      // Process booking to calculate remaining amount
+      const totalAmount = Number(bookingsData.booking_amount) + Number(bookingsData.security_deposit_amount);
+      const paidAmount = Number(bookingsData.paid_amount) || 0;
+      const remainingAmount = totalAmount - paidAmount;
 
-        console.log(`Processing booking ${booking.booking_id}:`, {
-          bookingAmount: booking.booking_amount,
-          securityDeposit: booking.security_deposit_amount,
-          totalAmount,
-          paidAmount,
-          remainingAmount
-        });
-
-        return {
-          ...booking,
-          total_amount: totalAmount,
-          paid_amount: paidAmount,
-          remaining_amount: remainingAmount
-        };
+      console.log('Processing booking:', {
+        bookingAmount: bookingsData.booking_amount,
+        securityDeposit: bookingsData.security_deposit_amount,
+        totalAmount,
+        paidAmount,
+        remainingAmount
       });
 
-      // Show all bookings that have any remaining amount to be paid
-      const bookingsWithPendingPayments = processedBookings.filter(
-        booking => booking.remaining_amount > 0
-      );
+      const processedBooking = {
+        ...bookingsData,
+        total_amount: totalAmount,
+        paid_amount: paidAmount,
+        remaining_amount: remainingAmount
+      };
 
-      console.log('Bookings with pending payments:', bookingsWithPendingPayments);
-      setBookings(bookingsWithPendingPayments);
+      setBookings([processedBooking]);
+      setSelectedBooking(processedBooking);
+      setFormData(prev => ({
+        ...prev,
+        booking_id: processedBooking.id
+      }));
     } catch (error) {
-      console.error('Error fetching bookings:', error);
-      setError(error instanceof Error ? error.message : 'Failed to fetch bookings');
+      console.error('Error fetching booking:', error);
+      setError(error instanceof Error ? error.message : 'Failed to fetch booking');
     }
   };
 
@@ -150,96 +164,126 @@ export default function PaymentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedBooking) return;
+    console.log('Form submitted with data:', formData);
+    console.log('Selected booking:', selectedBooking);
+
+    if (!selectedBooking) {
+      setError('Please select a booking');
+      return;
+    }
+
+    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    if (!formData.payment_mode) {
+      setError('Please select a payment mode');
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
     try {
       const supabase = getSupabaseClient();
-      const amount = parseFloat(formData.amount);
+      const amount = Number(formData.amount);
+
+      // Validate amount against remaining balance
+      if (amount > selectedBooking.remaining_amount) {
+        throw new Error(`Amount cannot exceed remaining balance of ${formatCurrency(selectedBooking.remaining_amount)}`);
+      }
 
       // Get current user for the notification
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
       
-      console.log('Creating payment record for booking:', {
-        bookingId: formData.booking_id,
+      console.log('Creating payment record with data:', {
+        booking_id: selectedBooking.id,
         amount,
-        paymentMode: formData.payment_mode
+        payment_mode: formData.payment_mode,
+        created_by: user.id
       });
       
       // Create the payment record
       const { data: paymentData, error: paymentError } = await supabase
         .from('payments')
-        .insert({
-          booking_id: formData.booking_id,
-          amount: Number(amount),
+        .insert([{
+          booking_id: selectedBooking.id,
+          amount: amount,
           payment_mode: formData.payment_mode,
           payment_status: 'completed',
           created_at: new Date().toISOString(),
-          created_by: user?.id
-        })
+          created_by: user.id
+        }])
         .select()
         .single();
 
       if (paymentError) {
         console.error('Payment creation error:', paymentError);
-        throw paymentError;
+        throw new Error(paymentError.message);
+      }
+
+      if (!paymentData) {
+        throw new Error('Payment was created but no data was returned');
       }
 
       console.log('Created payment record successfully:', paymentData);
 
-      // Get all payments for this booking to calculate the total paid amount
-      const { data: allPayments, error: paymentsError } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('booking_id', formData.booking_id)
-        .eq('payment_status', 'completed');
-
-      if (paymentsError) {
-        console.error('Error fetching all payments:', paymentsError);
-        throw paymentsError;
-      }
-
-      // Calculate total paid amount from all payments
-      const totalPaidAmount = allPayments.reduce((sum, payment) => sum + Number(payment.amount), 0);
-      const totalRequired = selectedBooking.booking_amount + selectedBooking.security_deposit_amount;
-      const paymentStatus = totalPaidAmount >= totalRequired ? 'full' : 'partial';
+      // Calculate new paid amount and status
+      const newPaidAmount = Number(selectedBooking.paid_amount || 0) + amount;
+      const totalRequired = Number(selectedBooking.booking_amount) + Number(selectedBooking.security_deposit_amount);
+      const paymentStatus = newPaidAmount >= totalRequired ? 'full' : 'partial';
 
       console.log('Updating booking payment details:', {
-        totalPaidAmount,
+        newPaidAmount,
         totalRequired,
-        paymentStatus
+        paymentStatus,
+        booking_id: selectedBooking.id
       });
 
       // Update the booking's payment status and paid amount
       const { error: bookingUpdateError } = await supabase
         .from('bookings')
         .update({
-          paid_amount: totalPaidAmount,
+          paid_amount: newPaidAmount,
           payment_status: paymentStatus,
-          payment_mode: formData.payment_mode
+          payment_mode: formData.payment_mode,
+          updated_at: new Date().toISOString(),
+          updated_by: user.id
         })
-        .eq('id', formData.booking_id);
+        .eq('id', selectedBooking.id);
 
       if (bookingUpdateError) {
         console.error('Booking update error:', bookingUpdateError);
-        throw bookingUpdateError;
+        // If booking update fails, we should delete the payment we just created
+        await supabase
+          .from('payments')
+          .delete()
+          .eq('id', paymentData.id);
+        throw new Error('Failed to update booking payment status');
       }
 
       // Send notification about the payment
-      await notifyPaymentEvent(
-        'PAYMENT_CREATED',
-        paymentData.id,
-        {
-          amount: amount,
-          bookingId: selectedBooking.booking_id,
-          customerName: selectedBooking.customer_name,
-          actionBy: user?.email || 'Unknown User'
-        }
-      );
+      try {
+        await notifyPaymentEvent(
+          'PAYMENT_CREATED',
+          paymentData.id,
+          {
+            amount: amount,
+            bookingId: selectedBooking.booking_id,
+            customerName: selectedBooking.customer_name,
+            actionBy: user.email || 'Unknown User'
+          }
+        );
+      } catch (notifyError) {
+        console.error('Notification error:', notifyError);
+        // Don't throw here, as the payment was successful
+      }
 
-      toast.success('Payment recorded successfully');
+      toast.success('Payment added successfully');
       onClose();
       if (onPaymentCreated) {
         onPaymentCreated();
@@ -284,6 +328,7 @@ export default function PaymentModal({
               value={formData.booking_id}
               onChange={handleBookingChange}
               className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+              disabled={!!initialBookingId}
             >
               <option value="">Select a booking</option>
               {bookings.map((booking) => (
@@ -353,20 +398,6 @@ export default function PaymentModal({
             </select>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Payment Date
-            </label>
-            <input
-              type="date"
-              name="payment_date"
-              required
-              value={formData.payment_date}
-              onChange={handleInputChange}
-              className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
-
           <div className="flex justify-end space-x-3 pt-4 border-t">
             <button
               type="button"
@@ -380,7 +411,7 @@ export default function PaymentModal({
               disabled={loading || !selectedBooking || !formData.amount}
               className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? 'Creating...' : 'Create Payment'}
+              {loading ? 'Adding...' : 'Add Payment'}
             </button>
           </div>
         </form>

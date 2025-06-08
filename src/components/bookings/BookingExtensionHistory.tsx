@@ -129,7 +129,7 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
             <div className="flex justify-between items-start">
               <div>
                 <div className="text-base font-medium">
-                  {format(new Date(extension.created_at), 'MMMM d, yyyy')}
+                  {format(new Date(extension.created_at), 'MMMM d, yyyy h:mm a')}
                 </div>
                 <div className="text-gray-500 text-sm mt-1">
                   By: {extension.created_by_user?.username || 'System'}
