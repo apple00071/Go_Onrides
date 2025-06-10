@@ -4,10 +4,11 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
+import { validateFileType, validateAadhaarDocument, type DocumentType } from '@/lib/documentValidation';
 
 interface DocumentUploadProps {
   customerId: string;
-  documentType: 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
+  documentType: DocumentType;
   onUploadComplete: (url: string) => void;
   existingUrl?: string;
 }
@@ -21,41 +22,53 @@ export default function DocumentUpload({
   existingUrl
 }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false);
+  const [validating, setValidating] = useState(false);
   const [preview, setPreview] = useState<string | null>(existingUrl || null);
   const [error, setError] = useState<string | null>(null);
 
   const handleFileSelection = async () => {
     try {
-      // Create a file input element programmatically
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
+      fileInput.accept = 'image/*';
       
-      // Don't specify accept type to encourage showing all options
-      // This approach will force the OS to ask the user which app to use
-      
-      // Set up the onchange event handler
       fileInput.onchange = async (e: Event) => {
         const target = e.target as HTMLInputElement;
         const file = target.files?.[0];
         
         if (!file) return;
         
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-          setError('Please upload an image file');
+        // Basic file validation
+        const fileValidation = validateFileType(file);
+        if (!fileValidation.isValid) {
+          setError(fileValidation.message);
           return;
         }
 
-        // Validate file size (max 5MB)
-        if (file.size > 5 * 1024 * 1024) {
-          setError('File size should be less than 5MB');
-          return;
+        // Additional validation for Aadhaar documents
+        if (documentType === 'aadhar_front' || documentType === 'aadhar_back') {
+          setValidating(true);
+          setError(null);
+          
+          try {
+            const aadhaarValidation = await validateAadhaarDocument(file);
+            if (!aadhaarValidation.isValid) {
+              setError(aadhaarValidation.message);
+              setValidating(false);
+              return;
+            }
+          } catch (err) {
+            setError('Error validating Aadhaar document. Please try again.');
+            setValidating(false);
+            return;
+          }
+          
+          setValidating(false);
         }
 
         await uploadFile(file);
       };
       
-      // Trigger the file dialog
       fileInput.click();
     } catch (err) {
       console.error('Error selecting document:', err);
@@ -160,14 +173,18 @@ export default function DocumentUpload({
             type="button"
             onClick={handleFileSelection}
             className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            disabled={uploading}
+            disabled={uploading || validating}
           >
             <Upload className="h-5 w-5 mr-2 text-gray-500" />
-            <span className="text-sm text-gray-700">Upload Document</span>
+            <span className="text-sm text-gray-700">
+              {validating ? 'Validating...' : uploading ? 'Uploading...' : 'Upload Document'}
+            </span>
           </button>
           
-          {uploading && (
-            <p className="text-center text-sm text-gray-500 mt-2">Uploading...</p>
+          {(uploading || validating) && (
+            <p className="text-center text-sm text-gray-500 mt-2">
+              {validating ? 'Validating document...' : 'Uploading...'}
+            </p>
           )}
         </div>
       )}

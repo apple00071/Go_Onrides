@@ -17,22 +17,45 @@ export async function fetchNotifications(
   } = {}
 ): Promise<NotificationsResponse> {
   const { unreadOnly = false, limit = 50, page = 0 } = options;
-  const supabase = getSupabaseClient();
-  
-  const params = new URLSearchParams({
-    unread: unreadOnly.toString(),
-    limit: limit.toString(),
-    page: page.toString()
-  });
-  
-  const response = await fetch(`/api/notifications?${params}`);
-  
-  if (!response.ok) {
-    const error = await response.json();
-    throw new Error(error.message || 'Failed to fetch notifications');
+  const maxRetries = 3;
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      const params = new URLSearchParams({
+        unread: unreadOnly.toString(),
+        limit: limit.toString(),
+        page: page.toString()
+      });
+      
+      const response = await fetch(`/api/notifications?${params}`, {
+        // Add credentials to ensure cookies are sent
+        credentials: 'include',
+        // Add headers to help with debugging
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || `HTTP error! status: ${response.status}`);
+      }
+      
+      return response.json();
+    } catch (error) {
+      console.error(`Attempt ${attempt + 1} failed:`, error);
+      lastError = error instanceof Error ? error : new Error('Failed to fetch notifications');
+      
+      if (attempt < maxRetries - 1) {
+        // Wait before retrying, using exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
   }
   
-  return response.json();
+  throw lastError || new Error('Failed to fetch notifications after multiple attempts');
 }
 
 /**

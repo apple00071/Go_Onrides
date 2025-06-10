@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download, ZoomIn } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -47,6 +47,12 @@ interface BookingDetailsData {
   paid_amount: number;
   payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
   status: BookingStatus;
+  completed_at?: string;
+  completed_by?: string;
+  completed_by_user?: {
+    email: string;
+    username: string;
+  };
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -66,7 +72,13 @@ interface BookingDetailsData {
     dl_front?: string;
     dl_back?: string;
   };
-  signature_url?: string;
+  vehicle_remarks?: string;
+  damage_charges: number;
+  refund_amount: number;
+  signatures?: {
+    bookingSignature?: string;
+    completionSignature?: string;
+  };
 }
 
 type BookingStatus = 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
@@ -101,7 +113,7 @@ export default function BookingDetailsPage() {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
-  const [signature, setSignature] = useState<string | null>(null);
+  const [signature, setSignature] = useState<{ bookingSignature?: string; completionSignature?: string } | null>(null);
   const { isAdmin, canEdit, hasPermission } = usePermissions();
 
   const fetchBookingDetails = async () => {
@@ -111,24 +123,33 @@ export default function BookingDetailsPage() {
       const bookingIdentifier = decodeURIComponent(params.id as string);
       const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(bookingIdentifier);
       
-      // Fetch booking details
+      // First fetch the booking details
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
-        .select(`
-          *,
-          created_by_user:profiles!bookings_created_by_fkey(
-            email,
-            username
-          ),
-          updated_by_user:profiles!bookings_updated_by_fkey(
-            email,
-            username
-          )
-        `)
+        .select('*')
         .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
         .single();
 
       if (bookingError) throw bookingError;
+
+      // Then fetch the user profiles
+      const [createdByUser, updatedByUser, completedByUser] = await Promise.all([
+        bookingData.created_by ? supabase
+          .from('profiles')
+          .select('email, username')
+          .eq('id', bookingData.created_by)
+          .maybeSingle() : Promise.resolve({ data: null }),
+        bookingData.updated_by ? supabase
+          .from('profiles')
+          .select('email, username')
+          .eq('id', bookingData.updated_by)
+          .maybeSingle() : Promise.resolve({ data: null }),
+        bookingData.completed_by ? supabase
+          .from('profiles')
+          .select('email, username')
+          .eq('id', bookingData.completed_by)
+          .maybeSingle() : Promise.resolve({ data: null })
+      ]);
 
       // Fetch customer documents
       const { data: customerData, error: customerError } = await supabase
@@ -137,17 +158,21 @@ export default function BookingDetailsPage() {
         .eq('id', bookingData.customer_id)
         .single();
 
-      // Fetch signature
-      const { data: signatureData, error: signatureError } = await supabase
+      // Fetch both initial and completion signatures
+      const { data: signaturesData, error: signatureError } = await supabase
         .from('booking_signatures')
-        .select('signature_data')
+        .select('signature_data, created_at')
         .eq('booking_id', bookingData.id)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
       if (signatureError) {
-        console.error('Error fetching signature:', signatureError);
-      } else if (signatureData) {
-        setSignature(signatureData.signature_data);
+        console.error('Error fetching signatures:', signatureError);
+      } else if (signaturesData && signaturesData.length > 0) {
+        // First signature is the booking signature, last signature is the completion signature
+        setSignature({
+          bookingSignature: signaturesData[0]?.signature_data,
+          completionSignature: signaturesData[signaturesData.length - 1]?.signature_data
+        });
       }
 
       const transformedBooking: BookingDetailsData = {
@@ -155,6 +180,12 @@ export default function BookingDetailsPage() {
         status: bookingData.status as BookingStatus,
         payment_status: bookingData.payment_status as BookingDetailsData['payment_status'],
         payment_mode: bookingData.payment_mode as BookingDetailsData['payment_mode'],
+        created_by_user: createdByUser.data || undefined,
+        updated_by_user: updatedByUser.data || undefined,
+        completed_by_user: completedByUser.data || undefined,
+        signatures: signature || undefined,
+        damage_charges: bookingData.damage_charges || 0,
+        refund_amount: bookingData.refund_amount || 0,
         documents: customerData?.documents || {
           customer_photo: '',
           aadhar_front: '',
@@ -274,7 +305,7 @@ export default function BookingDetailsPage() {
 
       const pdfBlob = await generateInvoice({
         ...booking,
-        signature: signature || undefined
+        signature: booking.signatures?.completionSignature || booking.signatures?.bookingSignature
       });
       
       // Create a download link
@@ -404,11 +435,16 @@ export default function BookingDetailsPage() {
                   )}
                 </div>
                 <p className="mt-2 text-sm text-gray-500">
-                  Created by {booking?.created_by_user?.username || 'Unknown'} on {formatDate(booking?.created_at || '')}
+                  Created by {booking?.created_by_user?.username || 'Unknown'} on {new Date(booking?.created_at || '').toLocaleString()}
                 </p>
-                {booking?.updated_by_user && booking.updated_at !== booking.created_at && (
+                {booking?.completed_at && (
                   <p className="text-sm text-gray-500">
-                    Last updated by {booking.updated_by_user.username} on {formatDate(booking.updated_at)}
+                    Completed by {booking?.completed_by_user?.username || 'Unknown'} on {new Date(booking.completed_at).toLocaleString()}
+                  </p>
+                )}
+                {booking?.updated_by_user && booking.updated_at !== booking.created_at && booking.updated_at !== booking.completed_at && (
+                  <p className="text-sm text-gray-500">
+                    Last updated by {booking.updated_by_user.username} on {new Date(booking.updated_at).toLocaleString()}
                   </p>
                 )}
               </div>
@@ -508,24 +544,20 @@ export default function BookingDetailsPage() {
                 <label className="text-sm text-gray-500">Permanent Address</label>
                 <p className="font-medium">{booking?.perm_address || 'N/A'}</p>
               </div>
+              {booking.signatures?.bookingSignature && (
+                <div className="col-span-1 md:col-span-2">
+                  <label className="text-sm text-gray-500">Booking Signature</label>
+                  <div className="border rounded-lg p-4 mt-1 max-w-md">
+                    <img
+                      src={booking.signatures.bookingSignature}
+                      alt="Booking Signature"
+                      className="max-w-full h-auto max-h-[150px] w-auto object-contain"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-
-          {/* Customer Signature Section */}
-          {signature && (
-            <div className="bg-white rounded-lg shadow p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Customer Signature</h2>
-              </div>
-              <div className="border rounded-lg p-4">
-                <img
-                  src={signature}
-                  alt="Customer Signature"
-                  className="max-w-full h-auto"
-                />
-              </div>
-            </div>
-          )}
 
           {/* Payment Information with Invoice Download */}
           <div className="bg-white rounded-lg shadow">
@@ -553,7 +585,7 @@ export default function BookingDetailsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
               {booking?.documents && Object.entries(booking.documents).map(([key, url]) => (
                 url ? (
-                  <div key={key} className="relative">
+                  <div key={key} className="relative group">
                     <button
                       onClick={() => handleImageClick(url, key.replace(/_/g, ' ').toUpperCase())}
                       className="w-full aspect-[3/2] relative rounded-lg overflow-hidden border border-gray-200 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -563,8 +595,11 @@ export default function BookingDetailsPage() {
                         alt={key.replace(/_/g, ' ')}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
-                        className="object-cover"
+                        className="object-cover transition-transform group-hover:scale-105"
                       />
+                      <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
+                        <ZoomIn className="text-white opacity-0 group-hover:opacity-100 h-6 w-6" />
+                      </div>
                     </button>
                     <p className="mt-1 text-sm text-gray-600 text-center">
                       {key.replace(/_/g, ' ').toUpperCase()}
@@ -574,6 +609,30 @@ export default function BookingDetailsPage() {
               ))}
             </div>
           </div>
+
+          {/* Image Modal */}
+          {selectedImage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75" onClick={() => setSelectedImage(null)}>
+              <div className="relative max-w-7xl w-full h-full p-4 flex items-center justify-center">
+                <button
+                  onClick={() => setSelectedImage(null)}
+                  className="absolute top-4 right-4 p-2 rounded-full bg-white text-gray-800 hover:bg-gray-100"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <img
+                    src={selectedImage}
+                    alt={selectedImageLabel}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                  <p className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-4 py-2 rounded-md">
+                    {selectedImageLabel}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right Column - History and Actions */}
@@ -591,10 +650,83 @@ export default function BookingDetailsPage() {
             <BookingExtensionHistory bookingId={booking?.id || ''} />
           </div>
 
-          {/* Vehicle Damage History */}
-          <div className="bg-white rounded-lg shadow p-6">
-            <VehicleDamageHistory bookingId={booking?.id || ''} />
-          </div>
+          {/* Completion Details Section */}
+          {booking?.status === 'completed' && (
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-xl font-semibold text-gray-900 mb-4">Vehicle Return & Completion Details</h2>
+              
+              {/* Completion Info */}
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900">Completion Information</h3>
+                  <p className="text-sm text-gray-500">
+                    Completed by {booking.completed_by_user?.username || 'Unknown'} on {new Date(booking.completed_at || '').toLocaleString()}
+                  </p>
+                </div>
+
+                {/* Vehicle Return Details */}
+                {booking.vehicle_remarks && (
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Vehicle Return Remarks</h3>
+                    <p className="mt-1 text-gray-600">{booking.vehicle_remarks}</p>
+                  </div>
+                )}
+
+                {/* Security Deposit Details */}
+                {booking.security_deposit_amount > 0 && (
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Security Deposit Settlement</h3>
+                    <div className="mt-2 space-y-2">
+                      <p className="text-sm text-gray-600">
+                        Initial Deposit: {formatCurrency(booking.security_deposit_amount)}
+                      </p>
+                      {booking.damage_charges > 0 && (
+                        <p className="text-sm text-red-600">
+                          Damage Charges: {formatCurrency(booking.damage_charges)}
+                        </p>
+                      )}
+                      <p className="text-sm font-medium text-gray-900">
+                        Final Refund: {formatCurrency(booking.refund_amount)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Booking Signature */}
+                {booking.signatures?.bookingSignature && (
+                  <div className="col-span-1 md:col-span-2">
+                    <label className="text-sm text-gray-500">Booking Signature</label>
+                    <div className="border rounded-lg p-4 mt-1 max-w-md">
+                      <img
+                        src={booking.signatures.bookingSignature}
+                        alt="Booking Signature"
+                        className="max-w-full h-auto max-h-[150px] w-auto object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Completion Signature */}
+                {booking.signatures?.completionSignature && (
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Return Confirmation Signature</h3>
+                    <div className="mt-2 border rounded-lg p-4 max-w-md">
+                      <img
+                        src={booking.signatures.completionSignature}
+                        alt="Return Confirmation Signature"
+                        className="max-w-full h-auto max-h-[150px] w-auto object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Vehicle Damage History */}
+              <div className="mt-6">
+                <VehicleDamageHistory bookingId={booking?.id || ''} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

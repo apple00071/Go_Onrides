@@ -56,14 +56,6 @@ interface BookingStats {
   pending: number;
 }
 
-interface StaffPerformance {
-  id: string;
-  name: string;
-  bookings_created: number;
-  customers_added: number;
-  documents_uploaded: number;
-}
-
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884D8'];
 const CHART_TYPES = ['line', 'bar', 'area'] as const;
 type ChartType = typeof CHART_TYPES[number];
@@ -97,7 +89,6 @@ export default function ReportsPage() {
     repeat_customers: 0,
     average_booking_value: 0
   });
-  const [staffPerformance, setStaffPerformance] = useState<StaffPerformance[]>([]);
   const [dateRange, setDateRange] = useState({
     from: addDays(new Date(), -30),
     to: new Date(),
@@ -301,30 +292,13 @@ export default function ReportsPage() {
 
       setVehicleUtilization(Object.values(vehicleStats));
 
-      // Only fetch staff performance if user is admin
-      if (isAdmin) {
-        // For now, create placeholder data for staff performance since we don't have created_by
-        // This can be replaced with actual implementation later
-        const placeholderStaffData: StaffPerformance[] = [
-          {
-            id: '1',
-            name: 'Admin User',
-            bookings_created: stats.total,
-            customers_added: customerMetrics.total_customers,
-            documents_uploaded: Math.floor(stats.total * 2)
-          }
-        ];
-        
-        setStaffPerformance(placeholderStaffData);
-      }
-
     } catch (error) {
       console.error('Error fetching report data:', error);
       setError(error instanceof Error ? error.message : 'Failed to fetch report data');
     } finally {
       setLoading(false);
     }
-  }, [dateRange, revenuePeriod, isAdmin]);
+  }, [dateRange, revenuePeriod]);
 
   useEffect(() => {
     fetchReportData();
@@ -741,37 +715,6 @@ export default function ReportsPage() {
             </div>
           </div>
         </Card>
-        
-        {/* Staff Performance - Only visible to admins */}
-        {isAdmin && staffPerformance.length > 0 && (
-          <Card className="p-6 md:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold">Staff Performance</h3>
-            </div>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={staffPerformance}
-                  margin={{
-                    top: 20,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="bookings_created" name="Bookings Created" fill="#8884d8" />
-                  <Bar dataKey="customers_added" name="Customers Added" fill="#82ca9d" />
-                  <Bar dataKey="documents_uploaded" name="Documents Uploaded" fill="#ffc658" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        )}
       </div>
     </div>
   );

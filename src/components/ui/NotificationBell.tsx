@@ -6,10 +6,12 @@ import { fetchNotifications, markNotificationsAsRead } from '@/lib/notification'
 import { Notification } from '@/types/notifications';
 import { format } from 'date-fns';
 import Link from 'next/link';
+import { toast } from 'react-hot-toast';
 
 export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -39,11 +41,14 @@ export default function NotificationBell() {
   // Load notifications data
   const loadNotifications = async () => {
     try {
+      setError(null);
       const result = await fetchNotifications({ limit: 10 });
       setNotifications(result.data);
       setUnreadCount(result.unread);
     } catch (error) {
       console.error('Failed to load notifications:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load notifications');
+      toast.error('Failed to load notifications. Please try again later.');
     } finally {
       setLoading(false);
     }
@@ -57,8 +62,10 @@ export default function NotificationBell() {
         prevNotifications.map(notification => ({ ...notification, is_read: true }))
       );
       setUnreadCount(0);
+      toast.success('All notifications marked as read');
     } catch (error) {
       console.error('Failed to mark notifications as read:', error);
+      toast.error('Failed to mark notifications as read. Please try again.');
     }
   };
 
@@ -76,11 +83,16 @@ export default function NotificationBell() {
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
+      toast.error('Failed to mark notification as read. Please try again.');
     }
   };
 
   // Toggle the notification dropdown
   const toggleDropdown = () => {
+    if (!isOpen) {
+      // Refresh notifications when opening the dropdown
+      loadNotifications();
+    }
     setIsOpen(prev => !prev);
   };
 
@@ -116,7 +128,18 @@ export default function NotificationBell() {
           
           {loading ? (
             <div className="px-4 py-6 text-center text-sm text-gray-500">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
               Loading notifications...
+            </div>
+          ) : error ? (
+            <div className="px-4 py-6 text-center">
+              <p className="text-sm text-red-500 mb-2">{error}</p>
+              <button 
+                onClick={loadNotifications}
+                className="text-xs text-blue-600 hover:text-blue-800"
+              >
+                Try again
+              </button>
             </div>
           ) : notifications.length === 0 ? (
             <div className="px-4 py-6 text-center text-sm text-gray-500">

@@ -5,6 +5,7 @@ import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import type { Database } from '@/types/database';
 
+// Increased token limit to allow more requests per IP
 const limiter = rateLimit({
   interval: 60 * 1000, // 1 minute
   uniqueTokenPerInterval: 500 // Max 500 users per interval
@@ -24,7 +25,9 @@ const adminSupabase = createClient<Database>(
   {
     auth: {
       autoRefreshToken: false,
-      persistSession: false
+      persistSession: false,
+      storageKey: 'admin-auth', // Add unique storage key for admin client
+      detectSessionInUrl: false // Disable session detection in URL
     },
     db: {
       schema: 'public'
@@ -34,13 +37,26 @@ const adminSupabase = createClient<Database>(
 
 export async function POST(request: Request) {
   try {
-    // Apply rate limiting
+    // Apply rate limiting with exponential backoff
     try {
-      await limiter.check(request, 5); // 5 requests per minute per IP
-    } catch {
+      await limiter.check(request, 20); // Increased to 20 requests per minute
+    } catch (rateLimitError: any) {
+      // Calculate remaining time until rate limit resets
+      const reset = rateLimitError.reset || Date.now() + 60000; // Default to 1 minute if reset not provided
+      const retryAfter = Math.ceil((reset - Date.now()) / 1000);
+      
       return NextResponse.json(
-        { error: 'Too many login attempts. Please try again later.' },
-        { status: 429 }
+        { 
+          error: 'Too many login attempts. Please try again later.',
+          retryAfter: retryAfter // Send retry-after time to client
+        },
+        { 
+          status: 429,
+          headers: {
+            'Retry-After': retryAfter.toString(),
+            'X-RateLimit-Reset': reset.toString()
+          }
+        }
       );
     }
 
