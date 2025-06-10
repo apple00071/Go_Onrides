@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { Upload, X, Camera, Image as ImageIcon } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, X, Camera, Image as ImageIcon, Loader2 } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
 import { validateFileType, validateAadhaarDocument, type DocumentType } from '@/lib/documentValidation';
+import CameraOverlay from '@/components/ui/CameraOverlay';
 
 interface DocumentUploadProps {
   customerId: string;
@@ -26,19 +27,44 @@ export default function DocumentUpload({
   const [preview, setPreview] = useState<string | null>(existingUrl || null);
   const [error, setError] = useState<string | null>(null);
   const [showUploadOptions, setShowUploadOptions] = useState(false);
+  const [showCameraOverlay, setShowCameraOverlay] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<string>('');
+  
+  // Create a hidden file input element
+  useEffect(() => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    document.body.appendChild(input);
+
+    return () => {
+      document.body.removeChild(input);
+    };
+  }, []);
+
+  const getOverlayType = () => {
+    if (documentType === 'customer_photo') return 'photo';
+    if (documentType.startsWith('aadhar_')) return 'aadhar';
+    if (documentType.startsWith('dl_')) return 'dl';
+    return 'photo';
+  };
 
   const handleFileSelection = async (captureMethod: 'camera' | 'gallery') => {
     try {
-      const fileInput = document.createElement('input');
-      fileInput.type = 'file';
-      fileInput.accept = 'image/*';
-      
-      // Set capture attribute for camera if selected
+      const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+      if (!fileInput) return;
+
+      // Configure file input
       if (captureMethod === 'camera') {
-        fileInput.setAttribute('capture', 'environment'); // 'environment' for back camera, 'user' for front camera
+        fileInput.setAttribute('capture', 'environment');
+        setShowCameraOverlay(true);
+      } else {
+        fileInput.removeAttribute('capture');
       }
       
       fileInput.onchange = async (e: Event) => {
+        setShowCameraOverlay(false);
         const target = e.target as HTMLInputElement;
         const file = target.files?.[0];
         
@@ -55,21 +81,32 @@ export default function DocumentUpload({
         if (documentType === 'aadhar_front' || documentType === 'aadhar_back') {
           setValidating(true);
           setError(null);
+          setOcrProgress('Initializing OCR...');
           
           try {
             const aadhaarValidation = await validateAadhaarDocument(file);
+            console.log('Validation result:', aadhaarValidation);
+            
             if (!aadhaarValidation.isValid) {
               setError(aadhaarValidation.message);
+              if (aadhaarValidation.debug) {
+                console.log('Validation debug info:', aadhaarValidation.debug);
+                if (aadhaarValidation.debug.matchedPatterns?.length > 0) {
+                  setError(`Document validation failed. Could not find all required Aadhaar card elements. Found: ${aadhaarValidation.debug.matchedPatterns.join(', ')}`);
+                }
+              }
               setValidating(false);
               return;
             }
           } catch (err) {
-            setError('Error validating Aadhaar document. Please try again.');
+            console.error('Validation error:', err);
+            setError('Error validating Aadhaar document. Please try again with a clearer image.');
             setValidating(false);
             return;
           }
           
           setValidating(false);
+          setOcrProgress('');
         }
 
         await uploadFile(file);
@@ -183,16 +220,25 @@ export default function DocumentUpload({
             className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             disabled={uploading || validating}
           >
-            <Upload className="h-5 w-5 mr-2 text-gray-500" />
+            {validating ? (
+              <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+            ) : (
+              <Upload className="h-5 w-5 mr-2 text-gray-500" />
+            )}
             <span className="text-sm text-gray-700">
               {validating ? 'Validating...' : uploading ? 'Uploading...' : 'Upload Document'}
             </span>
           </button>
           
           {(uploading || validating) && (
-            <p className="text-center text-sm text-gray-500 mt-2">
-              {validating ? 'Validating document...' : 'Uploading...'}
-            </p>
+            <div className="text-center space-y-1">
+              <p className="text-sm text-gray-500">
+                {validating ? 'Validating document...' : 'Uploading...'}
+              </p>
+              {ocrProgress && (
+                <p className="text-xs text-gray-400">{ocrProgress}</p>
+              )}
+            </div>
           )}
 
           {/* Upload Options Modal */}
@@ -225,11 +271,19 @@ export default function DocumentUpload({
               </div>
             </div>
           )}
+
+          {/* Camera Overlay */}
+          <CameraOverlay
+            documentType={getOverlayType()}
+            isVisible={showCameraOverlay}
+          />
         </div>
       )}
       
       {error && (
-        <p className="mt-1 text-sm text-red-600">{error}</p>
+        <div className="mt-1 p-2 bg-red-50 border border-red-200 rounded-md">
+          <p className="text-sm text-red-600">{error}</p>
+        </div>
       )}
     </div>
   );

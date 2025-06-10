@@ -41,7 +41,8 @@
     "sonner": "^2.0.5",
     "tailwind-merge": "^2.6.0",
     "tailwindcss-animate": "^1.0.7",
-    "tesseract.js": "^4.1.4"
+    "tesseract.js": "^4.1.4",
+    "tesseract.js-core": "^6.0.0"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.50.0",
