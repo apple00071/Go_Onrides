@@ -3,6 +3,10 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/database';
 
+// Mark routes as dynamic
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
+
 // GET endpoint to fetch notifications for the current user
 export async function GET(request: Request) {
   try {

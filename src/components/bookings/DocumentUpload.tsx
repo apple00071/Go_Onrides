@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, Camera, Image as ImageIcon } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
@@ -25,12 +25,18 @@ export default function DocumentUpload({
   const [validating, setValidating] = useState(false);
   const [preview, setPreview] = useState<string | null>(existingUrl || null);
   const [error, setError] = useState<string | null>(null);
+  const [showUploadOptions, setShowUploadOptions] = useState(false);
 
-  const handleFileSelection = async () => {
+  const handleFileSelection = async (captureMethod: 'camera' | 'gallery') => {
     try {
       const fileInput = document.createElement('input');
       fileInput.type = 'file';
       fileInput.accept = 'image/*';
+      
+      // Set capture attribute for camera if selected
+      if (captureMethod === 'camera') {
+        fileInput.setAttribute('capture', 'environment'); // 'environment' for back camera, 'user' for front camera
+      }
       
       fileInput.onchange = async (e: Event) => {
         const target = e.target as HTMLInputElement;
@@ -73,6 +79,8 @@ export default function DocumentUpload({
     } catch (err) {
       console.error('Error selecting document:', err);
       toast.error('Failed to open file picker');
+    } finally {
+      setShowUploadOptions(false);
     }
   };
 
@@ -171,7 +179,7 @@ export default function DocumentUpload({
         <div className="space-y-2">
           <button
             type="button"
-            onClick={handleFileSelection}
+            onClick={() => setShowUploadOptions(true)}
             className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
             disabled={uploading || validating}
           >
@@ -185,6 +193,37 @@ export default function DocumentUpload({
             <p className="text-center text-sm text-gray-500 mt-2">
               {validating ? 'Validating document...' : 'Uploading...'}
             </p>
+          )}
+
+          {/* Upload Options Modal */}
+          {showUploadOptions && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-lg p-6 w-80 space-y-4">
+                <h3 className="text-lg font-medium text-gray-900">Choose Upload Method</h3>
+                <div className="space-y-3">
+                  <button
+                    onClick={() => handleFileSelection('camera')}
+                    className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <Camera className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-700">Take Photo</span>
+                  </button>
+                  <button
+                    onClick={() => handleFileSelection('gallery')}
+                    className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <ImageIcon className="h-5 w-5 mr-2 text-gray-500" />
+                    <span className="text-sm text-gray-700">Choose from Gallery</span>
+                  </button>
+                  <button
+                    onClick={() => setShowUploadOptions(false)}
+                    className="flex items-center justify-center w-full py-2 px-4 text-sm text-gray-500 hover:text-gray-700"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
         </div>
       )}

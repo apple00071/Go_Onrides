@@ -3,6 +3,10 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { Permission } from '@/types/database'
 
+// Mark routes as dynamic
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
+
 export async function GET() {
   try {
     const cookieStore = cookies()
