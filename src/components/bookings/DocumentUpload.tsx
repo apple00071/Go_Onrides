@@ -4,7 +4,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import Image from 'next/image';
-import { validateFileType, validateAadhaarDocument, type DocumentType } from '@/lib/documentValidation';
+import { validateFileType, type DocumentType } from '@/lib/documentValidation';
 import CameraOverlay from '@/components/ui/CameraOverlay';
 
 interface DocumentUploadProps {
@@ -23,12 +23,10 @@ export default function DocumentUpload({
   existingUrl
 }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false);
-  const [validating, setValidating] = useState(false);
   const [preview, setPreview] = useState<string | null>(existingUrl || null);
   const [error, setError] = useState<string | null>(null);
   const [showUploadOptions, setShowUploadOptions] = useState(false);
   const [showCameraOverlay, setShowCameraOverlay] = useState(false);
-  const [ocrProgress, setOcrProgress] = useState<string>('');
   
   // Create a hidden file input element
   useEffect(() => {
@@ -77,38 +75,7 @@ export default function DocumentUpload({
           return;
         }
 
-        // Additional validation for Aadhaar documents
-        if (documentType === 'aadhar_front' || documentType === 'aadhar_back') {
-          setValidating(true);
-          setError(null);
-          setOcrProgress('Initializing OCR...');
-          
-          try {
-            const aadhaarValidation = await validateAadhaarDocument(file);
-            console.log('Validation result:', aadhaarValidation);
-            
-            if (!aadhaarValidation.isValid) {
-              setError(aadhaarValidation.message);
-              if (aadhaarValidation.debug) {
-                console.log('Validation debug info:', aadhaarValidation.debug);
-                if (aadhaarValidation.debug.matchedPatterns?.length > 0) {
-                  setError(`Document validation failed. Could not find all required Aadhaar card elements. Found: ${aadhaarValidation.debug.matchedPatterns.join(', ')}`);
-                }
-              }
-              setValidating(false);
-              return;
-            }
-          } catch (err) {
-            console.error('Validation error:', err);
-            setError('Error validating Aadhaar document. Please try again with a clearer image.');
-            setValidating(false);
-            return;
-          }
-          
-          setValidating(false);
-          setOcrProgress('');
-        }
-
+        // Upload the file directly
         await uploadFile(file);
       };
       
@@ -218,29 +185,24 @@ export default function DocumentUpload({
             type="button"
             onClick={() => setShowUploadOptions(true)}
             className="flex items-center justify-center w-full py-3 px-4 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            disabled={uploading || validating}
+            disabled={uploading}
           >
-            {validating ? (
+            {uploading ? (
               <Loader2 className="h-5 w-5 mr-2 animate-spin" />
             ) : (
               <Upload className="h-5 w-5 mr-2 text-gray-500" />
             )}
             <span className="text-sm text-gray-700">
-              {validating ? 'Validating...' : uploading ? 'Uploading...' : 'Upload Document'}
+              {uploading ? 'Uploading...' : 'Upload Document'}
             </span>
           </button>
           
-          {(uploading || validating) && (
+          {uploading && (
             <div className="text-center space-y-1">
-              <p className="text-sm text-gray-500">
-                {validating ? 'Validating document...' : 'Uploading...'}
-              </p>
-              {ocrProgress && (
-                <p className="text-xs text-gray-400">{ocrProgress}</p>
-              )}
+              <p className="text-sm text-gray-500">Uploading...</p>
             </div>
           )}
-
+          
           {/* Upload Options Modal */}
           {showUploadOptions && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

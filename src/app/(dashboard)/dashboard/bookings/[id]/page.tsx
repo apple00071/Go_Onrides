@@ -161,17 +161,22 @@ export default function BookingDetailsPage() {
       // Fetch both initial and completion signatures
       const { data: signaturesData, error: signatureError } = await supabase
         .from('booking_signatures')
-        .select('signature_data, created_at')
+        .select('signature_data, signature_type, created_at')
         .eq('booking_id', bookingData.id)
         .order('created_at', { ascending: true });
 
       if (signatureError) {
         console.error('Error fetching signatures:', signatureError);
       } else if (signaturesData && signaturesData.length > 0) {
-        // First signature is the booking signature, last signature is the completion signature
+        // Group signatures by type
+        const bookingSignature = signaturesData.find(s => s.signature_type === 'booking')?.signature_data || 
+                                 signaturesData[0]?.signature_data;
+        const completionSignature = signaturesData.find(s => s.signature_type === 'completion')?.signature_data || 
+                                    (signaturesData.length > 1 ? signaturesData[signaturesData.length - 1]?.signature_data : null);
+        
         setSignature({
-          bookingSignature: signaturesData[0]?.signature_data,
-          completionSignature: signaturesData[signaturesData.length - 1]?.signature_data
+          bookingSignature,
+          completionSignature
         });
       }
 
@@ -688,20 +693,6 @@ export default function BookingDetailsPage() {
                       <p className="text-sm font-medium text-gray-900">
                         Final Refund: {formatCurrency(booking.refund_amount)}
                       </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Booking Signature */}
-                {booking.signatures?.bookingSignature && (
-                  <div className="col-span-1 md:col-span-2">
-                    <label className="text-sm text-gray-500">Booking Signature</label>
-                    <div className="border rounded-lg p-4 mt-1 max-w-md">
-                      <img
-                        src={booking.signatures.bookingSignature}
-                        alt="Booking Signature"
-                        className="max-w-full h-auto max-h-[150px] w-auto object-contain"
-                      />
                     </div>
                   </div>
                 )}

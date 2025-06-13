@@ -15,6 +15,7 @@ import {
   RotateCw
 } from 'lucide-react';
 import { DatePickerWithRange } from '@/components/ui/date-range-picker';
+import type { DateRange } from "react-day-picker";
 
 export default function UserActivityLogs() {
   const [logs, setLogs] = useState<UserLog[]>([]);
@@ -27,16 +28,38 @@ export default function UserActivityLogs() {
     actionType: '',
     entityType: '',
     dateRange: {
-      from: new Date(new Date().setDate(new Date().getDate() - 30)),
-      to: new Date()
+      from: undefined as Date | undefined,
+      to: undefined as Date | undefined
     }
   });
 
+  // Set default date range after initial render to avoid hydration mismatch
   useEffect(() => {
-    fetchLogs();
-  }, [page, filters]);
+    setFilters(prev => ({
+      ...prev,
+      dateRange: {
+        from: new Date(new Date().setDate(new Date().getDate() - 30)),
+        to: new Date()
+      }
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (filters.dateRange.from && filters.dateRange.to) {
+      fetchLogs();
+    }
+  }, [page, filters.actionType, filters.entityType]);
+
+  // Separate effect for date range to avoid running on initial render
+  useEffect(() => {
+    if (filters.dateRange.from && filters.dateRange.to) {
+      fetchLogs();
+    }
+  }, [filters.dateRange]);
 
   const fetchLogs = async () => {
+    if (!filters.dateRange.from || !filters.dateRange.to) return;
+    
     setLoading(true);
     setError(null);
 
@@ -146,21 +169,23 @@ export default function UserActivityLogs() {
             <option value="vehicle">Vehicle</option>
           </select>
           
-          <DatePickerWithRange
-            date={filters.dateRange}
-            onSelect={(range) => {
-              if (range?.from && range?.to) {
-                setFilters(prev => ({
-                  ...prev, 
-                  dateRange: { 
-                    from: range.from as Date, 
-                    to: range.to as Date 
-                  }
-                }));
-                setPage(1);
-              }
-            }}
-          />
+          {filters.dateRange.from && filters.dateRange.to && (
+            <DatePickerWithRange
+              date={filters.dateRange}
+              onSelect={(range) => {
+                if (range?.from && range?.to) {
+                  setFilters(prev => ({
+                    ...prev, 
+                    dateRange: { 
+                      from: range.from, 
+                      to: range.to 
+                    }
+                  }));
+                  setPage(1);
+                }
+              }}
+            />
+          )}
           
           <button
             onClick={fetchLogs}

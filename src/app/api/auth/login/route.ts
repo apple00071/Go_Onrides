@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 import { rateLimit } from '@/lib/rate-limit';
 import type { Database } from '@/types/database';
 
+export const dynamic = 'force-dynamic';
+
 // Increased token limit to allow more requests per IP
 const limiter = rateLimit({
   interval: 60 * 1000, // 1 minute

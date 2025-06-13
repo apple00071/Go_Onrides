@@ -43,6 +43,7 @@ interface Customer {
   dl_number: string | null;
   dl_expiry_date: string | null;
   dob: string | null;
+  signature?: string | null;
 }
 
 interface CustomerDetails extends Customer {
@@ -68,6 +69,7 @@ export default function CustomerDetailsPage() {
   const [customer, setCustomer] = useState<CustomerDetails | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageLabel, setSelectedImageLabel] = useState<string>('');
+  const [signature, setSignature] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCustomerDetails = async () => {
@@ -136,10 +138,25 @@ export default function CustomerDetailsPage() {
         if (bookingsError) {
           console.error('Bookings fetch error:', bookingsError);
         }
+        
+        // Fetch customer's latest signature from booking_signatures
+        const { data: signaturesData, error: signatureError } = await supabase
+          .from('booking_signatures')
+          .select('signature_data, created_at')
+          .eq('customer_id', customerData.id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        if (signatureError) {
+          console.error('Error fetching signature:', signatureError);
+        } else if (signaturesData && signaturesData.length > 0) {
+          setSignature(signaturesData[0].signature_data);
+        }
 
         const customerWithDetails = {
           ...customerData,
-          bookings: bookingsData || []
+          bookings: bookingsData || [],
+          signature: signature
         } as CustomerDetails;
 
         console.log('Customer details:', customerWithDetails);
@@ -156,7 +173,7 @@ export default function CustomerDetailsPage() {
     };
 
     fetchCustomerDetails();
-  }, [params?.id]);
+  }, [params?.id, signature]);
 
   if (loading) {
     return (
@@ -340,6 +357,25 @@ export default function CustomerDetailsPage() {
                           alt="Customer Photo"
                           fill
                           className="object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
+                  {signature && (
+                    <div 
+                      className="cursor-pointer hover:opacity-75 transition-opacity"
+                      onClick={() => {
+                        setSelectedImage(signature);
+                        setSelectedImageLabel('Customer Signature');
+                      }}
+                    >
+                      <p className="text-sm font-medium text-gray-500 mb-2">Customer Signature</p>
+                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200 bg-white">
+                        <Image
+                          src={signature}
+                          alt="Customer Signature"
+                          fill
+                          className="object-contain p-2"
                         />
                       </div>
                     </div>

@@ -5,6 +5,8 @@ import LoginForm from '@/components/auth/LoginForm'
 import { Metadata } from 'next'
 import Image from 'next/image'
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Login - Goon Riders',
   description: 'Sign in to your Goon Riders account'

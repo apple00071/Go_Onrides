@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { Metadata } from 'next'
 
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: 'Workers',
   description: 'Manage workers'
