@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import CompleteBookingModal from './CompleteBookingModal';
 
 interface Booking {
   id: string;
@@ -31,8 +30,6 @@ interface BookingListProps {
 
 export default function BookingList({ bookings }: BookingListProps) {
   const router = useRouter();
-  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
-  const [showCompleteModal, setShowCompleteModal] = useState(false);
 
   const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800',
@@ -52,12 +49,7 @@ export default function BookingList({ bookings }: BookingListProps) {
 
   const handleCompleteClick = (e: React.MouseEvent, booking: Booking) => {
     e.stopPropagation(); // Prevent row click
-    setSelectedBooking(booking);
-    setShowCompleteModal(true);
-  };
-
-  const handleCompleteSuccess = () => {
-    router.refresh(); // Refresh the page to show updated data
+    router.push(`/dashboard/bookings/${encodeURIComponent(booking.booking_id)}/complete`);
   };
 
   const getPaymentStatusDisplay = (booking: Booking) => {
@@ -166,21 +158,6 @@ export default function BookingList({ bookings }: BookingListProps) {
           </tbody>
         </table>
       </div>
-
-      {selectedBooking && (
-        <CompleteBookingModal
-          isOpen={showCompleteModal}
-          onClose={() => {
-            setShowCompleteModal(false);
-            setSelectedBooking(null);
-          }}
-          onComplete={handleCompleteSuccess}
-          bookingId={selectedBooking.id}
-          totalAmount={selectedBooking.total_amount}
-          paidAmount={selectedBooking.paid_amount}
-          securityDeposit={selectedBooking.security_deposit_amount}
-        />
-      )}
     </>
   );
 } 

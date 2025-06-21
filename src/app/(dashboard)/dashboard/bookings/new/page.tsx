@@ -21,6 +21,26 @@ interface CustomerDocuments {
   dl_back?: string;
 }
 
+interface SubmittedDocuments {
+  original_aadhar: boolean;
+  original_dl: boolean;
+  pan_card: boolean;
+  voter_id: boolean;
+  passport: boolean;
+  other_doc1: {
+    name: string;
+    submitted: boolean;
+  };
+  other_doc2: {
+    name: string;
+    submitted: boolean;
+  };
+  other_doc3: {
+    name: string;
+    submitted: boolean;
+  };
+}
+
 interface FormData {
   customer_name: string;
   customer_contact: string;
@@ -37,6 +57,12 @@ interface FormData {
   dropoff_time: string;
   temp_address: string;
   perm_address: string;
+  rental_purpose: 'local' | 'outstation';
+  outstation_details: {
+    odd_meter_reading: string;
+    destination: string;
+    estimated_km: string;
+  };
   vehicle_details: {
     model: string;
     registration: string;
@@ -49,6 +75,7 @@ interface FormData {
   payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
   status: 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
   documents: CustomerDocuments;
+  submitted_documents: SubmittedDocuments;
   signature: string;
   terms_accepted: boolean;
 }
@@ -76,6 +103,12 @@ export default function NewBookingPage() {
     dropoff_time: '',
     temp_address: '',
     perm_address: '',
+    rental_purpose: 'local',
+    outstation_details: {
+      odd_meter_reading: '',
+      destination: '',
+      estimated_km: ''
+    },
     vehicle_details: {
       model: '',
       registration: ''
@@ -93,6 +126,16 @@ export default function NewBookingPage() {
       aadhar_back: '',
       dl_front: '',
       dl_back: ''
+    },
+    submitted_documents: {
+      original_aadhar: false,
+      original_dl: false,
+      pan_card: false,
+      voter_id: false,
+      passport: false,
+      other_doc1: { name: '', submitted: false },
+      other_doc2: { name: '', submitted: false },
+      other_doc3: { name: '', submitted: false }
     },
     signature: '',
     terms_accepted: false
@@ -125,6 +168,14 @@ export default function NewBookingPage() {
           ...prev,
           vehicle_details: {
             ...prev.vehicle_details,
+            [child]: value
+          }
+        }));
+      } else if (parent === 'outstation_details') {
+        setFormData(prev => ({
+          ...prev,
+          outstation_details: {
+            ...prev.outstation_details,
             [child]: value
           }
         }));
@@ -347,6 +398,9 @@ export default function NewBookingPage() {
           temp_address: formData.temp_address || '',
           perm_address: formData.perm_address || '',
           vehicle_details: formData.vehicle_details,
+          rental_purpose: formData.rental_purpose,
+          outstation_details: formData.rental_purpose === 'outstation' ? formData.outstation_details : null,
+          submitted_documents: formData.submitted_documents,
           start_date: formData.start_date,
           end_date: formData.end_date,
           pickup_time: formData.pickup_time,
@@ -665,6 +719,74 @@ export default function NewBookingPage() {
                 </div>
               </div>
 
+              {/* Rental Purpose and Outstation Details */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Rental Details</h3>
+                <div>
+                  <label htmlFor="rental_purpose" className="block text-sm font-medium text-gray-700">
+                    Purpose of Rent
+                  </label>
+                  <select
+                    id="rental_purpose"
+                    name="rental_purpose"
+                    value={formData.rental_purpose}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    required
+                  >
+                    <option value="local">Local</option>
+                    <option value="outstation">Outstation</option>
+                  </select>
+                </div>
+
+                {formData.rental_purpose === 'outstation' && (
+                  <div className="space-y-4">
+                    <div>
+                      <label htmlFor="outstation_details.odd_meter_reading" className="block text-sm font-medium text-gray-700">
+                        Odd Meter Reading
+                      </label>
+                      <input
+                        type="text"
+                        id="outstation_details.odd_meter_reading"
+                        name="outstation_details.odd_meter_reading"
+                        value={formData.outstation_details.odd_meter_reading}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="outstation_details.destination" className="block text-sm font-medium text-gray-700">
+                        Destination
+                      </label>
+                      <input
+                        type="text"
+                        id="outstation_details.destination"
+                        name="outstation_details.destination"
+                        value={formData.outstation_details.destination}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="outstation_details.estimated_km" className="block text-sm font-medium text-gray-700">
+                        Estimated Kilometers
+                      </label>
+                      <input
+                        type="number"
+                        id="outstation_details.estimated_km"
+                        name="outstation_details.estimated_km"
+                        value={formData.outstation_details.estimated_km}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Booking Details */}
               <div className="space-y-6">
                 <h3 className="text-lg font-medium text-gray-900">Booking Details</h3>
@@ -904,6 +1026,234 @@ export default function NewBookingPage() {
                   </div>
                 </div>
               )}
+
+              {/* Submitted Documents Checklist */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Submitted Documents Checklist</h3>
+                <div className="bg-white p-6 rounded-lg border border-gray-200">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="original_aadhar"
+                        name="submitted_documents.original_aadhar"
+                        checked={formData.submitted_documents.original_aadhar}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              original_aadhar: e.target.checked
+                            }
+                          }));
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="original_aadhar" className="text-sm text-gray-700">Original Aadhar Card</label>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="original_dl"
+                        name="submitted_documents.original_dl"
+                        checked={formData.submitted_documents.original_dl}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              original_dl: e.target.checked
+                            }
+                          }));
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="original_dl" className="text-sm text-gray-700">Original Driving License</label>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="pan_card"
+                        name="submitted_documents.pan_card"
+                        checked={formData.submitted_documents.pan_card}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              pan_card: e.target.checked
+                            }
+                          }));
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="pan_card" className="text-sm text-gray-700">PAN Card</label>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="voter_id"
+                        name="submitted_documents.voter_id"
+                        checked={formData.submitted_documents.voter_id}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              voter_id: e.target.checked
+                            }
+                          }));
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="voter_id" className="text-sm text-gray-700">Voter ID</label>
+                    </div>
+
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="passport"
+                        name="submitted_documents.passport"
+                        checked={formData.submitted_documents.passport}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              passport: e.target.checked
+                            }
+                          }));
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="passport" className="text-sm text-gray-700">Passport</label>
+                    </div>
+
+                    {/* Other Document 1 */}
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="other_doc1"
+                        checked={formData.submitted_documents.other_doc1.submitted}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              other_doc1: {
+                                ...prev.submitted_documents.other_doc1,
+                                submitted: e.target.checked
+                              }
+                            }
+                          }));
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <input
+                        type="text"
+                        value={formData.submitted_documents.other_doc1.name}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              other_doc1: {
+                                ...prev.submitted_documents.other_doc1,
+                                name: e.target.value
+                              }
+                            }
+                          }));
+                        }}
+                        placeholder="Other Document 1"
+                        className="flex-1 text-sm text-gray-700 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    {/* Other Document 2 */}
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="other_doc2"
+                        checked={formData.submitted_documents.other_doc2.submitted}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              other_doc2: {
+                                ...prev.submitted_documents.other_doc2,
+                                submitted: e.target.checked
+                              }
+                            }
+                          }));
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <input
+                        type="text"
+                        value={formData.submitted_documents.other_doc2.name}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              other_doc2: {
+                                ...prev.submitted_documents.other_doc2,
+                                name: e.target.value
+                              }
+                            }
+                          }));
+                        }}
+                        placeholder="Other Document 2"
+                        className="flex-1 text-sm text-gray-700 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+
+                    {/* Other Document 3 */}
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        id="other_doc3"
+                        checked={formData.submitted_documents.other_doc3.submitted}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              other_doc3: {
+                                ...prev.submitted_documents.other_doc3,
+                                submitted: e.target.checked
+                              }
+                            }
+                          }));
+                        }}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                      <input
+                        type="text"
+                        value={formData.submitted_documents.other_doc3.name}
+                        onChange={(e) => {
+                          setFormData(prev => ({
+                            ...prev,
+                            submitted_documents: {
+                              ...prev.submitted_documents,
+                              other_doc3: {
+                                ...prev.submitted_documents.other_doc3,
+                                name: e.target.value
+                              }
+                            }
+                          }));
+                        }}
+                        placeholder="Other Document 3"
+                        className="flex-1 text-sm text-gray-700 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {/* Terms and Conditions */}
               <div className="space-y-6">

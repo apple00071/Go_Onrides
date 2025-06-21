@@ -386,7 +386,7 @@ export default function BookingDetailsPage() {
         <div className="flex flex-wrap gap-2">
           {booking?.status === 'in_use' && hasPermission('manageBookings') && (
             <button
-              onClick={() => setShowCompleteModal(true)}
+              onClick={() => router.push(`/dashboard/bookings/${encodeURIComponent(booking.booking_id)}/complete`)}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
             >
               Complete Booking
@@ -722,18 +722,6 @@ export default function BookingDetailsPage() {
       </div>
 
       {/* Modals */}
-      {showCompleteModal && booking && (
-        <CompleteBookingModal
-          isOpen={showCompleteModal}
-          onClose={() => setShowCompleteModal(false)}
-          onComplete={handleCompleteSuccess}
-          bookingId={booking.id}
-          totalAmount={totalAmount}
-          paidAmount={booking.paid_amount}
-          securityDeposit={booking.security_deposit_amount}
-        />
-      )}
-
       {showEditModal && booking && (
         <EditBookingModal
           isOpen={showEditModal}

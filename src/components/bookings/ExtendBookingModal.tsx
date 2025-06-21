@@ -30,6 +30,13 @@ interface FormData {
   extension_reason: string;
 }
 
+// Helper function to convert 24h to 12h format
+const formatTimeDisplay = (hour: number, minute: string) => {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${period}`;
+};
+
 export default function ExtendBookingModal({
   isOpen,
   onClose,
@@ -359,11 +366,14 @@ export default function ExtendBookingModal({
               className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
             >
               <option value="">Select time</option>
-              {getAvailableTimeSlots().map(time => (
-                <option key={time} value={time}>
-                  {time}
-                </option>
-              ))}
+              {getAvailableTimeSlots().map(time => {
+                const [hour, minute] = time.split(':');
+                return (
+                  <option key={time} value={time}>
+                    {formatTimeDisplay(parseInt(hour), minute)}
+                  </option>
+                );
+              })}
             </select>
           </div>
 

@@ -1,53 +1,73 @@
-import { useRef, useEffect } from 'react';
-import SignaturePad from 'react-signature-canvas';
+'use client';
+
+import { useRef, useEffect, useState } from 'react';
+import SignaturePad from 'signature_pad';
 
 interface SignatureCanvasProps {
-  onSave: (signature: string) => void;
-  width?: number;
-  height?: number;
+  onSave: (signatureData: string) => void;
 }
 
-export default function SignatureCanvas({ onSave, width = 500, height = 200 }: SignatureCanvasProps) {
-  const signaturePadRef = useRef<SignaturePad>(null);
+export default function SignatureCanvas({ onSave }: SignatureCanvasProps) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [signaturePad, setSignaturePad] = useState<SignaturePad | null>(null);
+
+  useEffect(() => {
+    if (!canvasRef.current) return;
+
+    const canvas = canvasRef.current;
+    const pad = new SignaturePad(canvas, {
+      backgroundColor: 'rgb(255, 255, 255)'
+    });
+
+    // Set canvas dimensions
+    const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    canvas.width = canvas.offsetWidth * ratio;
+    canvas.height = canvas.offsetHeight * ratio;
+    canvas.getContext('2d')?.scale(ratio, ratio);
+    pad.clear(); // Clear and reset dimensions
+
+    setSignaturePad(pad);
+
+    return () => {
+      pad.off();
+    };
+  }, []);
 
   const handleClear = () => {
-    if (signaturePadRef.current) {
-      signaturePadRef.current.clear();
-      onSave(''); // Clear the signature data
+    if (signaturePad) {
+      signaturePad.clear();
     }
   };
 
-  // Auto-save signature when changes occur
-  const handleEndStroke = () => {
-    if (signaturePadRef.current && !signaturePadRef.current.isEmpty()) {
-      const dataURL = signaturePadRef.current.toDataURL('image/png');
-      onSave(dataURL);
-    } else {
-      onSave('');
+  const handleSave = () => {
+    if (signaturePad && !signaturePad.isEmpty()) {
+      const signatureData = signaturePad.toDataURL();
+      onSave(signatureData);
     }
   };
 
   return (
     <div className="space-y-4">
       <div className="border rounded-lg overflow-hidden bg-white">
-        <SignaturePad
-          ref={signaturePadRef}
-          onEnd={handleEndStroke}
-          canvasProps={{
-            className: 'signature-canvas w-full',
-            width: width,
-            height: height,
-            style: { width: '100%', height: '100%' }
-          }}
+        <canvas
+          ref={canvasRef}
+          className="w-full h-40 touch-none"
         />
       </div>
-      <div className="flex justify-end">
+      <div className="flex justify-end space-x-4">
         <button
           type="button"
           onClick={handleClear}
-          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+          className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
         >
           Clear
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          className="px-3 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700"
+        >
+          Save Signature
         </button>
       </div>
     </div>

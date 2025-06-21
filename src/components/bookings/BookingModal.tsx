@@ -55,6 +55,23 @@ interface FormData {
   documents: CustomerDocuments;
 }
 
+// Helper function to convert 24h to 12h format
+const formatTimeDisplay = (hour: number, minute: string) => {
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${period}`;
+};
+
+// Generate time slots once
+const timeSlots = Array.from({ length: 48 }, (_, i) => {
+  const hour = Math.floor(i / 2);
+  const minute = i % 2 === 0 ? '00' : '30';
+  return {
+    value: `${hour.toString().padStart(2, '0')}:${minute}`,
+    label: formatTimeDisplay(hour, minute)
+  };
+});
+
 export default function BookingModal({
   isOpen,
   onClose,
@@ -864,16 +881,11 @@ export default function BookingModal({
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               >
                 <option value="">Select time</option>
-                {Array.from({ length: 48 }, (_, i) => {
-                  const hour = Math.floor(i / 2);
-                  const minute = i % 2 === 0 ? '00' : '30';
-                  const time = `${hour.toString().padStart(2, '0')}:${minute}`;
-                  return (
-                    <option key={time} value={time}>
-                      {time}
-                    </option>
-                  );
-                })}
+                {timeSlots.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -888,16 +900,11 @@ export default function BookingModal({
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               >
                 <option value="">Select time</option>
-                {Array.from({ length: 48 }, (_, i) => {
-                  const hour = Math.floor(i / 2);
-                  const minute = i % 2 === 0 ? '00' : '30';
-                  const time = `${hour.toString().padStart(2, '0')}:${minute}`;
-                  return (
-                    <option key={time} value={time}>
-                      {time}
-                    </option>
-                  );
-                })}
+                {timeSlots.map(({ value, label }) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
@@ -942,6 +949,7 @@ export default function BookingModal({
                 name="total_amount"
                 readOnly
                 value={formData.total_amount}
+                onChange={() => {}}
                 className="bg-gray-50"
               />
             </div>
