@@ -7,7 +7,6 @@ import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, Calendar
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
-import CompleteBookingModal from '@/components/bookings/CompleteBookingModal';
 import VehicleDamageHistory from '@/components/bookings/VehicleDamageHistory';
 import EditBookingModal from '@/components/bookings/EditBookingModal';
 import ExtendBookingModal from '@/components/bookings/ExtendBookingModal';
@@ -110,7 +109,6 @@ export default function BookingDetailsPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageLabel, setSelectedImageLabel] = useState<string>('');
   const [payments, setPayments] = useState<any[]>([]);
-  const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
   const [signature, setSignature] = useState<{ bookingSignature?: string; completionSignature?: string } | null>(null);
@@ -216,9 +214,9 @@ export default function BookingDetailsPage() {
 
   const handleStatusChange = async (newStatus: BookingStatus) => {
     if (!booking) return;
-
+    
     if (newStatus === 'completed') {
-      setShowCompleteModal(true);
+      router.push(`/dashboard/bookings/${encodeURIComponent(params.id as string)}/complete`);
       return;
     }
 
@@ -242,17 +240,8 @@ export default function BookingDetailsPage() {
   };
 
   const handleCompleteSuccess = async () => {
-    // Refresh the data
-    setLoading(true);
-    try {
-      await fetchBookingDetails();
-      toast.success('Booking completed and data refreshed');
-    } catch (error) {
-      console.error('Error refreshing data:', error);
-      toast.error('Failed to refresh booking data');
-    } finally {
-      setLoading(false);
-    }
+    await fetchBookingDetails();
+    toast.success('Booking completed successfully');
   };
 
   const handleImageClick = (url: string, label: string) => {
