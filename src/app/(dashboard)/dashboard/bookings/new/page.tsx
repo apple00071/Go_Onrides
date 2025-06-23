@@ -374,7 +374,8 @@ export default function NewBookingPage() {
             dl_expiry_date: formData.dl_expiry_date || null,
             temp_address_street: formData.temp_address || '',
             perm_address_street: formData.perm_address || '',
-            documents: formData.documents
+            documents: formData.documents,
+            created_by: (await supabase.auth.getUser()).data.user?.id
           })
           .select('id')
           .single();

@@ -45,6 +45,7 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetails | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     signature: '',
     damageCharges: '0',
@@ -72,6 +73,18 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
       try {
         setLoading(true);
         const supabase = getSupabaseClient();
+
+        // Get current user's session and profile
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          
+          setIsAdmin(profile?.role === 'admin');
+        }
 
         const { data: bookingData, error: bookingError } = await supabase
           .from('bookings')
@@ -108,10 +121,25 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+    setFormData(prev => {
+      const newFormData = {
+        ...prev,
+        [name]: value
+      };
+
+      // Automatically update payment amount when fees or damage charges change
+      if (name === 'lateFee' || name === 'extensionFee' || name === 'damageCharges') {
+        const lateFee = parseFloat(newFormData.lateFee) || 0;
+        const extensionFee = parseFloat(newFormData.extensionFee) || 0;
+        const damageCharges = parseFloat(newFormData.damageCharges) || 0;
+        
+        // Calculate total fees
+        const totalFees = lateFee + extensionFee + damageCharges;
+        newFormData.paymentAmount = totalFees.toString();
+      }
+
+      return newFormData;
+    });
   };
 
   const handleSignatureChange = (signatureData: string) => {
@@ -180,22 +208,31 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
       // Calculate the new total paid amount including this payment
       const newPaidAmount = currentBooking.paid_amount + remainingAmount;
 
+      // Prepare update data
+      const updateData: any = {
+        status: 'completed',
+        vehicle_remarks: formData.vehicleRemarks,
+        inspection_notes: formData.inspection_notes,
+        completed_at: new Date().toISOString(),
+        completed_by: session.user.id,
+        damage_charges: damageCharges,
+        late_fee: parseFloat(formData.lateFee) || 0,
+        extension_fee: parseFloat(formData.extensionFee) || 0,
+        total_amount: finalTotalAmount,
+        paid_amount: newPaidAmount,
+        payment_status: 'full'
+      };
+
+      // Only add odometer_reading and fuel_level for outstation bookings
+      if (booking?.rental_purpose === 'outstation') {
+        updateData.odometer_reading = formData.odometer_reading;
+        updateData.fuel_level = formData.fuel_level;
+      }
+
       // Update the booking to mark it as completed and update amounts
       const { error: bookingUpdateError } = await supabase
         .from('bookings')
-        .update({
-          status: 'completed',
-          vehicle_remarks: formData.vehicleRemarks,
-          odometer_reading: formData.odometer_reading,
-          fuel_level: formData.fuel_level,
-          inspection_notes: formData.inspection_notes,
-          completed_at: new Date().toISOString(),
-          completed_by: session.user.id,
-          damage_charges: damageCharges,
-          total_amount: finalTotalAmount,
-          paid_amount: newPaidAmount,
-          payment_status: 'full'
-        })
+        .update(updateData)
         .eq('id', booking?.id);
 
       if (bookingUpdateError) {
@@ -254,7 +291,37 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
   }
 
   const termsAndConditions = booking.security_deposit_amount > 0 
-    ? `I hereby acknowledge that I have returned the vehicle and agree to the assessment of any damages and associated charges. I understand that my security deposit of ₹${booking.security_deposit_amount.toLocaleString('en-IN')} will be refunded minus any applicable damage charges of ₹${parseFloat(formData.damageCharges).toLocaleString('en-IN')}, resulting in a final refund of ₹${parseFloat(formData.paymentAmount).toLocaleString('en-IN')}.`
+    ? (() => {
+        const damageChargesAmount = parseFloat(formData.damageCharges) || 0;
+        const lateFeeAmount = parseFloat(formData.lateFee) || 0;
+        const extensionFeeAmount = parseFloat(formData.extensionFee) || 0;
+        const securityDeposit = booking.security_deposit_amount;
+        const totalCharges = lateFeeAmount + extensionFeeAmount + damageChargesAmount;
+        const refundAmount = Math.max(0, securityDeposit - totalCharges);
+        const additionalCharges = Math.max(0, totalCharges - securityDeposit);
+
+        // Create array of charges
+        const charges = [];
+        if (lateFeeAmount > 0) charges.push(`late fee of ₹${lateFeeAmount.toLocaleString('en-IN')}`);
+        if (extensionFeeAmount > 0) charges.push(`extension fee of ₹${extensionFeeAmount.toLocaleString('en-IN')}`);
+        if (damageChargesAmount > 0) charges.push(`damage charges of ₹${damageChargesAmount.toLocaleString('en-IN')}`);
+
+        // Format charges with proper spacing and conjunctions
+        const chargesText = charges.length > 1 
+          ? `${charges.slice(0, -1).join(', ')} and ${charges[charges.length - 1]}`
+          : charges[0] || '';
+
+        return `I hereby acknowledge that I have returned the vehicle and agree to the assessment of all charges. ${
+          charges.length > 0 ? `The following charges are applicable: ${chargesText}. ` : ''
+        }I understand that my security deposit of ₹${securityDeposit.toLocaleString('en-IN')} will be ${
+          refundAmount === securityDeposit ? 'fully refunded' :
+          refundAmount > 0 ? 'partially refunded' : 'fully utilized for the charges'
+        }${
+          additionalCharges > 0 ? `. Additional charges of ₹${additionalCharges.toLocaleString('en-IN')} need to be paid` : ''
+        }${
+          refundAmount > 0 ? `. The final refund amount is ₹${refundAmount.toLocaleString('en-IN')}` : ''
+        }.`
+      })()
     : 'I hereby acknowledge that I have returned the vehicle and agree to the assessment of any damages and associated charges. I confirm that all payments have been settled as per the agreement.';
 
   return (
@@ -286,49 +353,62 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
           )}
 
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
-            {/* Vehicle Return Details */}
-            <div className="space-y-4 rounded-lg bg-gray-50 p-4">
-              <h3 className="font-medium">Vehicle Return Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Odometer Reading
-                  </label>
-                  <input
-                    type="text"
-                    name="odometer_reading"
-                    value={formData.odometer_reading}
-                    onChange={handleChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700">
-                    Fuel Level
-                  </label>
-                  <select
-                    name="fuel_level"
-                    value={formData.fuel_level}
-                    onChange={handleChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="">Select fuel level</option>
-                    <option value="full">Full</option>
-                    <option value="3/4">3/4</option>
-                    <option value="1/2">1/2</option>
-                    <option value="1/4">1/4</option>
-                    <option value="empty">Empty</option>
-                  </select>
+            {/* Vehicle Return Details - Only show for outstation bookings */}
+            {booking?.rental_purpose === 'outstation' && (
+              <div className="space-y-4 rounded-lg bg-gray-50 p-4">
+                <h3 className="font-medium">Vehicle Return Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Odometer Reading
+                    </label>
+                    <input
+                      type="text"
+                      name="odometer_reading"
+                      value={formData.odometer_reading}
+                      onChange={handleChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      required={booking?.rental_purpose === 'outstation'}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Fuel Level
+                    </label>
+                    <select
+                      name="fuel_level"
+                      value={formData.fuel_level}
+                      onChange={handleChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                      required={booking?.rental_purpose === 'outstation'}
+                    >
+                      <option value="">Select fuel level</option>
+                      <option value="full">Full</option>
+                      <option value="3/4">3/4</option>
+                      <option value="1/2">1/2</option>
+                      <option value="1/4">1/4</option>
+                      <option value="empty">Empty</option>
+                    </select>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Payment Details */}
             <div className="space-y-4 rounded-lg bg-gray-50 p-4">
               <h3 className="font-medium">Payment Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Security Deposit Amount
+                  </label>
+                  <input
+                    type="text"
+                    value={`₹${booking.security_deposit_amount.toLocaleString('en-IN')}`}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-100"
+                    readOnly
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Late Fee
@@ -338,8 +418,8 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
                     name="lateFee"
                     value={formData.lateFee}
                     onChange={handleChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-100"
-                    readOnly
+                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${!isAdmin ? 'bg-gray-100' : ''}`}
+                    readOnly={!isAdmin}
                   />
                 </div>
                 <div>
@@ -351,8 +431,8 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
                     name="extensionFee"
                     value={formData.extensionFee}
                     onChange={handleChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-100"
-                    readOnly
+                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 ${!isAdmin ? 'bg-gray-100' : ''}`}
+                    readOnly={!isAdmin}
                   />
                 </div>
                 <div>
@@ -364,7 +444,8 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
                     name="paymentAmount"
                     value={formData.paymentAmount}
                     onChange={handleChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 bg-gray-100"
+                    readOnly
                   />
                 </div>
                 <div>
@@ -463,7 +544,12 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
             {/* Signature */}
             <div className="space-y-4 rounded-lg bg-gray-50 p-4">
               <h3 className="font-medium">Signature</h3>
-              <div>
+              <div className="mb-6">
+                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+                  <p className="text-sm text-yellow-800">
+                    {termsAndConditions}
+                  </p>
+                </div>
                 <label className="block text-sm font-medium text-gray-700">
                   Customer Signature
                 </label>

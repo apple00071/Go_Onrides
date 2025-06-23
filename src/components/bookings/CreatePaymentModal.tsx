@@ -4,21 +4,29 @@ import { formatCurrency } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import { Dialog } from '@headlessui/react';
 import { X } from 'lucide-react';
+import { notifyPaymentEvent } from '@/lib/notification';
 
 interface CreatePaymentModalProps {
   isOpen: boolean;
   onClose: () => void;
   remainingAmount: number;
   onPaymentCreated: () => void;
+  bookingId: string;
+  bookingNumber: string;
+  customerName: string;
 }
 
 export default function CreatePaymentModal({
   isOpen,
   onClose,
   remainingAmount,
-  onPaymentCreated
+  onPaymentCreated,
+  bookingId,
+  bookingNumber,
+  customerName
 }: CreatePaymentModalProps) {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [amount, setAmount] = useState(remainingAmount);
   const [paymentMethod, setPaymentMethod] = useState('cash');
 
@@ -26,26 +34,97 @@ export default function CreatePaymentModal({
     e.preventDefault();
     try {
       setLoading(true);
+      setError(null);
       const supabase = getSupabaseClient();
 
-      // Create payment record
-      const { error: paymentError } = await supabase
-        .from('payments')
-        .insert({
-          amount,
-          payment_method: paymentMethod,
-          payment_status: 'completed',
-          payment_type: 'booking_payment'
-        });
+      // Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        throw new Error('User not authenticated');
+      }
 
-      if (paymentError) throw paymentError;
+      // Get current booking details to calculate new paid amount
+      const { data: currentBooking, error: bookingFetchError } = await supabase
+        .from('bookings')
+        .select('paid_amount')
+        .eq('id', bookingId)
+        .single();
+
+      if (bookingFetchError) {
+        console.error('Error fetching current booking:', bookingFetchError);
+        throw new Error('Failed to fetch current booking details');
+      }
+
+      const newPaidAmount = (currentBooking?.paid_amount || 0) + amount;
+
+      // Create payment record
+      const { data: paymentData, error: paymentError } = await supabase
+        .from('payments')
+        .insert([{
+          booking_id: bookingId,
+          amount: amount,
+          payment_mode: paymentMethod,
+          payment_status: 'completed',
+          created_at: new Date().toISOString(),
+          created_by: user.id
+        }])
+        .select()
+        .single();
+
+      if (paymentError) {
+        console.error('Payment creation error:', paymentError);
+        throw new Error(paymentError.message);
+      }
+
+      if (!paymentData) {
+        throw new Error('Payment was created but no data was returned');
+      }
+
+      // Update booking's payment status and paid amount
+      const { error: bookingUpdateError } = await supabase
+        .from('bookings')
+        .update({
+          paid_amount: newPaidAmount,
+          payment_status: amount >= remainingAmount ? 'full' : 'partial',
+          payment_mode: paymentMethod,
+          updated_at: new Date().toISOString(),
+          updated_by: user.id
+        })
+        .eq('id', bookingId);
+
+      if (bookingUpdateError) {
+        console.error('Booking update error:', bookingUpdateError);
+        // Rollback payment creation if booking update fails
+        await supabase
+          .from('payments')
+          .delete()
+          .eq('id', paymentData.id);
+        throw new Error('Failed to update booking payment status');
+      }
+
+      // Send notification about the payment
+      try {
+        await notifyPaymentEvent(
+          'PAYMENT_CREATED',
+          paymentData.id,
+          {
+            amount: amount,
+            bookingId: bookingNumber,
+            customerName: customerName,
+            actionBy: user.email || 'Unknown User'
+          }
+        );
+      } catch (notifyError) {
+        console.error('Notification error:', notifyError);
+        // Don't throw here, as the payment was successful
+      }
 
       toast.success('Payment recorded successfully');
       onPaymentCreated();
       onClose();
     } catch (error) {
       console.error('Error:', error);
-      toast.error('Failed to record payment');
+      setError(error instanceof Error ? error.message : 'Failed to record payment');
     } finally {
       setLoading(false);
     }
@@ -55,14 +134,12 @@ export default function CreatePaymentModal({
     <Dialog
       open={isOpen}
       onClose={onClose}
-      className="fixed inset-0 z-50 overflow-y-auto"
+      className="relative z-50"
     >
-      <div className="flex min-h-screen items-center justify-center">
-        {/* Overlay */}
-        <Dialog.Overlay className="fixed inset-0 bg-black opacity-30" />
+      <div className="fixed inset-0 bg-black/30" aria-hidden="true" />
 
-        {/* Modal */}
-        <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+      <div className="fixed inset-0 flex items-center justify-center p-4">
+        <Dialog.Panel className="relative bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b">
             <Dialog.Title className="text-lg font-medium text-gray-900">
@@ -79,6 +156,12 @@ export default function CreatePaymentModal({
 
           {/* Content */}
           <form onSubmit={handleSubmit} className="p-4 space-y-4">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
+                {error}
+              </div>
+            )}
+            
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Amount
@@ -89,7 +172,15 @@ export default function CreatePaymentModal({
                   min="0"
                   max={remainingAmount}
                   value={amount}
-                  onChange={(e) => setAmount(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => {
+                    const value = parseFloat(e.target.value) || 0;
+                    if (value > remainingAmount) {
+                      setError(`Amount cannot exceed remaining balance of ${formatCurrency(remainingAmount)}`);
+                      return;
+                    }
+                    setAmount(value);
+                    setError(null);
+                  }}
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                 />
               </div>
@@ -110,6 +201,7 @@ export default function CreatePaymentModal({
                 <option value="cash">Cash</option>
                 <option value="card">Card</option>
                 <option value="upi">UPI</option>
+                <option value="bank_transfer">Bank Transfer</option>
               </select>
             </div>
 
@@ -131,7 +223,7 @@ export default function CreatePaymentModal({
               </button>
             </div>
           </form>
-        </div>
+        </Dialog.Panel>
       </div>
     </Dialog>
   );

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { formatCurrency } from '@/lib/utils';
-import { CreditCard, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import CreatePaymentModal from '@/components/bookings/CreatePaymentModal';
 
 interface PaymentInformationProps {
@@ -15,6 +15,9 @@ interface PaymentInformationProps {
   status: string;
   paymentStatus: string;
   onPaymentCreated: () => void;
+  bookingId: string;
+  bookingNumber: string;
+  customerName: string;
 }
 
 export default function PaymentInformation({
@@ -26,7 +29,10 @@ export default function PaymentInformation({
   extensionFee,
   status,
   paymentStatus,
-  onPaymentCreated
+  onPaymentCreated,
+  bookingId,
+  bookingNumber,
+  customerName
 }: PaymentInformationProps) {
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
@@ -155,6 +161,9 @@ export default function PaymentInformation({
           onClose={() => setIsPaymentModalOpen(false)}
           remainingAmount={remainingAmount}
           onPaymentCreated={onPaymentCreated}
+          bookingId={bookingId}
+          bookingNumber={bookingNumber}
+          customerName={customerName}
         />
       )}
     </div>

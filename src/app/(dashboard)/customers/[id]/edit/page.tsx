@@ -12,6 +12,7 @@ interface Customer {
   name: string;
   email: string;
   phone: string;
+  alternative_phone: string | null;
   dob: string | null;
   aadhar_number: string | null;
   dl_number: string | null;
@@ -26,6 +27,7 @@ interface Customer {
   perm_address_pincode: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  emergency_contact_phone1: string | null;
   emergency_contact_relationship: string | null;
   documents: {
     customer_photo?: string;
