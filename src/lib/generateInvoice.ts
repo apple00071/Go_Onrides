@@ -52,13 +52,7 @@ const drawTableHeader = (doc: jsPDF, y: number) => {
 
 // Helper function to format currency with ₹ symbol
 const formatIndianCurrency = (amount: number) => {
-  const formatter = new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  });
-  return formatter.format(amount);
+  return formatCurrency(amount);
 };
 
 export const generateInvoice = async (booking: BookingForInvoice) => {

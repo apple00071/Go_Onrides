@@ -46,47 +46,37 @@ interface BookingRecord {
 
 export async function generateBookingId(supabase: SupabaseClient): Promise<string> {
   try {
-    const currentYear = new Date().getFullYear().toString().slice(-2);
-    
-    // Get all bookings for the current year
+    // Get all bookings ordered by booking_id in descending order
     const { data: bookings, error } = await supabase
       .from('bookings')
       .select('booking_id')
-      .like('booking_id', `GN%${currentYear}`)
-      .order('booking_id', { ascending: false });
+      .order('booking_id', { ascending: false })
+      .limit(1);
 
     if (error) {
       console.error('Supabase query error:', error);
       throw new Error(`Database error: ${error.message || 'Unknown error occurred'}`);
     }
 
-    let nextNumber = 1;
+    let nextNumber = 125; // Start from 125 if no bookings exist
 
-    if (bookings && bookings.length > 0) {
-      // Find the highest number used
-      const highestNumber = bookings.reduce((max: number, booking: BookingRecord) => {
-        if (!booking.booking_id) return max;
-        
-        const match = booking.booking_id.match(/^GN(\d+)/);
-        if (match) {
-          const num = parseInt(match[1], 10);
-          return num > max ? num : max;
-        }
-        return max;
-      }, 0);
-      
-      nextNumber = highestNumber + 1;
+    if (bookings && bookings.length > 0 && bookings[0].booking_id) {
+      // Extract the number from the latest booking ID
+      const match = bookings[0].booking_id.match(/^GN(\d+)/);
+      if (match) {
+        nextNumber = parseInt(match[1], 10) + 1;
+      }
     }
 
-    // Format: GN + sequential number + YY
-    const bookingId = `GN${nextNumber}${currentYear}`;
+    // Format: GN + sequential number (no padding)
+    const bookingId = `GN${nextNumber}`;
     
     // Verify the booking ID doesn't already exist
     const { data: existingBooking, error: verifyError } = await supabase
       .from('bookings')
       .select('booking_id')
       .eq('booking_id', bookingId)
-      .maybeSingle(); // Use maybeSingle instead of single to avoid 406 error
+      .maybeSingle();
 
     if (verifyError) {
       console.error('Verification error:', verifyError);

@@ -10,6 +10,7 @@ interface Customer {
   name: string;
   email: string;
   phone: string;
+  alternative_phone: string | null;
   dob: string | null;
   aadhar_number: string | null;
   dl_number: string | null;
@@ -22,8 +23,8 @@ interface Customer {
   perm_address_city: string | null;
   perm_address_state: string | null;
   perm_address_pincode: string | null;
-  emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  emergency_contact_phone1: string | null;
   emergency_contact_relationship: string | null;
   documents: {
     customer_photo?: string;
@@ -45,6 +46,7 @@ interface FormData {
   name: string;
   email: string;
   phone: string;
+  alternative_phone: string;
   dob: string;
   aadhar_number: string;
   dl_number: string;
@@ -57,8 +59,8 @@ interface FormData {
   perm_address_city: string;
   perm_address_state: string;
   perm_address_pincode: string;
-  emergency_contact_name: string;
   emergency_contact_phone: string;
+  emergency_contact_phone1: string;
   emergency_contact_relationship: string;
   documents: {
     customer_photo?: string;
@@ -77,6 +79,7 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
     name: customer?.name || '',
     email: customer?.email || '',
     phone: customer?.phone || '',
+    alternative_phone: customer?.alternative_phone || '',
     dob: customer?.dob || '',
     aadhar_number: customer?.aadhar_number || '',
     dl_number: customer?.dl_number || '',
@@ -89,8 +92,8 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
     perm_address_city: customer?.perm_address_city || '',
     perm_address_state: customer?.perm_address_state || '',
     perm_address_pincode: customer?.perm_address_pincode || '',
-    emergency_contact_name: customer?.emergency_contact_name || '',
     emergency_contact_phone: customer?.emergency_contact_phone || '',
+    emergency_contact_phone1: customer?.emergency_contact_phone1 || '',
     emergency_contact_relationship: customer?.emergency_contact_relationship || '',
     documents: customer?.documents || {}
   })
@@ -189,6 +192,20 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
             </div>
 
             <div>
+              <label htmlFor="alternative_phone" className="block text-sm font-medium text-gray-700">
+                Alternative Phone
+              </label>
+              <input
+                type="tel"
+                id="alternative_phone"
+                name="alternative_phone"
+                value={formData.alternative_phone}
+                onChange={handleChange}
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div>
               <label htmlFor="dob" className="block text-sm font-medium text-gray-700">
                 Date of Birth
               </label>
@@ -249,21 +266,6 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
             </div>
 
             <div>
-              <label htmlFor="emergency_contact_name" className="block text-sm font-medium text-gray-700">
-                Emergency Contact Name
-              </label>
-              <input
-                type="text"
-                id="emergency_contact_name"
-                name="emergency_contact_name"
-                value={formData.emergency_contact_name}
-                onChange={handleChange}
-                required
-                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-              />
-            </div>
-
-            <div>
               <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700">
                 Emergency Contact Phone
               </label>
@@ -274,6 +276,20 @@ const CustomerForm = ({ customer, mode }: CustomerFormProps) => {
                 value={formData.emergency_contact_phone}
                 onChange={handleChange}
                 required
+                className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="emergency_contact_phone1" className="block text-sm font-medium text-gray-700">
+                Secondary Emergency Contact Phone
+              </label>
+              <input
+                type="tel"
+                id="emergency_contact_phone1"
+                name="emergency_contact_phone1"
+                value={formData.emergency_contact_phone1}
+                onChange={handleChange}
                 className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>

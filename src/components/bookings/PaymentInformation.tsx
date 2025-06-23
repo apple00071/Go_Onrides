@@ -3,149 +3,158 @@
 import { useState } from 'react';
 import { formatCurrency } from '@/lib/utils';
 import { CreditCard, Plus } from 'lucide-react';
-import PaymentModal from '@/components/payments/PaymentModal';
+import CreatePaymentModal from '@/components/bookings/CreatePaymentModal';
 
 interface PaymentInformationProps {
-  booking: {
-    id: string;
-    booking_id: string;
-    booking_amount: number;
-    security_deposit_amount: number;
-    paid_amount: number;
-    payment_status: string;
-    payment_mode: string;
-    status: string;
-    damage_charges?: number;
-    refund_amount?: number;
-  };
-  onPaymentCreated?: () => void;
+  bookingAmount: number;
+  securityDeposit: number;
+  paidAmount: number;
+  damageCharges: number;
+  lateFee: number;
+  extensionFee: number;
+  status: string;
+  paymentStatus: string;
+  onPaymentCreated: () => void;
 }
 
-export default function PaymentInformation({ booking, onPaymentCreated }: PaymentInformationProps) {
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
+export default function PaymentInformation({
+  bookingAmount,
+  securityDeposit,
+  paidAmount,
+  damageCharges,
+  lateFee,
+  extensionFee,
+  status,
+  paymentStatus,
+  onPaymentCreated
+}: PaymentInformationProps) {
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
 
-  // Calculate amounts
-  const bookingAmount = booking.booking_amount;
-  const securityDeposit = booking.security_deposit_amount;
-  const damageCharges = booking.damage_charges || 0;
-  const refundAmount = booking.refund_amount || securityDeposit;
-  const paidAmount = booking.paid_amount || 0;
-
-  let totalAmount;
-
-  if (booking.status === 'completed') {
-    // For completed bookings:
-    // Total amount should include booking amount + damage charges
-    totalAmount = bookingAmount + damageCharges;
-  } else {
-    // For ongoing bookings:
-    // Total includes booking amount + security deposit
-    totalAmount = bookingAmount + securityDeposit;
-  }
+  // Calculate total amount based on booking status
+  const totalAmount = status === 'completed'
+    ? bookingAmount + securityDeposit + damageCharges + lateFee + extensionFee
+    : bookingAmount + securityDeposit;
 
   // Calculate remaining amount
-  const remainingAmount = booking.status === 'completed' ? 0 : totalAmount - paidAmount;
-
-  const getPaymentStatusColor = (status: string) => {
-    switch (status) {
-      case 'full':
-        return 'bg-green-100 text-green-800';
-      case 'partial':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'pending':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const handleNewPayment = () => {
-    setShowPaymentModal(true);
-  };
-
-  const handlePaymentCreated = () => {
-    setShowPaymentModal(false);
-    if (onPaymentCreated) {
-      onPaymentCreated();
-    }
-  };
+  const remainingAmount = totalAmount - paidAmount;
 
   return (
-    <div className="bg-white rounded-lg shadow">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-6">
-          {booking.status !== 'completed' && booking.status !== 'cancelled' && remainingAmount > 0 && (
+    <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="px-4 py-5 sm:p-6">
+        <h3 className="text-lg leading-6 font-medium text-gray-900">
+          Payment Information
+        </h3>
+        
+        <div className="mt-5 border-t border-gray-200">
+          <dl className="divide-y divide-gray-200">
+            {/* Booking Amount */}
+            <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium text-gray-500">Booking Amount</dt>
+              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                {formatCurrency(bookingAmount)}
+              </dd>
+            </div>
+
+            {/* Security Deposit */}
+            <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium text-gray-500">Security Deposit</dt>
+              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                {formatCurrency(securityDeposit)}
+              </dd>
+            </div>
+
+            {/* Damage Charges */}
+            {status === 'completed' && damageCharges > 0 && (
+              <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                <dt className="text-sm font-medium text-gray-500">Damage Charges</dt>
+                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                  {formatCurrency(damageCharges)}
+                </dd>
+              </div>
+            )}
+
+            {/* Late Fee */}
+            {status === 'completed' && lateFee > 0 && (
+              <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                <dt className="text-sm font-medium text-gray-500">Late Return Fee</dt>
+                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                  {formatCurrency(lateFee)}
+                </dd>
+              </div>
+            )}
+
+            {/* Extension Fee */}
+            {status === 'completed' && extensionFee > 0 && (
+              <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+                <dt className="text-sm font-medium text-gray-500">Extension Fee</dt>
+                <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                  {formatCurrency(extensionFee)}
+                </dd>
+              </div>
+            )}
+
+            {/* Total Amount */}
+            <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium text-gray-500">Total Amount</dt>
+              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                {formatCurrency(totalAmount)}
+              </dd>
+            </div>
+
+            {/* Paid Amount */}
+            <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium text-gray-500">Paid Amount</dt>
+              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                {formatCurrency(paidAmount)}
+              </dd>
+            </div>
+
+            {/* Remaining Amount */}
+            <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium text-gray-500">Remaining Amount</dt>
+              <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                {formatCurrency(remainingAmount)}
+              </dd>
+            </div>
+
+            {/* Payment Status */}
+            <div className="py-4 sm:grid sm:grid-cols-3 sm:gap-4">
+              <dt className="text-sm font-medium text-gray-500">Payment Status</dt>
+              <dd className="mt-1 sm:mt-0 sm:col-span-2">
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${
+                  paymentStatus === 'paid' ? 'bg-green-100 text-green-800' :
+                  paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  {paymentStatus}
+                </span>
+              </dd>
+            </div>
+          </dl>
+        </div>
+
+        {/* Add Payment Button */}
+        {remainingAmount > 0 && (
+          <div className="mt-6">
             <button
-              onClick={handleNewPayment}
-              className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              type="button"
+              onClick={() => setIsPaymentModalOpen(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
-              <Plus className="h-4 w-4 mr-1" />
+              <Plus className="h-4 w-4 mr-2" />
               Add Payment
             </button>
-          )}
-        </div>
-
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm text-gray-500">Booking Amount</label>
-            <p className="text-lg font-medium">{formatCurrency(bookingAmount)}</p>
           </div>
-          {booking.status !== 'completed' && (
-            <div>
-              <label className="text-sm text-gray-500">Security Deposit</label>
-              <p className="text-lg font-medium">{formatCurrency(securityDeposit)}</p>
-            </div>
-          )}
-          {damageCharges > 0 && (
-            <div>
-              <label className="text-sm text-gray-500">Damage Charges</label>
-              <p className="text-lg font-medium text-red-600">+{formatCurrency(damageCharges)}</p>
-            </div>
-          )}
-          {booking.status === 'completed' && (
-            <div>
-              <label className="text-sm text-gray-500">Security Deposit Refund</label>
-              <p className="text-lg font-medium text-green-600">{formatCurrency(refundAmount)}</p>
-            </div>
-          )}
-          <div className="pt-2 border-t">
-            <label className="text-sm text-gray-500">Total Amount</label>
-            <p className="text-lg font-semibold">{formatCurrency(totalAmount)}</p>
-            {booking.status === 'completed' && (
-              <p className="text-sm text-gray-500 mt-1">
-                (Booking Amount + Damage Charges)
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="mt-6 space-y-4">
-          <div>
-            <label className="text-sm text-gray-500">Paid Amount</label>
-            <p className="text-lg font-medium text-green-600">{formatCurrency(paidAmount)}</p>
-          </div>
-          <div>
-            <label className="text-sm text-gray-500">Remaining Amount</label>
-            <p className="text-lg font-medium text-red-600">{formatCurrency(remainingAmount)}</p>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <div>
-              <label className="text-sm text-gray-500">Payment Status</label>
-              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getPaymentStatusColor(booking.payment_status)} mt-1`}>
-                {booking.payment_status.charAt(0).toUpperCase() + booking.payment_status.slice(1)}
-              </span>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
-      {showPaymentModal && (
-        <PaymentModal
-          isOpen={showPaymentModal}
-          onClose={() => setShowPaymentModal(false)}
-          onPaymentCreated={handlePaymentCreated}
-          initialBookingId={booking.id}
+      {/* Payment Modal */}
+      {isPaymentModalOpen && (
+        <CreatePaymentModal
+          isOpen={isPaymentModalOpen}
+          onClose={() => setIsPaymentModalOpen(false)}
+          remainingAmount={remainingAmount}
+          onPaymentCreated={onPaymentCreated}
         />
       )}
     </div>

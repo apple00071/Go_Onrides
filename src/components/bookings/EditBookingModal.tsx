@@ -15,8 +15,9 @@ interface BookingDetails {
   customer_name: string;
   customer_contact: string;
   customer_email: string;
-  emergency_contact_name: string;
+  alternative_phone: string;
   emergency_contact_phone: string;
+  emergency_contact_phone1: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;
@@ -67,8 +68,9 @@ interface FormData {
   customer_name: string;
   customer_contact: string;
   customer_email: string;
-  emergency_contact_name: string;
+  alternative_phone: string;
   emergency_contact_phone: string;
+  emergency_contact_phone1: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;
@@ -123,8 +125,9 @@ export default function EditBookingModal({
     customer_name: booking?.customer_name || '',
     customer_contact: booking?.customer_contact || '',
     customer_email: booking?.customer_email || '',
-    emergency_contact_name: booking?.emergency_contact_name || '',
+    alternative_phone: booking?.alternative_phone || '',
     emergency_contact_phone: booking?.emergency_contact_phone || '',
+    emergency_contact_phone1: booking?.emergency_contact_phone1 || '',
     aadhar_number: booking?.aadhar_number || '',
     date_of_birth: booking?.date_of_birth || '',
     dl_number: booking?.dl_number || '',
@@ -362,8 +365,8 @@ export default function EditBookingModal({
 
       // Validate required fields
       if (!formData.customer_name || !formData.customer_contact || !formData.customer_email ||
-          !formData.emergency_contact_name || !formData.emergency_contact_phone ||
-          !formData.aadhar_number || !formData.date_of_birth ||
+          !formData.alternative_phone || !formData.emergency_contact_phone ||
+          !formData.emergency_contact_phone1 || !formData.aadhar_number || !formData.date_of_birth ||
           !formData.dl_number || !formData.dl_expiry_date ||
           !formData.temp_address || !formData.perm_address) {
         throw new Error('Please fill in all required customer fields');
@@ -414,9 +417,9 @@ export default function EditBookingModal({
           name: formData.customer_name,
           email: formData.customer_email,
           phone: formData.customer_contact,
-          emergency_contact_name: formData.emergency_contact_name,
+          alternative_phone: formData.alternative_phone,
           emergency_contact_phone: formData.emergency_contact_phone,
-          emergency_contact_relationship: 'emergency',
+          emergency_contact_phone1: formData.emergency_contact_phone1,
           date_of_birth: formData.date_of_birth,
           aadhar_number: formData.aadhar_number,
           dl_number: formData.dl_number,
@@ -442,8 +445,9 @@ export default function EditBookingModal({
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
           customer_email: formData.customer_email,
-          emergency_contact_name: formData.emergency_contact_name,
+          alternative_phone: formData.alternative_phone,
           emergency_contact_phone: formData.emergency_contact_phone,
+          emergency_contact_phone1: formData.emergency_contact_phone1,
           aadhar_number: formData.aadhar_number,
           date_of_birth: formData.date_of_birth,
           dl_number: formData.dl_number,
@@ -566,21 +570,24 @@ export default function EditBookingModal({
             </div>
           </div>
 
-          {/* Emergency Contact */}
+          {/* Alternative Phone */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Emergency Contact Name *
+                Alternative Phone
               </label>
               <input
-                type="text"
-                name="emergency_contact_name"
-                required
-                value={formData.emergency_contact_name}
+                type="tel"
+                name="alternative_phone"
+                value={formData.alternative_phone}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />
             </div>
+          </div>
+
+          {/* Emergency Contact */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Emergency Contact Phone *
@@ -590,6 +597,18 @@ export default function EditBookingModal({
                 name="emergency_contact_phone"
                 required
                 value={formData.emergency_contact_phone}
+                onChange={handleInputChange}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Emergency Contact Phone 1
+              </label>
+              <input
+                type="tel"
+                name="emergency_contact_phone1"
+                value={formData.emergency_contact_phone1}
                 onChange={handleInputChange}
                 className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               />

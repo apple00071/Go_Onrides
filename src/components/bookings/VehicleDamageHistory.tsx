@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { formatDateTime } from '@/lib/utils';
+import { formatDateTime, formatCurrency } from '@/lib/utils';
 
 interface VehicleDamage {
   id: string;
@@ -129,7 +129,7 @@ export default function VehicleDamageHistory({ bookingId }: VehicleDamageHistory
               </div>
               {damage.charges > 0 && (
                 <div className="text-red-600 font-medium">
-                  ₹{damage.charges.toLocaleString()}
+                  {formatCurrency(damage.charges)}
                 </div>
               )}
             </div>

@@ -45,8 +45,9 @@ interface FormData {
   customer_name: string;
   customer_contact: string;
   customer_email: string;
-  emergency_contact_name: string;
+  alternative_phone: string;
   emergency_contact_phone: string;
+  emergency_contact_phone1: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;
@@ -91,8 +92,9 @@ export default function NewBookingPage() {
     customer_name: '',
     customer_contact: '',
     customer_email: '',
-    emergency_contact_name: '',
+    alternative_phone: '',
     emergency_contact_phone: '',
+    emergency_contact_phone1: '',
     aadhar_number: '',
     date_of_birth: '',
     dl_number: '',
@@ -224,8 +226,9 @@ export default function NewBookingPage() {
             customer_name: customer.name,
             customer_contact: customer.phone,
             customer_email: customer.email || '',
-            emergency_contact_name: customer.emergency_contact_name || '',
+            alternative_phone: customer.alternative_phone || '',
             emergency_contact_phone: customer.emergency_contact_phone || '',
+            emergency_contact_phone1: customer.emergency_contact_phone1 || '',
             date_of_birth: customer.dob || '',
             dl_number: customer.dl_number || '',
             dl_expiry_date: customer.dl_expiry_date || '',
@@ -310,7 +313,7 @@ export default function NewBookingPage() {
 
       if (!isExistingCustomer) {
         if (!formData.customer_name || !formData.customer_contact || !formData.customer_email ||
-            !formData.emergency_contact_name || !formData.emergency_contact_phone ||
+            !formData.emergency_contact_phone || !formData.emergency_contact_phone1 ||
             !formData.aadhar_number || !formData.date_of_birth ||
             !formData.dl_number || !formData.dl_expiry_date ||
             !formData.temp_address || !formData.perm_address) {
@@ -337,8 +340,9 @@ export default function NewBookingPage() {
           .update({
             name: formData.customer_name,
             email: formData.customer_email || null,
-            emergency_contact_name: formData.emergency_contact_name,
+            alternative_phone: formData.alternative_phone || null,
             emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_phone1: formData.emergency_contact_phone1 || null,
             emergency_contact_relationship: 'emergency',
             dob: formData.date_of_birth || null,
             aadhar_number: formData.aadhar_number,
@@ -360,8 +364,9 @@ export default function NewBookingPage() {
             name: formData.customer_name,
             email: formData.customer_email || null,
             phone: formData.customer_contact,
-            emergency_contact_name: formData.emergency_contact_name,
+            alternative_phone: formData.alternative_phone || null,
             emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_phone1: formData.emergency_contact_phone1 || null,
             emergency_contact_relationship: 'emergency',
             dob: formData.date_of_birth || null,
             aadhar_number: formData.aadhar_number,
@@ -389,8 +394,8 @@ export default function NewBookingPage() {
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
           customer_email: formData.customer_email || null,
-          emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_phone: formData.emergency_contact_phone,
+          emergency_contact_phone1: formData.emergency_contact_phone1 || null,
           aadhar_number: formData.aadhar_number,
           date_of_birth: formData.date_of_birth || null,
           dl_number: formData.dl_number,
@@ -460,6 +465,15 @@ export default function NewBookingPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  // Add a helper function to convert 24h to 12h format
+  const formatTimeDisplay = (time: string): string => {
+    const [hourStr, minute] = time.split(':');
+    const hour = parseInt(hourStr, 10);
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const displayHour = hour % 12 || 12;
+    return `${displayHour}:${minute} ${period}`;
   };
 
   return (
@@ -565,18 +579,19 @@ export default function NewBookingPage() {
                   {!isExistingCustomer && (
                     <>
                       <div>
-                        <label htmlFor="emergency_contact_name" className="block text-sm font-medium text-gray-700 mb-1">
-                          Emergency Contact Name *
+                        <label htmlFor="alternative_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                          Alternative Phone
                         </label>
                         <input
-                          id="emergency_contact_name"
-                          type="text"
-                          name="emergency_contact_name"
-                          required
-                          value={formData.emergency_contact_name}
+                          id="alternative_phone"
+                          type="tel"
+                          name="alternative_phone"
+                          value={formData.alternative_phone}
                           onChange={handleInputChange}
                           className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          aria-required="true"
+                          maxLength={10}
+                          pattern="\d{10}"
+                          title="Please enter a valid 10-digit phone number"
                         />
                       </div>
 
@@ -593,6 +608,26 @@ export default function NewBookingPage() {
                           onChange={handleInputChange}
                           className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                           aria-required="true"
+                          maxLength={10}
+                          pattern="\d{10}"
+                          title="Please enter a valid 10-digit phone number"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor="emergency_contact_phone1" className="block text-sm font-medium text-gray-700 mb-1">
+                          Secondary Emergency Contact Phone
+                        </label>
+                        <input
+                          id="emergency_contact_phone1"
+                          type="tel"
+                          name="emergency_contact_phone1"
+                          value={formData.emergency_contact_phone1}
+                          onChange={handleInputChange}
+                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                          maxLength={10}
+                          pattern="\d{10}"
+                          title="Please enter a valid 10-digit phone number"
                         />
                       </div>
 
@@ -845,7 +880,7 @@ export default function NewBookingPage() {
                         if (!isTimeInPast(time)) {
                           return (
                             <option key={time} value={time}>
-                              {time}
+                              {formatTimeDisplay(time)}
                             </option>
                           );
                         }
@@ -873,7 +908,7 @@ export default function NewBookingPage() {
                         if (!isTimeInPast(time)) {
                           return (
                             <option key={time} value={time}>
-                              {time}
+                              {formatTimeDisplay(time)}
                             </option>
                           );
                         }

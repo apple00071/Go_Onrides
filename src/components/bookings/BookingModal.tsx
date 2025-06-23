@@ -29,8 +29,9 @@ interface FormData {
   customer_name: string;
   customer_contact: string;
   customer_email: string;
-  emergency_contact_name: string;
+  alternative_phone: string;
   emergency_contact_phone: string;
+  emergency_contact_phone1: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;
@@ -82,12 +83,13 @@ export default function BookingModal({
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
 
   // Memoize the initial form data
-  const initialFormData = useMemo<FormData>(() => ({
+  const initialFormData: FormData = {
     customer_name: '',
     customer_contact: '',
     customer_email: '',
-    emergency_contact_name: '',
+    alternative_phone: '',
     emergency_contact_phone: '',
+    emergency_contact_phone1: '',
     aadhar_number: '',
     date_of_birth: '',
     dl_number: '',
@@ -105,18 +107,12 @@ export default function BookingModal({
     booking_amount: '',
     security_deposit_amount: '',
     total_amount: '',
-    payment_status: 'pending' as 'full' | 'partial' | 'pending',
-    paid_amount: '',
+    payment_status: 'pending',
+    paid_amount: '0',
     payment_mode: 'cash',
     status: 'confirmed',
-    documents: {
-      customer_photo: '',
-      aadhar_front: '',
-      aadhar_back: '',
-      dl_front: '',
-      dl_back: ''
-    }
-  }), []); // Empty dependency array since this never changes
+    documents: {}
+  };
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
 
@@ -150,46 +146,52 @@ export default function BookingModal({
   useEffect(() => {
     const checkExistingCustomer = async () => {
       if (formData.customer_contact.length >= 10) {
-        const supabase = getSupabaseClient();
-        
-        // First find the customer
-        const { data: customers, error: customerError } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('phone', formData.customer_contact)
-          .limit(1);
+        try {
+          setLoading(true);
+          const supabase = getSupabaseClient();
+          
+          const { data: customers, error } = await supabase
+            .from('customers')
+            .select('*')
+            .eq('phone', formData.customer_contact)
+            .limit(1);
 
-        if (customerError) {
-          console.error('Error checking customer:', customerError);
-          return;
-        }
+          if (error) {
+            throw error;
+          }
 
-        if (customers && customers.length > 0) {
-          const customer = customers[0];
-          setIsExistingCustomer(true);
-          // Pre-fill form data with existing customer info
-          setFormData(prev => ({
-            ...prev,
-            customer_name: customer.name,
-            customer_email: customer.email,
-            emergency_contact_name: customer.emergency_contact?.name || '',
-            emergency_contact_phone: customer.emergency_contact?.phone || '',
-            aadhar_number: customer.identification?.aadhar_number || '',
-            date_of_birth: customer.date_of_birth || '',
-            dl_number: customer.identification?.dl_number || '',
-            dl_expiry_date: customer.identification?.dl_expiry || '',
-            temp_address: customer.address?.temporary || '',
-            perm_address: customer.address?.permanent || '',
-          }));
-          toast.success('Found existing customer - form pre-filled');
-        } else {
-          setIsExistingCustomer(false);
-          // Reset form data except phone number
-          const { customer_contact } = formData;
-          setFormData({
-            ...initialFormData,
-            customer_contact
-          });
+          if (customers && customers.length > 0) {
+            const customer = customers[0];
+            setIsExistingCustomer(true);
+            setFormData(prev => ({
+              ...prev,
+              customer_name: customer.name,
+              customer_email: customer.email || '',
+              alternative_phone: customer.alternative_phone || '',
+              emergency_contact_phone: customer.emergency_contact_phone || '',
+              emergency_contact_phone1: customer.emergency_contact_phone1 || '',
+              aadhar_number: customer.aadhar_number || '',
+              date_of_birth: customer.dob || '',
+              dl_number: customer.dl_number || '',
+              dl_expiry_date: customer.dl_expiry_date || '',
+              temp_address: customer.temp_address_street || '',
+              perm_address: customer.perm_address_street || '',
+              documents: customer.documents || {}
+            }));
+            toast.success('Found existing customer - form pre-filled');
+          } else {
+            setIsExistingCustomer(false);
+            // Reset form data except phone number
+            const { customer_contact } = formData;
+            setFormData({
+              ...initialFormData,
+              customer_contact
+            });
+          }
+        } catch (error) {
+          console.error('Error checking customer:', error);
+        } finally {
+          setLoading(false);
         }
       }
     };
@@ -390,9 +392,8 @@ export default function BookingModal({
       if (!isExistingCustomer) {
         // Validate all fields for new customers
         if (!formData.customer_name || !formData.customer_contact || !formData.customer_email ||
-            !formData.emergency_contact_name || !formData.emergency_contact_phone ||
-            !formData.aadhar_number || !formData.date_of_birth ||
-            !formData.dl_number || !formData.dl_expiry_date ||
+            !formData.emergency_contact_phone || !formData.aadhar_number ||
+            !formData.date_of_birth || !formData.dl_number || !formData.dl_expiry_date ||
             !formData.temp_address || !formData.perm_address) {
           throw new Error('Please fill in all required fields');
         }
@@ -470,8 +471,9 @@ export default function BookingModal({
           .update({
             name: formData.customer_name,
             email: formData.customer_email,
-            emergency_contact_name: formData.emergency_contact_name,
+            alternative_phone: formData.alternative_phone || null,
             emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_phone1: formData.emergency_contact_phone1 || null,
             emergency_contact_relationship: 'emergency',
             dob: formData.date_of_birth,
             aadhar_number: formData.aadhar_number,
@@ -495,8 +497,9 @@ export default function BookingModal({
             name: formData.customer_name,
             email: formData.customer_email,
             phone: formData.customer_contact,
-            emergency_contact_name: formData.emergency_contact_name,
+            alternative_phone: formData.alternative_phone || null,
             emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_phone1: formData.emergency_contact_phone1 || null,
             emergency_contact_relationship: 'emergency',
             dob: formData.date_of_birth,
             aadhar_number: formData.aadhar_number,
@@ -529,8 +532,8 @@ export default function BookingModal({
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
           customer_email: formData.customer_email,
-          emergency_contact_name: formData.emergency_contact_name,
           emergency_contact_phone: formData.emergency_contact_phone,
+          emergency_contact_phone1: formData.emergency_contact_phone1 || null,
           aadhar_number: formData.aadhar_number,
           date_of_birth: formData.date_of_birth,
           dl_number: formData.dl_number,
@@ -687,13 +690,12 @@ export default function BookingModal({
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Emergency Contact Name *
+                    Alternative Phone
                   </label>
                   <input
-                    type="text"
-                    name="emergency_contact_name"
-                    required
-                    value={formData.emergency_contact_name}
+                    type="tel"
+                    name="alternative_phone"
+                    value={formData.alternative_phone}
                     onChange={handleInputChange}
                     className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
@@ -707,6 +709,18 @@ export default function BookingModal({
                     name="emergency_contact_phone"
                     required
                     value={formData.emergency_contact_phone}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Secondary Emergency Contact Phone
+                  </label>
+                  <input
+                    type="tel"
+                    name="emergency_contact_phone1"
+                    value={formData.emergency_contact_phone1}
                     onChange={handleInputChange}
                     className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />

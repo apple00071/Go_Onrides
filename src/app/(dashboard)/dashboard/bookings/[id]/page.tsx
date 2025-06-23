@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download, ZoomIn } from 'lucide-react';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import VehicleDamageHistory from '@/components/bookings/VehicleDamageHistory';
@@ -24,8 +24,9 @@ interface BookingDetailsData {
   customer_name: string;
   customer_contact: string;
   customer_email: string;
-  emergency_contact_name: string;
+  alternative_phone: string;
   emergency_contact_phone: string;
+  emergency_contact_phone1: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;
@@ -74,6 +75,8 @@ interface BookingDetailsData {
   vehicle_remarks?: string;
   damage_charges: number;
   refund_amount: number;
+  late_fee: number;
+  extension_fee: number;
   signatures?: {
     bookingSignature?: string;
     completionSignature?: string;
@@ -100,6 +103,16 @@ function convertToEditBookingFormat(booking: BookingDetailsData) {
   };
 }
 
+// Add a helper function to convert 24h to 12h format
+const formatTimeDisplay = (time: string): string => {
+  if (!time) return '';
+  const [hourStr, minute] = time.split(':');
+  const hour = parseInt(hourStr, 10);
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${period}`;
+};
+
 export default function BookingDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -124,7 +137,7 @@ export default function BookingDetailsPage() {
       // First fetch the booking details
       const { data: bookingData, error: bookingError } = await supabase
         .from('bookings')
-        .select('*')
+        .select('*, late_fee, extension_fee')
         .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
         .single();
 
@@ -156,12 +169,20 @@ export default function BookingDetailsPage() {
         .eq('id', bookingData.customer_id)
         .single();
 
-      // Fetch both initial and completion signatures
-      const { data: signaturesData, error: signatureError } = await supabase
-        .from('booking_signatures')
-        .select('signature_data, signature_type, created_at')
-        .eq('booking_id', bookingData.id)
-        .order('created_at', { ascending: true });
+      // Fetch both initial and completion signatures using the booking's UUID
+      let signaturesData = null;
+      let signatureError = null;
+      
+      if (bookingData.id) {
+        const signaturesResult = await supabase
+          .from('booking_signatures')
+          .select('signature_data, signature_type, created_at')
+          .eq('booking_id', bookingData.id)
+          .order('created_at', { ascending: true });
+        
+        signaturesData = signaturesResult.data;
+        signatureError = signaturesResult.error;
+      }
 
       if (signatureError) {
         console.error('Error fetching signatures:', signatureError);
@@ -189,6 +210,8 @@ export default function BookingDetailsPage() {
         signatures: signature || undefined,
         damage_charges: bookingData.damage_charges || 0,
         refund_amount: bookingData.refund_amount || 0,
+        late_fee: bookingData.late_fee || 0,
+        extension_fee: bookingData.extension_fee || 0,
         documents: customerData?.documents || {
           customer_photo: '',
           aadhar_front: '',
@@ -428,18 +451,20 @@ export default function BookingDetailsPage() {
                     </select>
                   )}
                 </div>
-                <p className="mt-2 text-sm text-gray-500">
-                  Created by {booking?.created_by_user?.username || 'Unknown'} on {new Date(booking?.created_at || '').toLocaleString()}
-                </p>
-                {booking?.completed_at && (
-                  <p className="text-sm text-gray-500">
-                    Completed by {booking?.completed_by_user?.username || 'Unknown'} on {new Date(booking.completed_at).toLocaleString()}
-                  </p>
+                {booking?.created_by_user && (
+                  <div className="text-xs text-gray-500 mt-2">
+                    Created by {booking?.created_by_user?.username || 'Unknown'} on {formatDateTime(booking?.created_at || new Date())}
+                  </div>
                 )}
-                {booking?.updated_by_user && booking.updated_at !== booking.created_at && booking.updated_at !== booking.completed_at && (
-                  <p className="text-sm text-gray-500">
-                    Last updated by {booking.updated_by_user.username} on {new Date(booking.updated_at).toLocaleString()}
-                  </p>
+                {booking.completed_at && booking.completed_by_user && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Completed by {booking?.completed_by_user?.username || 'Unknown'} on {formatDateTime(booking.completed_at)}
+                  </div>
+                )}
+                {booking.updated_at && booking.updated_by_user && (
+                  <div className="text-xs text-gray-500 mt-1">
+                    Last updated by {booking.updated_by_user.username} on {formatDateTime(booking.updated_at)}
+                  </div>
                 )}
               </div>
               <div className="text-right">
@@ -475,7 +500,7 @@ export default function BookingDetailsPage() {
                 </div>
                 <div className="flex items-center mt-1">
                   <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="text-sm">{booking?.pickup_time}</p>
+                  <p className="text-sm">{formatTimeDisplay(booking?.pickup_time || '')}</p>
                 </div>
                 <div className="flex items-center mt-2">
                   <Calendar className="h-4 w-4 mr-2 text-gray-400" />
@@ -483,7 +508,7 @@ export default function BookingDetailsPage() {
                 </div>
                 <div className="flex items-center mt-1">
                   <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="text-sm">{booking?.dropoff_time}</p>
+                  <p className="text-sm">{formatTimeDisplay(booking?.dropoff_time || '')}</p>
                 </div>
               </div>
             </div>
@@ -503,6 +528,12 @@ export default function BookingDetailsPage() {
                   <Phone className="h-4 w-4 mr-2 text-gray-400" />
                   <p className="font-medium">{booking?.customer_contact || 'N/A'}</p>
                 </div>
+                {booking?.alternative_phone && (
+                  <div className="flex items-center mt-1">
+                    <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                    <p className="text-sm">{booking.alternative_phone} (Alternative)</p>
+                  </div>
+                )}
                 {booking?.customer_email && (
                   <div className="flex items-center mt-1">
                     <Mail className="h-4 w-4 mr-2 text-gray-400" />
@@ -527,8 +558,10 @@ export default function BookingDetailsPage() {
               </div>
               <div>
                 <label className="text-sm text-gray-500">Emergency Contact</label>
-                <p className="font-medium">{booking?.emergency_contact_name || 'N/A'}</p>
-                <p className="text-sm text-gray-500">{booking?.emergency_contact_phone || 'N/A'}</p>
+                <p className="font-medium">{booking?.emergency_contact_phone || 'N/A'}</p>
+                {booking?.emergency_contact_phone1 && (
+                  <p className="text-sm text-gray-500">Secondary: {booking.emergency_contact_phone1}</p>
+                )}
               </div>
               <div>
                 <label className="text-sm text-gray-500">Temporary Address</label>
@@ -566,8 +599,15 @@ export default function BookingDetailsPage() {
                   Download Invoice
                 </button>
               </div>
-              <PaymentInformation 
-                booking={booking} 
+              <PaymentInformation
+                bookingAmount={booking.booking_amount}
+                securityDeposit={booking.security_deposit_amount}
+                paidAmount={booking.paid_amount}
+                damageCharges={booking.damage_charges}
+                lateFee={booking.late_fee}
+                extensionFee={booking.extension_fee}
+                status={booking.status}
+                paymentStatus={booking.payment_status}
                 onPaymentCreated={handlePaymentCreated}
               />
             </div>
@@ -654,7 +694,7 @@ export default function BookingDetailsPage() {
                 <div>
                   <h3 className="text-lg font-medium text-gray-900">Completion Information</h3>
                   <p className="text-sm text-gray-500">
-                    Completed by {booking.completed_by_user?.username || 'Unknown'} on {new Date(booking.completed_at || '').toLocaleString()}
+                    Completed by {booking.completed_by_user?.username || 'Unknown'} on {formatDateTime(booking.completed_at || new Date())}
                   </p>
                 </div>
 
@@ -663,6 +703,25 @@ export default function BookingDetailsPage() {
                   <div>
                     <h3 className="text-lg font-medium text-gray-900">Vehicle Return Remarks</h3>
                     <p className="mt-1 text-gray-600">{booking.vehicle_remarks}</p>
+                  </div>
+                )}
+
+                {/* Late Return Details */}
+                {(booking.late_fee > 0 || booking.extension_fee > 0) && (
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Late Return Details</h3>
+                    <div className="mt-2 space-y-2">
+                      {booking.late_fee > 0 && (
+                        <p className="text-sm text-red-600">
+                          Late Fee: {formatCurrency(booking.late_fee)}
+                        </p>
+                      )}
+                      {booking.extension_fee > 0 && (
+                        <p className="text-sm text-red-600">
+                          Extension Fee: {formatCurrency(booking.extension_fee)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
 
