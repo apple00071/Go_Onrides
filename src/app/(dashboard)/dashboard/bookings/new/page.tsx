@@ -46,8 +46,8 @@ interface BookingFormData {
   rental_purpose: 'local' | 'outstation';
   outstation_details: {
     destination: string;
-    odd_meter_reading: number;
-    estimated_km: number;
+    estimated_kms: number;
+    start_odo: number;
   } | null;
   signature?: string;
   terms_accepted: boolean;
@@ -93,9 +93,15 @@ interface BookingData {
   submitted_documents?: SubmittedDocuments;
   outstation_details?: {
     destination: string;
-    odd_meter_reading: number;
-    estimated_km: number;
+    estimated_kms: number;
+    start_odo: number;
   } | null;
+}
+
+interface OutstationDetails {
+  destination: string;
+  estimated_kms: number;
+  start_odo: number;
 }
 
 export default function NewBookingPage() {
@@ -136,7 +142,11 @@ export default function NewBookingPage() {
     payment_mode: 'cash',
     payment_status: 'pending',
     rental_purpose: 'local',
-    outstation_details: null,
+    outstation_details: {
+      destination: '',
+      estimated_kms: 0,
+      start_odo: 0
+    },
     signature: '',
     terms_accepted: false,
     model: '',
@@ -186,8 +196,8 @@ export default function NewBookingPage() {
         rental_purpose: value as 'local' | 'outstation',
         outstation_details: value === 'outstation' ? {
           destination: '',
-          odd_meter_reading: 0,
-          estimated_km: 0
+          estimated_kms: 0,
+          start_odo: 0
         } : null
       }));
       return;
@@ -367,16 +377,16 @@ export default function NewBookingPage() {
         throw new Error('Please fill in all required customer information');
       }
 
-      // Validate outstation details if rental purpose is outstation
+      // Validate outstation details
       if (formData.rental_purpose === 'outstation') {
         if (!formData.outstation_details?.destination) {
           throw new Error('Please enter the destination for outstation booking');
         }
-        if (!formData.outstation_details?.odd_meter_reading || formData.outstation_details.odd_meter_reading <= 0) {
-          throw new Error('Please enter the current odometer reading');
-        }
-        if (!formData.outstation_details?.estimated_km || formData.outstation_details.estimated_km <= 0) {
+        if (!formData.outstation_details?.estimated_kms || formData.outstation_details.estimated_kms <= 0) {
           throw new Error('Please enter the estimated kilometers');
+        }
+        if (!formData.outstation_details?.start_odo || formData.outstation_details.start_odo < 0) {
+          throw new Error('Please enter the start odometer reading');
         }
       }
 
@@ -870,8 +880,8 @@ export default function NewBookingPage() {
                 </div>
 
                 {formData.rental_purpose === 'outstation' && (
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium text-gray-900">Outstation Details</h3>
+                  <div className="space-y-6 border-t pt-6">
+                    <h3 className="text-lg font-medium leading-6 text-gray-900">Outstation Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label htmlFor="outstation_details.destination" className="block text-sm font-medium text-gray-700">
@@ -888,31 +898,31 @@ export default function NewBookingPage() {
                         />
                       </div>
                       <div>
-                        <label htmlFor="outstation_details.odd_meter_reading" className="block text-sm font-medium text-gray-700">
-                          Current Odometer Reading *
+                        <label htmlFor="outstation_details.estimated_kms" className="block text-sm font-medium text-gray-700">
+                          Estimated Kilometers *
                         </label>
                         <input
                           type="number"
-                          id="outstation_details.odd_meter_reading"
-                          name="outstation_details.odd_meter_reading"
+                          id="outstation_details.estimated_kms"
+                          name="outstation_details.estimated_kms"
                           required
                           min="0"
-                          value={formData.outstation_details?.odd_meter_reading || ''}
+                          value={formData.outstation_details?.estimated_kms || ''}
                           onChange={handleInputChange}
                           className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         />
                       </div>
                       <div>
-                        <label htmlFor="outstation_details.estimated_km" className="block text-sm font-medium text-gray-700">
-                          Estimated Kilometers *
+                        <label htmlFor="outstation_details.start_odo" className="block text-sm font-medium text-gray-700">
+                          Start Odometer *
                         </label>
                         <input
                           type="number"
-                          id="outstation_details.estimated_km"
-                          name="outstation_details.estimated_km"
+                          id="outstation_details.start_odo"
+                          name="outstation_details.start_odo"
                           required
                           min="0"
-                          value={formData.outstation_details?.estimated_km || ''}
+                          value={formData.outstation_details?.start_odo || ''}
                           onChange={handleInputChange}
                           className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         />

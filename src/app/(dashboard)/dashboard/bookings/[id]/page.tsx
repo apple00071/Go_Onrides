@@ -73,8 +73,9 @@ async function fetchBookingDetails(bookingId: string): Promise<BookingDetailsDat
   if (booking.rental_purpose === 'outstation' && booking.outstation_details) {
     booking.outstation_details = {
       destination: booking.outstation_details.destination || '',
-      estimated_kilometers: booking.outstation_details.estimated_kilometers || 0,
-      odd_meter_reading: booking.outstation_details.odd_meter_reading || 0
+      estimated_kms: booking.outstation_details.estimated_kms || 0,
+      start_odo: booking.outstation_details.start_odo || 0,
+      end_odo: booking.outstation_details.end_odo || 0
     };
   }
 
@@ -482,13 +483,16 @@ export default function BookingDetailsPage() {
               {booking.rental_purpose === 'outstation' && booking.outstation_details && (
                 <>
                   <p className="text-sm text-gray-500">
-                    <span className="font-medium">Destination:</span> {booking.outstation_details.destination || 'N/A'}
+                    <span className="font-medium">Destination:</span> {booking.outstation_details?.destination || 'N/A'}
                   </p>
                   <p className="text-sm text-gray-500">
-                    <span className="font-medium">Estimated Kilometers:</span> {booking.outstation_details.estimated_kilometers?.toString() || 'N/A'}
+                    <span className="font-medium">Estimated Kilometers:</span> {booking.outstation_details?.estimated_kms?.toString() || 'N/A'}
                   </p>
                   <p className="text-sm text-gray-500">
-                    <span className="font-medium">Odometer Reading:</span> {booking.outstation_details.odd_meter_reading?.toString() || 'N/A'}
+                    <span className="font-medium">Start Odometer:</span> {booking.outstation_details?.start_odo?.toString() || 'N/A'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    <span className="font-medium">End Odometer:</span> {booking.outstation_details?.end_odo?.toString() || 'N/A'}
                   </p>
                 </>
               )}
