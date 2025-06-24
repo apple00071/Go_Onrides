@@ -31,6 +31,9 @@ interface Booking {
     username: string;
   };
   paid_amount?: number;
+  damage_charges?: number;
+  late_fee?: number;
+  extension_fee?: number;
 }
 
 interface BookingsTableProps {
@@ -51,8 +54,16 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
+  const calculateTotalAmount = (booking: Booking) => {
+    const baseAmount = booking.booking_amount + booking.security_deposit_amount;
+    const additionalFees = (booking.status === 'completed' || booking.status === 'in_use')
+      ? (booking.damage_charges || 0) + (booking.late_fee || 0) + (booking.extension_fee || 0)
+      : 0;
+    return baseAmount + additionalFees;
+  };
+
   const getPaymentStatusDisplay = (booking: Booking) => {
-    const totalRequired = booking.booking_amount + booking.security_deposit_amount;
+    const totalRequired = calculateTotalAmount(booking);
     const paidAmount = booking.paid_amount || 0;
     return paidAmount >= totalRequired ? 'full' : paidAmount > 0 ? 'partial' : 'pending';
   };
@@ -190,9 +201,16 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
-                  <span className="text-sm font-medium text-gray-900">
-                    {formatCurrency(booking.booking_amount + booking.security_deposit_amount)}
-                  </span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-gray-900">
+                      {formatCurrency(calculateTotalAmount(booking))}
+                    </span>
+                    {booking.paid_amount ? (
+                      <span className="text-xs text-gray-500">
+                        Paid: {formatCurrency(booking.paid_amount)}
+                      </span>
+                    ) : null}
+                  </div>
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
                   <div className="flex flex-col gap-2">

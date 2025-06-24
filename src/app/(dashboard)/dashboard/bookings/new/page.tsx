@@ -1,47 +1,22 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
-import DocumentUpload from '@/components/bookings/DocumentUpload';
 import { generateBookingId } from '@/lib/utils';
 import SignaturePad from 'react-signature-canvas';
 import type SignaturePadType from 'react-signature-canvas';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
+import DocumentUpload from '@/components/documents/DocumentUpload';
+import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
+import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
+import { type FormEvent } from 'react';
+import { RefreshCw, Upload, Camera, X } from 'lucide-react';
+import { notifyBookingEvent } from '@/lib/notification';
 
-type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
-
-interface CustomerDocuments {
-  customer_photo?: string;
-  aadhar_front?: string;
-  aadhar_back?: string;
-  dl_front?: string;
-  dl_back?: string;
-}
-
-interface SubmittedDocuments {
-  original_aadhar: boolean;
-  original_dl: boolean;
-  pan_card: boolean;
-  voter_id: boolean;
-  passport: boolean;
-  other_doc1: {
-    name: string;
-    submitted: boolean;
-  };
-  other_doc2: {
-    name: string;
-    submitted: boolean;
-  };
-  other_doc3: {
-    name: string;
-    submitted: boolean;
-  };
-}
-
-interface FormData {
+interface BookingFormData {
   customer_name: string;
   customer_contact: string;
   customer_email: string;
@@ -52,43 +27,88 @@ interface FormData {
   date_of_birth: string;
   dl_number: string;
   dl_expiry_date: string;
-  start_date: string;
-  end_date: string;
-  pickup_time: string;
-  dropoff_time: string;
   temp_address: string;
   perm_address: string;
-  rental_purpose: 'local' | 'outstation';
-  outstation_details: {
-    odd_meter_reading: string;
-    destination: string;
-    estimated_km: string;
-  };
   vehicle_details: {
     model: string;
     registration: string;
   };
-  booking_amount: string;
-  security_deposit_amount: string;
-  total_amount: string;
-  payment_status: 'full' | 'partial' | 'pending';
-  paid_amount: string;
+  start_date: string;
+  end_date: string;
+  pickup_time: string;
+  dropoff_time: string;
+  booking_amount: number;
+  security_deposit_amount: number;
+  total_amount: number;
+  paid_amount: number;
   payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
-  status: 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
-  documents: CustomerDocuments;
-  submitted_documents: SubmittedDocuments;
-  signature: string;
+  payment_status: 'full' | 'partial' | 'pending';
+  rental_purpose: 'local' | 'outstation';
+  outstation_details: {
+    destination: string;
+    odd_meter_reading: number;
+    estimated_km: number;
+  } | null;
+  signature?: string;
   terms_accepted: boolean;
+  model: string;
+  destination: string;
+  uploaded_documents?: UploadedDocuments;
+  submitted_documents?: SubmittedDocuments;
+}
+
+// Add interface for booking data
+interface BookingData {
+  booking_id: string;
+  customer_id: string;
+  customer_name: string;
+  customer_contact: string;
+  customer_email: string;
+  emergency_contact_phone: string;
+  emergency_contact_phone1: string;
+  aadhar_number: string;
+  date_of_birth: string;
+  dl_number: string;
+  dl_expiry_date: string;
+  temp_address: string;
+  perm_address: string;
+  vehicle_details: {
+    model: string;
+    registration: string;
+  };
+  start_date: string;
+  end_date: string;
+  pickup_time: string;
+  dropoff_time: string;
+  booking_amount: number;
+  security_deposit_amount: number;
+  total_amount: number;
+  payment_status: 'full' | 'partial' | 'pending';
+  paid_amount: number;
+  payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
+  rental_purpose: 'local' | 'outstation';
+  created_at: string;
+  created_by: string | undefined;
+  status: 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
+  submitted_documents?: SubmittedDocuments;
+  outstation_details?: {
+    destination: string;
+    odd_meter_reading: number;
+    estimated_km: number;
+  } | null;
 }
 
 export default function NewBookingPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const [signaturePad, setSignaturePad] = useState<SignaturePadType | null>(null);
+  const [debouncedAadhar, setDebouncedAadhar] = useState('');
+  const [tempBookingId, setTempBookingId] = useState<string>('');
 
-  const initialFormData = useMemo<FormData>(() => ({
+  const initialFormData: BookingFormData = {
     customer_name: '',
     customer_contact: '',
     customer_email: '',
@@ -99,51 +119,39 @@ export default function NewBookingPage() {
     date_of_birth: '',
     dl_number: '',
     dl_expiry_date: '',
-    start_date: '',
-    end_date: '',
-    pickup_time: '',
-    dropoff_time: '',
     temp_address: '',
     perm_address: '',
-    rental_purpose: 'local',
-    outstation_details: {
-      odd_meter_reading: '',
-      destination: '',
-      estimated_km: ''
-    },
     vehicle_details: {
       model: '',
       registration: ''
     },
-    booking_amount: '',
-    security_deposit_amount: '',
-    total_amount: '',
-    payment_status: 'pending',
-    paid_amount: '',
+    start_date: '',
+    end_date: '',
+    pickup_time: '',
+    dropoff_time: '',
+    booking_amount: 0,
+    security_deposit_amount: 0,
+    total_amount: 0,
+    paid_amount: 0,
     payment_mode: 'cash',
-    status: 'confirmed',
-    documents: {
-      customer_photo: '',
-      aadhar_front: '',
-      aadhar_back: '',
-      dl_front: '',
-      dl_back: ''
-    },
+    payment_status: 'pending',
+    rental_purpose: 'local',
+    outstation_details: null,
+    signature: '',
+    terms_accepted: false,
+    model: '',
+    destination: '',
+    uploaded_documents: {},
     submitted_documents: {
       original_aadhar: false,
       original_dl: false,
-      pan_card: false,
-      voter_id: false,
       passport: false,
-      other_doc1: { name: '', submitted: false },
-      other_doc2: { name: '', submitted: false },
-      other_doc3: { name: '', submitted: false }
-    },
-    signature: '',
-    terms_accepted: false
-  }), []);
+      voter_id: false,
+      other_document: ''
+    }
+  };
 
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+  const [formData, setFormData] = useState<BookingFormData>(initialFormData);
 
   const getCurrentTime = () => {
     const now = new Date();
@@ -162,6 +170,40 @@ export default function NewBookingPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    
+    if (name === 'aadhar_number') {
+      setFormData(prev => ({ ...prev, [name]: value }));
+      
+      if (value.length === 12) {
+        setDebouncedAadhar(value);
+      }
+      return;
+    }
+
+    if (name === 'rental_purpose') {
+      setFormData(prev => ({
+        ...prev,
+        rental_purpose: value as 'local' | 'outstation',
+        outstation_details: value === 'outstation' ? {
+          destination: '',
+          odd_meter_reading: 0,
+          estimated_km: 0
+        } : null
+      }));
+      return;
+    }
+
+    if (name.startsWith('outstation_details.')) {
+      const field = name.split('.')[1];
+      setFormData(prev => ({
+        ...prev,
+        outstation_details: prev.outstation_details ? {
+          ...prev.outstation_details,
+          [field]: field === 'destination' ? value : Number(value)
+        } : null
+      }));
+      return;
+    }
 
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
@@ -173,89 +215,110 @@ export default function NewBookingPage() {
             [child]: value
           }
         }));
-      } else if (parent === 'outstation_details') {
-        setFormData(prev => ({
-          ...prev,
-          outstation_details: {
-            ...prev.outstation_details,
-            [child]: value
-          }
-        }));
       }
     } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
+      setFormData(prev => ({
+        ...prev,
+        [name]: name.includes('amount') ? Number(value) : value
+      }));
     }
   };
 
   useEffect(() => {
-    const bookingAmt = parseFloat(formData.booking_amount) || 0;
-    const securityAmt = parseFloat(formData.security_deposit_amount) || 0;
+    const bookingAmt = parseFloat(formData.booking_amount.toString()) || 0;
+    const securityAmt = parseFloat(formData.security_deposit_amount.toString()) || 0;
     const total = bookingAmt + securityAmt;
-    setFormData(prev => ({ ...prev, total_amount: total.toString() }));
+    setFormData(prev => ({ ...prev, total_amount: total }));
   }, [formData.booking_amount, formData.security_deposit_amount]);
 
   useEffect(() => {
     if (formData.payment_status === 'full') {
-      setFormData(prev => ({ ...prev, paid_amount: formData.total_amount }));
+      setFormData(prev => ({ ...prev, paid_amount: parseFloat(formData.total_amount.toString()) || 0 }));
     } else if (formData.payment_status === 'pending') {
-      setFormData(prev => ({ ...prev, paid_amount: '0' }));
+      setFormData(prev => ({ ...prev, paid_amount: 0 }));
     }
   }, [formData.payment_status, formData.total_amount]);
 
+  const checkExistingCustomer = async (aadharNumber: string) => {
+    if (!aadharNumber || aadharNumber.length !== 12) return;
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const supabase = getSupabaseClient();
+      
+      const { data: customers, error } = await supabase
+        .from('customers')
+        .select('*, documents')
+        .eq('aadhar_number', aadharNumber)
+        .limit(1);
+
+      if (error) {
+        throw error;
+      }
+
+      if (customers && customers.length > 0) {
+        const customer = customers[0];
+        setIsExistingCustomer(true);
+        setFormData(prev => ({
+          ...prev,
+          customer_name: customer.name || '',
+          customer_email: customer.email || '',
+          customer_contact: customer.phone || '',
+          alternative_phone: customer.alternative_phone || '',
+          emergency_contact_phone: customer.emergency_contact_phone || '',
+          emergency_contact_phone1: customer.emergency_contact_phone1 || '',
+          date_of_birth: customer.dob || '',
+          dl_number: customer.dl_number || '',
+          dl_expiry_date: customer.dl_expiry_date || '',
+          temp_address: customer.temp_address_street || '',
+          perm_address: customer.perm_address_street || '',
+          uploaded_documents: customer.documents || {}
+        }));
+        toast.success('Found existing customer - form pre-filled with details and documents');
+      } else {
+        setIsExistingCustomer(false);
+        setFormData(prev => ({
+          ...prev,
+          customer_name: '',
+          customer_email: '',
+          customer_contact: '',
+          alternative_phone: '',
+          emergency_contact_phone: '',
+          emergency_contact_phone1: '',
+          date_of_birth: '',
+          dl_number: '',
+          dl_expiry_date: '',
+          temp_address: '',
+          perm_address: '',
+          uploaded_documents: {}
+        }));
+      }
+    } catch (error) {
+      console.error('Error checking customer:', error);
+      setError('Failed to check customer details. Please try again.');
+      toast.error('Failed to check customer details');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const checkExistingCustomer = async () => {
-      if (formData.aadhar_number.length === 12) {
-        const supabase = getSupabaseClient();
-        
-        const { data: customers, error: customerError } = await supabase
-          .from('customers')
-          .select('*')
-          .eq('aadhar_number', formData.aadhar_number)
-          .limit(1);
+    let timeoutId: NodeJS.Timeout;
 
-        if (customerError) {
-          console.error('Error checking customer:', customerError);
-          return;
-        }
+    if (debouncedAadhar) {
+      timeoutId = setTimeout(() => {
+        checkExistingCustomer(debouncedAadhar);
+      }, 500);
+    }
 
-        if (customers && customers.length > 0) {
-          const customer = customers[0];
-          setIsExistingCustomer(true);
-          setFormData(prev => ({
-            ...prev,
-            customer_name: customer.name,
-            customer_contact: customer.phone,
-            customer_email: customer.email || '',
-            alternative_phone: customer.alternative_phone || '',
-            emergency_contact_phone: customer.emergency_contact_phone || '',
-            emergency_contact_phone1: customer.emergency_contact_phone1 || '',
-            date_of_birth: customer.dob || '',
-            dl_number: customer.dl_number || '',
-            dl_expiry_date: customer.dl_expiry_date || '',
-            temp_address: customer.temp_address_street || '',
-            perm_address: customer.perm_address_street || '',
-            documents: customer.documents || {
-              customer_photo: '',
-              aadhar_front: '',
-              aadhar_back: '',
-              dl_front: '',
-              dl_back: ''
-            }
-          }));
-          toast.success('Found existing customer - form pre-filled');
-        } else {
-          setIsExistingCustomer(false);
-          const { aadhar_number } = formData;
-          setFormData({
-            ...initialFormData,
-            aadhar_number
-          });
-        }
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
       }
     };
-
-    checkExistingCustomer();
-  }, [formData.aadhar_number, initialFormData]);
+  }, [debouncedAadhar]);
 
   const today = useMemo(() => new Date().toISOString().split('T')[0], []);
   const maxDOB = useMemo(() => {
@@ -278,16 +341,6 @@ export default function NewBookingPage() {
     return date.toISOString().split('T')[0];
   }, [formData.start_date]);
 
-  const handleDocumentUpload = (type: DocumentType, url: string) => {
-    setFormData(prev => ({
-      ...prev,
-      documents: {
-        ...prev.documents,
-        [type]: url
-      }
-    }));
-  };
-
   const handleSignatureClear = () => {
     if (signaturePad) {
       signaturePad.clear();
@@ -302,169 +355,186 @@ export default function NewBookingPage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
+    
     try {
-      const supabase = getSupabaseClient();
-      const bookingId = await generateBookingId(supabase);
+      setSubmitting(true);
+      setError(null);
 
-      if (!isExistingCustomer) {
-        if (!formData.customer_name || !formData.customer_contact || !formData.customer_email ||
-            !formData.emergency_contact_phone || !formData.emergency_contact_phone1 ||
-            !formData.aadhar_number || !formData.date_of_birth ||
-            !formData.dl_number || !formData.dl_expiry_date ||
-            !formData.temp_address || !formData.perm_address) {
-          throw new Error('Please fill in all required fields');
+      // Validate required fields
+      if (!formData.customer_name || !formData.customer_contact || !formData.aadhar_number) {
+        throw new Error('Please fill in all required customer information');
+      }
+
+      // Validate outstation details if rental purpose is outstation
+      if (formData.rental_purpose === 'outstation') {
+        if (!formData.outstation_details?.destination) {
+          throw new Error('Please enter the destination for outstation booking');
+        }
+        if (!formData.outstation_details?.odd_meter_reading || formData.outstation_details.odd_meter_reading <= 0) {
+          throw new Error('Please enter the current odometer reading');
+        }
+        if (!formData.outstation_details?.estimated_km || formData.outstation_details.estimated_km <= 0) {
+          throw new Error('Please enter the estimated kilometers');
         }
       }
 
-      let customerId: string;
-      const { data: existingCustomers, error: customerCheckError } = await supabase
+      const supabase = getSupabaseClient();
+
+      // Get the current user's email to use in the notification
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Create or update customer first
+      const customerData = {
+        name: formData.customer_name,
+        phone: formData.customer_contact,
+        email: formData.customer_email,
+        alternative_phone: formData.alternative_phone,
+        emergency_contact_phone: formData.emergency_contact_phone,
+        emergency_contact_phone1: formData.emergency_contact_phone1,
+        aadhar_number: formData.aadhar_number,
+        dob: formData.date_of_birth,
+        dl_number: formData.dl_number,
+        dl_expiry_date: formData.dl_expiry_date,
+        temp_address_street: formData.temp_address,
+        perm_address_street: formData.perm_address,
+        documents: formData.uploaded_documents,
+        updated_at: new Date().toISOString(),
+        created_by: user?.id
+      };
+
+      // First try to get the existing customer
+      const { data: existingCustomer, error: customerCheckError } = await supabase
         .from('customers')
         .select('id')
-        .eq('phone', formData.customer_contact)
-        .limit(1);
+        .eq('aadhar_number', formData.aadhar_number)
+        .single();
 
-      if (customerCheckError) {
-        throw new Error(`Failed to check existing customer: ${customerCheckError.message}`);
-      }
+      let customerId;
 
-      if (existingCustomers && existingCustomers.length > 0) {
-        customerId = existingCustomers[0].id;
-        
-        const { error: customerUpdateError } = await supabase
+      if (existingCustomer) {
+        // Update existing customer
+        const { error: updateError } = await supabase
           .from('customers')
-          .update({
-            name: formData.customer_name,
-            email: formData.customer_email || null,
-            alternative_phone: formData.alternative_phone || null,
-            emergency_contact_phone: formData.emergency_contact_phone,
-            emergency_contact_phone1: formData.emergency_contact_phone1 || null,
-            emergency_contact_relationship: 'emergency',
-            dob: formData.date_of_birth || null,
-            aadhar_number: formData.aadhar_number,
-            dl_number: formData.dl_number,
-            dl_expiry_date: formData.dl_expiry_date || null,
-            temp_address_street: formData.temp_address || '',
-            perm_address_street: formData.perm_address || '',
-            documents: formData.documents
-          })
-          .eq('id', customerId);
-
-        if (customerUpdateError) {
-          throw new Error(`Failed to update customer: ${customerUpdateError.message}`);
-        }
-      } else {
-        const { data: newCustomer, error: customerCreateError } = await supabase
-          .from('customers')
-          .insert({
-            name: formData.customer_name,
-            email: formData.customer_email || null,
-            phone: formData.customer_contact,
-            alternative_phone: formData.alternative_phone || null,
-            emergency_contact_phone: formData.emergency_contact_phone,
-            emergency_contact_phone1: formData.emergency_contact_phone1 || null,
-            emergency_contact_relationship: 'emergency',
-            dob: formData.date_of_birth || null,
-            aadhar_number: formData.aadhar_number,
-            dl_number: formData.dl_number,
-            dl_expiry_date: formData.dl_expiry_date || null,
-            temp_address_street: formData.temp_address || '',
-            perm_address_street: formData.perm_address || '',
-            documents: formData.documents,
-            created_by: (await supabase.auth.getUser()).data.user?.id
-          })
-          .select('id')
+          .update(customerData)
+          .eq('id', existingCustomer.id)
+          .select()
           .single();
 
-        if (customerCreateError || !newCustomer) {
-          throw new Error(`Failed to create customer: ${customerCreateError?.message}`);
+        if (updateError) {
+          throw new Error(`Failed to update customer: ${updateError.message}`);
         }
+        customerId = existingCustomer.id;
+      } else {
+        // Insert new customer
+        const { data: newCustomer, error: insertError } = await supabase
+          .from('customers')
+          .insert([customerData])
+          .select()
+          .single();
 
+        if (insertError) {
+          throw new Error(`Failed to create customer: ${insertError.message}`);
+        }
         customerId = newCustomer.id;
       }
 
+      // Create booking with the customer ID
       const { data: newBooking, error: bookingError } = await supabase
         .from('bookings')
         .insert({
-          booking_id: bookingId,
+          booking_id: tempBookingId,
           customer_id: customerId,
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
-          customer_email: formData.customer_email || null,
+          customer_email: formData.customer_email,
           emergency_contact_phone: formData.emergency_contact_phone,
-          emergency_contact_phone1: formData.emergency_contact_phone1 || null,
+          emergency_contact_phone1: formData.emergency_contact_phone1,
           aadhar_number: formData.aadhar_number,
-          date_of_birth: formData.date_of_birth || null,
+          date_of_birth: formData.date_of_birth,
           dl_number: formData.dl_number,
-          dl_expiry_date: formData.dl_expiry_date || null,
-          temp_address: formData.temp_address || '',
-          perm_address: formData.perm_address || '',
+          dl_expiry_date: formData.dl_expiry_date,
+          temp_address: formData.temp_address,
+          perm_address: formData.perm_address,
           vehicle_details: formData.vehicle_details,
-          rental_purpose: formData.rental_purpose,
-          outstation_details: formData.rental_purpose === 'outstation' ? formData.outstation_details : null,
-          submitted_documents: formData.submitted_documents,
           start_date: formData.start_date,
           end_date: formData.end_date,
           pickup_time: formData.pickup_time,
           dropoff_time: formData.dropoff_time,
-          booking_amount: parseFloat(formData.booking_amount),
-          security_deposit_amount: parseFloat(formData.security_deposit_amount),
-          total_amount: parseFloat(formData.total_amount),
-          paid_amount: parseFloat(formData.paid_amount),
+          booking_amount: formData.booking_amount,
+          security_deposit_amount: formData.security_deposit_amount,
+          total_amount: formData.total_amount,
           payment_status: formData.payment_status,
+          paid_amount: formData.paid_amount,
           payment_mode: formData.payment_mode,
-          status: formData.status,
-          created_by: (await supabase.auth.getUser()).data.user?.id
+          rental_purpose: formData.rental_purpose,
+          outstation_details: formData.outstation_details,
+          created_at: new Date().toISOString(),
+          created_by: user?.id,
+          status: 'confirmed',
+          submitted_documents: formData.submitted_documents
         })
-        .select('id')
+        .select()
         .single();
 
-      if (bookingError || !newBooking) {
-        throw new Error(`Failed to create booking: ${bookingError?.message}`);
+      if (bookingError) {
+        throw new Error(`Failed to create booking: ${bookingError.message}`);
       }
 
-      if (formData.signature) {
+      // If there are uploaded documents, store them in the documents table
+      if (formData.uploaded_documents && Object.keys(formData.uploaded_documents).length > 0) {
+        const documentsToInsert = Object.entries(formData.uploaded_documents).map(([type, url]) => ({
+          booking_id: newBooking.id,
+          customer_id: customerId,
+          document_type: type,
+          document_url: url,
+          created_at: new Date().toISOString()
+        }));
+
+        const { error: documentsError } = await supabase
+          .from('documents')
+          .insert(documentsToInsert);
+
+        if (documentsError) {
+          console.error('Failed to save documents:', documentsError);
+          toast.error('Failed to save some documents. Please try again.');
+          // Don't throw error here, as booking is already created
+        }
+      }
+
+      // Store signature in booking_signatures table if signature exists
+      if (formData.signature && newBooking?.id) {
         const { error: signatureError } = await supabase
           .from('booking_signatures')
           .insert({
             booking_id: newBooking.id,
             signature_data: formData.signature,
-            created_at: new Date().toISOString()
           });
 
         if (signatureError) {
-          console.error('Signature error details:', signatureError);
+          console.error('Failed to save signature:', signatureError);
+          toast.error('Failed to save signature. Please try again.');
+          // Don't throw error here, as booking is already created
         }
       }
 
-      if (parseFloat(formData.paid_amount) > 0) {
-        const { error: paymentError } = await supabase
-          .from('payments')
-          .insert({
-            booking_id: newBooking.id,
-            amount: parseFloat(formData.paid_amount),
-            payment_mode: formData.payment_mode,
-            payment_status: 'completed',
-            created_at: new Date().toISOString(),
-            created_by: (await supabase.auth.getUser()).data.user?.id
-          });
+      // Create notification for the new booking
+      await notifyBookingEvent('BOOKING_CREATED', newBooking.id, {
+        customerName: formData.customer_name,
+        bookingId: tempBookingId,
+        actionBy: user?.id || 'Unknown',
+        vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
+      });
 
-        if (paymentError) {
-          console.error('Payment creation error:', paymentError);
-        }
-      }
-
-      toast.success(`Booking created successfully. Booking ID: ${bookingId}`);
+      toast.success('Booking created successfully!');
       router.push('/dashboard/bookings');
     } catch (error) {
       console.error('Error creating booking:', error);
-      setError(error instanceof Error ? error.message : 'An unexpected error occurred');
+      setError(error instanceof Error ? error.message : 'Failed to create booking');
+      toast.error(error instanceof Error ? error.message : 'Failed to create booking');
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -476,6 +546,33 @@ export default function NewBookingPage() {
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minute} ${period}`;
   };
+
+  const handleDocumentsUploaded = (documents: UploadedDocuments) => {
+    setFormData(prev => ({
+      ...prev,
+      uploaded_documents: {
+        ...prev.uploaded_documents,
+        ...documents
+      }
+    }));
+  };
+
+  const handleSubmittedDocumentsChange = (documents: SubmittedDocuments) => {
+    setFormData(prev => ({
+      ...prev,
+      submitted_documents: documents
+    }));
+  };
+
+  useEffect(() => {
+    // Generate a temporary booking ID when component mounts
+    const generateTempId = async () => {
+      const supabase = getSupabaseClient();
+      const id = await generateBookingId(supabase);
+      setTempBookingId(id);
+    };
+    generateTempId();
+  }, []);
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -493,7 +590,7 @@ export default function NewBookingPage() {
         <div className="bg-white rounded-lg shadow">
           <div className="px-6 py-4 border-b">
             <h1 className="text-xl font-semibold text-gray-900">
-              {isExistingCustomer ? 'Create Booking for Existing Customer' : 'Create New Booking'}
+              Create New Booking
             </h1>
           </div>
 
@@ -525,6 +622,7 @@ export default function NewBookingPage() {
                       maxLength={12}
                       pattern="\d{12}"
                       title="Please enter a valid 12-digit Aadhar number"
+                      placeholder="Enter 12-digit Aadhar number to search"
                     />
                   </div>
 
@@ -577,144 +675,140 @@ export default function NewBookingPage() {
                     />
                   </div>
 
-                  {!isExistingCustomer && (
-                    <>
-                      <div>
-                        <label htmlFor="alternative_phone" className="block text-sm font-medium text-gray-700 mb-1">
-                          Alternative Phone
-                        </label>
-                        <input
-                          id="alternative_phone"
-                          type="tel"
-                          name="alternative_phone"
-                          value={formData.alternative_phone}
-                          onChange={handleInputChange}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          maxLength={10}
-                          pattern="\d{10}"
-                          title="Please enter a valid 10-digit phone number"
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="alternative_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                      Alternative Phone
+                    </label>
+                    <input
+                      id="alternative_phone"
+                      type="tel"
+                      name="alternative_phone"
+                      value={formData.alternative_phone}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      maxLength={10}
+                      pattern="\d{10}"
+                      title="Please enter a valid 10-digit phone number"
+                    />
+                  </div>
 
-                      <div>
-                        <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
-                          Emergency Contact Phone *
-                        </label>
-                        <input
-                          id="emergency_contact_phone"
-                          type="tel"
-                          name="emergency_contact_phone"
-                          required
-                          value={formData.emergency_contact_phone}
-                          onChange={handleInputChange}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          aria-required="true"
-                          maxLength={10}
-                          pattern="\d{10}"
-                          title="Please enter a valid 10-digit phone number"
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                      Emergency Contact Phone *
+                    </label>
+                    <input
+                      id="emergency_contact_phone"
+                      type="tel"
+                      name="emergency_contact_phone"
+                      required
+                      value={formData.emergency_contact_phone}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                      maxLength={10}
+                      pattern="\d{10}"
+                      title="Please enter a valid 10-digit phone number"
+                    />
+                  </div>
 
-                      <div>
-                        <label htmlFor="emergency_contact_phone1" className="block text-sm font-medium text-gray-700 mb-1">
-                          Secondary Emergency Contact Phone
-                        </label>
-                        <input
-                          id="emergency_contact_phone1"
-                          type="tel"
-                          name="emergency_contact_phone1"
-                          value={formData.emergency_contact_phone1}
-                          onChange={handleInputChange}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          maxLength={10}
-                          pattern="\d{10}"
-                          title="Please enter a valid 10-digit phone number"
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="emergency_contact_phone1" className="block text-sm font-medium text-gray-700 mb-1">
+                      Secondary Emergency Contact Phone
+                    </label>
+                    <input
+                      id="emergency_contact_phone1"
+                      type="tel"
+                      name="emergency_contact_phone1"
+                      value={formData.emergency_contact_phone1}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      maxLength={10}
+                      pattern="\d{10}"
+                      title="Please enter a valid 10-digit phone number"
+                    />
+                  </div>
 
-                      <div>
-                        <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 mb-1">
-                          Date of Birth *
-                        </label>
-                        <input
-                          id="date_of_birth"
-                          type="date"
-                          name="date_of_birth"
-                          required
-                          max={maxDOB}
-                          value={formData.date_of_birth}
-                          onChange={handleInputChange}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          aria-required="true"
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 mb-1">
+                      Date of Birth *
+                    </label>
+                    <input
+                      id="date_of_birth"
+                      type="date"
+                      name="date_of_birth"
+                      required
+                      max={maxDOB}
+                      value={formData.date_of_birth}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
 
-                      <div>
-                        <label htmlFor="dl_number" className="block text-sm font-medium text-gray-700 mb-1">
-                          Driving License Number *
-                        </label>
-                        <input
-                          id="dl_number"
-                          type="text"
-                          name="dl_number"
-                          required
-                          value={formData.dl_number}
-                          onChange={handleInputChange}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          aria-required="true"
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="dl_number" className="block text-sm font-medium text-gray-700 mb-1">
+                      Driving License Number *
+                    </label>
+                    <input
+                      id="dl_number"
+                      type="text"
+                      name="dl_number"
+                      required
+                      value={formData.dl_number}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
 
-                      <div>
-                        <label htmlFor="dl_expiry_date" className="block text-sm font-medium text-gray-700 mb-1">
-                          DL Expiry Date *
-                        </label>
-                        <input
-                          id="dl_expiry_date"
-                          type="date"
-                          name="dl_expiry_date"
-                          required
-                          min={minDLExpiry}
-                          value={formData.dl_expiry_date}
-                          onChange={handleInputChange}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          aria-required="true"
-                        />
-                      </div>
+                  <div>
+                    <label htmlFor="dl_expiry_date" className="block text-sm font-medium text-gray-700 mb-1">
+                      DL Expiry Date *
+                    </label>
+                    <input
+                      id="dl_expiry_date"
+                      type="date"
+                      name="dl_expiry_date"
+                      required
+                      min={minDLExpiry}
+                      value={formData.dl_expiry_date}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
 
-                      <div className="md:col-span-2">
-                        <label htmlFor="temp_address" className="block text-sm font-medium text-gray-700 mb-1">
-                          Temporary Address *
-                        </label>
-                        <textarea
-                          id="temp_address"
-                          name="temp_address"
-                          required
-                          value={formData.temp_address}
-                          onChange={handleInputChange}
-                          rows={2}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          aria-required="true"
-                        />
-                      </div>
+                  <div className="md:col-span-2">
+                    <label htmlFor="temp_address" className="block text-sm font-medium text-gray-700 mb-1">
+                      Temporary Address *
+                    </label>
+                    <textarea
+                      id="temp_address"
+                      name="temp_address"
+                      required
+                      value={formData.temp_address}
+                      onChange={handleInputChange}
+                      rows={2}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
 
-                      <div className="md:col-span-2">
-                        <label htmlFor="perm_address" className="block text-sm font-medium text-gray-700 mb-1">
-                          Permanent Address *
-                        </label>
-                        <textarea
-                          id="perm_address"
-                          name="perm_address"
-                          required
-                          value={formData.perm_address}
-                          onChange={handleInputChange}
-                          rows={2}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                          aria-required="true"
-                        />
-                      </div>
-                    </>
-                  )}
+                  <div className="md:col-span-2">
+                    <label htmlFor="perm_address" className="block text-sm font-medium text-gray-700 mb-1">
+                      Permanent Address *
+                    </label>
+                    <textarea
+                      id="perm_address"
+                      name="perm_address"
+                      required
+                      value={formData.perm_address}
+                      onChange={handleInputChange}
+                      rows={2}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -777,47 +871,52 @@ export default function NewBookingPage() {
 
                 {formData.rental_purpose === 'outstation' && (
                   <div className="space-y-4">
-                    <div>
-                      <label htmlFor="outstation_details.odd_meter_reading" className="block text-sm font-medium text-gray-700">
-                        Odd Meter Reading
-                      </label>
-                      <input
-                        type="text"
-                        id="outstation_details.odd_meter_reading"
-                        name="outstation_details.odd_meter_reading"
-                        value={formData.outstation_details.odd_meter_reading}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="outstation_details.destination" className="block text-sm font-medium text-gray-700">
-                        Destination
-                      </label>
-                      <input
-                        type="text"
-                        id="outstation_details.destination"
-                        name="outstation_details.destination"
-                        value={formData.outstation_details.destination}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label htmlFor="outstation_details.estimated_km" className="block text-sm font-medium text-gray-700">
-                        Estimated Kilometers
-                      </label>
-                      <input
-                        type="number"
-                        id="outstation_details.estimated_km"
-                        name="outstation_details.estimated_km"
-                        value={formData.outstation_details.estimated_km}
-                        onChange={handleInputChange}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                        required
-                      />
+                    <h3 className="text-lg font-medium text-gray-900">Outstation Details</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label htmlFor="outstation_details.destination" className="block text-sm font-medium text-gray-700">
+                          Destination *
+                        </label>
+                        <input
+                          type="text"
+                          id="outstation_details.destination"
+                          name="outstation_details.destination"
+                          required
+                          value={formData.outstation_details?.destination || ''}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="outstation_details.odd_meter_reading" className="block text-sm font-medium text-gray-700">
+                          Current Odometer Reading *
+                        </label>
+                        <input
+                          type="number"
+                          id="outstation_details.odd_meter_reading"
+                          name="outstation_details.odd_meter_reading"
+                          required
+                          min="0"
+                          value={formData.outstation_details?.odd_meter_reading || ''}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="outstation_details.estimated_km" className="block text-sm font-medium text-gray-700">
+                          Estimated Kilometers *
+                        </label>
+                        <input
+                          type="number"
+                          id="outstation_details.estimated_km"
+                          name="outstation_details.estimated_km"
+                          required
+                          min="0"
+                          value={formData.outstation_details?.estimated_km || ''}
+                          onChange={handleInputChange}
+                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        />
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1024,271 +1123,25 @@ export default function NewBookingPage() {
                 </div>
               </div>
 
-              {/* Document Upload - Only for new customers */}
-              {!isExistingCustomer && (
-                <div className="space-y-6">
-                  <h3 className="text-lg font-medium text-gray-900">Document Upload</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    <DocumentUpload
-                      customerId={formData.customer_contact}
-                      documentType="customer_photo"
-                      onUploadComplete={(url) => handleDocumentUpload('customer_photo', url)}
-                      existingUrl={formData.documents.customer_photo}
-                    />
-                    <DocumentUpload
-                      customerId={formData.customer_contact}
-                      documentType="aadhar_front"
-                      onUploadComplete={(url) => handleDocumentUpload('aadhar_front', url)}
-                      existingUrl={formData.documents.aadhar_front}
-                    />
-                    <DocumentUpload
-                      customerId={formData.customer_contact}
-                      documentType="aadhar_back"
-                      onUploadComplete={(url) => handleDocumentUpload('aadhar_back', url)}
-                      existingUrl={formData.documents.aadhar_back}
-                    />
-                    <DocumentUpload
-                      customerId={formData.customer_contact}
-                      documentType="dl_front"
-                      onUploadComplete={(url) => handleDocumentUpload('dl_front', url)}
-                      existingUrl={formData.documents.dl_front}
-                    />
-                    <DocumentUpload
-                      customerId={formData.customer_contact}
-                      documentType="dl_back"
-                      onUploadComplete={(url) => handleDocumentUpload('dl_back', url)}
-                      existingUrl={formData.documents.dl_back}
-                    />
-                  </div>
-                </div>
-              )}
+              {/* Documents Section */}
+              <div>
+                <h3 className="text-lg font-medium text-gray-900 mb-4">Documents</h3>
+                {tempBookingId && (
+                  <DocumentUpload
+                    bookingId={tempBookingId}
+                    onDocumentsUploaded={handleDocumentsUploaded}
+                    existingDocuments={formData.uploaded_documents}
+                  />
+                )}
+              </div>
 
-              {/* Submitted Documents Checklist */}
+              {/* Physical Documents Checklist */}
               <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Submitted Documents Checklist</h3>
-                <div className="bg-white p-6 rounded-lg border border-gray-200">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        id="original_aadhar"
-                        name="submitted_documents.original_aadhar"
-                        checked={formData.submitted_documents.original_aadhar}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              original_aadhar: e.target.checked
-                            }
-                          }));
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor="original_aadhar" className="text-sm text-gray-700">Original Aadhar Card</label>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        id="original_dl"
-                        name="submitted_documents.original_dl"
-                        checked={formData.submitted_documents.original_dl}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              original_dl: e.target.checked
-                            }
-                          }));
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor="original_dl" className="text-sm text-gray-700">Original Driving License</label>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        id="pan_card"
-                        name="submitted_documents.pan_card"
-                        checked={formData.submitted_documents.pan_card}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              pan_card: e.target.checked
-                            }
-                          }));
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor="pan_card" className="text-sm text-gray-700">PAN Card</label>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        id="voter_id"
-                        name="submitted_documents.voter_id"
-                        checked={formData.submitted_documents.voter_id}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              voter_id: e.target.checked
-                            }
-                          }));
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor="voter_id" className="text-sm text-gray-700">Voter ID</label>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        id="passport"
-                        name="submitted_documents.passport"
-                        checked={formData.submitted_documents.passport}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              passport: e.target.checked
-                            }
-                          }));
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <label htmlFor="passport" className="text-sm text-gray-700">Passport</label>
-                    </div>
-
-                    {/* Other Document 1 */}
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        id="other_doc1"
-                        checked={formData.submitted_documents.other_doc1.submitted}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              other_doc1: {
-                                ...prev.submitted_documents.other_doc1,
-                                submitted: e.target.checked
-                              }
-                            }
-                          }));
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <input
-                        type="text"
-                        value={formData.submitted_documents.other_doc1.name}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              other_doc1: {
-                                ...prev.submitted_documents.other_doc1,
-                                name: e.target.value
-                              }
-                            }
-                          }));
-                        }}
-                        placeholder="Other Document 1"
-                        className="flex-1 text-sm text-gray-700 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-
-                    {/* Other Document 2 */}
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        id="other_doc2"
-                        checked={formData.submitted_documents.other_doc2.submitted}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              other_doc2: {
-                                ...prev.submitted_documents.other_doc2,
-                                submitted: e.target.checked
-                              }
-                            }
-                          }));
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <input
-                        type="text"
-                        value={formData.submitted_documents.other_doc2.name}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              other_doc2: {
-                                ...prev.submitted_documents.other_doc2,
-                                name: e.target.value
-                              }
-                            }
-                          }));
-                        }}
-                        placeholder="Other Document 2"
-                        className="flex-1 text-sm text-gray-700 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-
-                    {/* Other Document 3 */}
-                    <div className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        id="other_doc3"
-                        checked={formData.submitted_documents.other_doc3.submitted}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              other_doc3: {
-                                ...prev.submitted_documents.other_doc3,
-                                submitted: e.target.checked
-                              }
-                            }
-                          }));
-                        }}
-                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                      />
-                      <input
-                        type="text"
-                        value={formData.submitted_documents.other_doc3.name}
-                        onChange={(e) => {
-                          setFormData(prev => ({
-                            ...prev,
-                            submitted_documents: {
-                              ...prev.submitted_documents,
-                              other_doc3: {
-                                ...prev.submitted_documents.other_doc3,
-                                name: e.target.value
-                              }
-                            }
-                          }));
-                        }}
-                        placeholder="Other Document 3"
-                        className="flex-1 text-sm text-gray-700 border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  </div>
-                </div>
+                <h3 className="text-lg font-medium text-gray-900">Physical Documents Verification</h3>
+                <DocumentsChecklist
+                  documents={formData.submitted_documents as SubmittedDocuments}
+                  onDocumentsChange={handleSubmittedDocumentsChange}
+                />
               </div>
 
               {/* Terms and Conditions */}
@@ -1376,10 +1229,10 @@ export default function NewBookingPage() {
               </button>
               <button
                 type="submit"
-                disabled={loading}
+                disabled={submitting}
                 className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50"
               >
-                {loading ? 'Creating...' : 'Create Booking'}
+                {submitting ? 'Creating...' : 'Create Booking'}
               </button>
             </div>
           </form>

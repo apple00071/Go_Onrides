@@ -28,11 +28,22 @@ BEGIN
       bucket_id = ''customer-documents'' AND
       auth.role() = ''authenticated'' AND
       (octet_length(file) <= 10485760) AND -- 10MB max file size
-      (mime_type = ANY (ARRAY[''application/pdf'', ''image/jpeg'', ''image/png'', ''image/heic''])) AND
+      (mime_type = ANY (ARRAY[''application/pdf'', ''image/jpeg'', ''image/png''])) AND
       EXISTS (
         SELECT 1 FROM profiles
         WHERE id = auth.uid() AND (role = ''admin'' OR permissions->''uploadDocuments'' = ''true'')
       )
+    )
+  ');
+
+  -- Policy to allow authenticated users to read files
+  EXECUTE format('
+    CREATE POLICY "Allow authenticated users to read files"
+    ON storage.objects FOR SELECT
+    TO authenticated
+    USING (
+      bucket_id = ''customer-documents'' AND
+      auth.role() = ''authenticated''
     )
   ');
 
@@ -50,8 +61,8 @@ BEGIN
       bucket_id = ''customer-documents'' AND
       auth.role() = ''authenticated'' AND
       owner = auth.uid() AND
-      (octet_length(file) <= 10485760) AND
-      (mime_type = ANY (ARRAY[''application/pdf'', ''image/jpeg'', ''image/png'', ''image/heic'']))
+      (octet_length(file) <= 10485760) AND -- 10MB max file size
+      (mime_type = ANY (ARRAY[''application/pdf'', ''image/jpeg'', ''image/png'']))
     )
   ');
 
@@ -63,28 +74,7 @@ BEGIN
     USING (
       bucket_id = ''customer-documents'' AND
       auth.role() = ''authenticated'' AND
-      (
-        owner = auth.uid() OR
-        EXISTS (
-          SELECT 1 FROM profiles
-          WHERE id = auth.uid() AND role = ''admin''
-        )
-      )
-    )
-  ');
-
-  -- Policy to allow authenticated users to read files with permission check
-  EXECUTE format('
-    CREATE POLICY "Allow authenticated users to read files"
-    ON storage.objects FOR SELECT
-    TO authenticated
-    USING (
-      bucket_id = ''customer-documents'' AND
-      auth.role() = ''authenticated'' AND
-      EXISTS (
-        SELECT 1 FROM profiles
-        WHERE id = auth.uid() AND (role = ''admin'' OR permissions->''viewDocuments'' = ''true'')
-      )
+      owner = auth.uid()
     )
   ');
 END $$; 

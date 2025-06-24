@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download, ZoomIn } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download, ZoomIn, CheckCircle2, PlusCircle } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -16,72 +16,7 @@ import { usePermissions } from '@/lib/usePermissions';
 import { notifyBookingEvent } from '@/lib/notification';
 import PaymentInformation from '@/components/bookings/PaymentInformation';
 import { generateInvoice } from '@/lib/generateInvoice';
-
-interface BookingDetailsData {
-  id: string;
-  booking_id: string;
-  customer_id: string;
-  customer_name: string;
-  customer_contact: string;
-  customer_email: string;
-  alternative_phone: string;
-  emergency_contact_phone: string;
-  emergency_contact_phone1: string;
-  aadhar_number: string;
-  date_of_birth: string;
-  dl_number: string;
-  dl_expiry_date: string;
-  temp_address: string;
-  perm_address: string;
-  vehicle_details: {
-    model: string;
-    registration: string;
-  };
-  start_date: string;
-  end_date: string;
-  pickup_time: string;
-  dropoff_time: string;
-  booking_amount: number;
-  security_deposit_amount: number;
-  payment_status: 'full' | 'partial' | 'pending';
-  paid_amount: number;
-  payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
-  status: BookingStatus;
-  completed_at?: string;
-  completed_by?: string;
-  completed_by_user?: {
-    email: string;
-    username: string;
-  };
-  created_at: string;
-  updated_at: string;
-  created_by: string;
-  updated_by: string;
-  created_by_user?: {
-    email: string;
-    username: string;
-  };
-  updated_by_user?: {
-    email: string;
-    username: string;
-  };
-  documents: {
-    customer_photo?: string;
-    aadhar_front?: string;
-    aadhar_back?: string;
-    dl_front?: string;
-    dl_back?: string;
-  };
-  vehicle_remarks?: string;
-  damage_charges: number;
-  refund_amount: number;
-  late_fee: number;
-  extension_fee: number;
-  signatures?: {
-    bookingSignature?: string;
-    completionSignature?: string;
-  };
-}
+import type { BookingDetails, BookingDetailsData, OutstationDetails } from '@/types/bookings';
 
 type BookingStatus = 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
 type PaymentStatus = 'full' | 'partial' | 'pending';
@@ -95,14 +30,6 @@ const STATUS_COLORS = {
   cancelled: 'bg-red-100 text-red-800'
 } as const;
 
-// Helper function to convert our booking data format to the format expected by EditBookingModal
-function convertToEditBookingFormat(booking: BookingDetailsData) {
-  return {
-    ...booking,
-    documents: booking.documents
-  };
-}
-
 // Add a helper function to convert 24h to 12h format
 const formatTimeDisplay = (time: string): string => {
   if (!time) return '';
@@ -112,6 +39,47 @@ const formatTimeDisplay = (time: string): string => {
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${minute} ${period}`;
 };
+
+// Update the fetchBookingDetails function to handle the new outstation details structure
+async function fetchBookingDetails(bookingId: string): Promise<BookingDetailsData> {
+  const supabase = getSupabaseClient();
+
+  const { data: booking, error } = await supabase
+    .from('bookings')
+    .select(`
+      *,
+      created_by_user:created_by(
+        email,
+        username
+      ),
+      updated_by_user:updated_by(
+        email,
+        username
+      ),
+      completed_by_user:completed_by(
+        email,
+        username
+      )
+    `)
+    .eq('id', bookingId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching booking details:', error);
+    throw new Error('Failed to fetch booking details');
+  }
+
+  // Transform the outstation_details to match the new structure
+  if (booking.rental_purpose === 'outstation' && booking.outstation_details) {
+    booking.outstation_details = {
+      destination: booking.outstation_details.destination || '',
+      estimated_kilometers: booking.outstation_details.estimated_kilometers || 0,
+      odd_meter_reading: booking.outstation_details.odd_meter_reading || 0
+    };
+  }
+
+  return booking;
+}
 
 export default function BookingDetailsPage() {
   const params = useParams();
@@ -168,6 +136,18 @@ export default function BookingDetailsPage() {
             dl_number,
             dl_expiry_date,
             documents
+          ),
+          created_by_user:profiles!created_by (
+            email,
+            username
+          ),
+          updated_by_user:profiles!updated_by (
+            email,
+            username
+          ),
+          completed_by_user:profiles!completed_by (
+            email,
+            username
           )
         `)
         .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
@@ -177,8 +157,6 @@ export default function BookingDetailsPage() {
         console.error('Booking Error:', bookingError);
         throw bookingError;
       }
-
-      console.log('Raw Booking Data:', bookingData);
 
       // Fetch signatures
       let signaturesData = null;
@@ -193,7 +171,6 @@ export default function BookingDetailsPage() {
           console.error('Error fetching signatures:', signatureError);
         } else {
           signaturesData = signatures;
-          console.log('Signatures Data:', signaturesData);
         }
       }
 
@@ -212,14 +189,13 @@ export default function BookingDetailsPage() {
         dl_expiry_date: bookingData.customer?.dl_expiry_date || '',
         temp_address: bookingData.temp_address || '',
         perm_address: bookingData.perm_address || '',
-        documents: bookingData.customer?.documents || {},
+        uploaded_documents: bookingData.customer?.documents || {},
+        submitted_documents: bookingData.submitted_documents || {},
         signatures: signaturesData?.length ? {
-          bookingSignature: signaturesData[0]?.signature_data,
+          bookingSignature: signaturesData[0]?.signature_data || null,
           completionSignature: signaturesData.length > 1 ? signaturesData[signaturesData.length - 1]?.signature_data : null
-        } : undefined
+        } : null
       };
-
-      console.log('Transformed Booking:', transformedBooking);
 
       setBooking(transformedBooking);
       setSignature(transformedBooking.signatures || null);
@@ -306,6 +282,9 @@ export default function BookingDetailsPage() {
     try {
       await fetchBookingDetails();
       toast.success('Payment recorded successfully');
+      
+      // Dispatch event to refresh other components
+      window.dispatchEvent(new CustomEvent('payment:created'));
     } catch (error) {
       console.error('Error refreshing booking data:', error);
       toast.error('Failed to refresh booking data');
@@ -376,9 +355,6 @@ export default function BookingDetailsPage() {
   // Add debug logging in render
   console.log('Current booking state:', booking);
 
-  // For the image props, ensure documentUrl is a string
-  const documentUrl = typeof booking?.documents === 'string' ? booking.documents : '/placeholder-image.jpg';
-
   return (
     <div className="min-h-screen p-6">
       {/* Header */}
@@ -432,8 +408,9 @@ export default function BookingDetailsPage() {
         <div className="lg:col-span-2 space-y-6">
           {/* Booking Status */}
           <div className="bg-white rounded-lg shadow p-6">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
+            <div className="flex flex-col gap-4">
+              {/* Status Badge and Selector */}
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium capitalize ${STATUS_COLORS[booking?.status || 'pending']}`}>
                     {booking?.status}
@@ -442,7 +419,7 @@ export default function BookingDetailsPage() {
                     <select
                       value={booking.status}
                       onChange={(e) => handleStatusChange(e.target.value as BookingStatus)}
-                      className="text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                      className="text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 py-1 px-2"
                     >
                       <option value="pending">Pending</option>
                       <option value="confirmed">Confirmed</option>
@@ -452,35 +429,69 @@ export default function BookingDetailsPage() {
                     </select>
                   )}
                 </div>
-                {booking?.created_by_user && (
-                  <div className="text-xs text-gray-500 mt-2">
-                    Created by {booking?.created_by_user?.username || 'Unknown'} on {formatDateTime(booking?.created_at || new Date())}
-                  </div>
-                )}
-                {booking.completed_at && booking.completed_by_user && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    Completed by {booking?.completed_by_user?.username || 'Unknown'} on {formatDateTime(booking.completed_at)}
-                  </div>
-                )}
-                {booking.updated_at && booking.updated_by_user && (
-                  <div className="text-xs text-gray-500 mt-1">
-                    Last updated by {booking.updated_by_user.username} on {formatDateTime(booking.updated_at)}
-                  </div>
-                )}
-              </div>
-              <div className="text-right">
-                <p className="text-lg font-semibold text-gray-900">
-                  {formatCurrency(totalAmount)}
-                </p>
-                <p className="text-sm text-gray-500">
-                  {booking?.paid_amount ? `Paid: ${formatCurrency(booking.paid_amount)}` : 'No payment recorded'}
-                </p>
-                {remainingAmount > 0 && (
-                  <p className="text-sm text-red-600">
-                    Remaining: {formatCurrency(remainingAmount)}
+                <div className="text-right">
+                  <p className="text-lg font-semibold text-gray-900">
+                    {formatCurrency(totalAmount)}
                   </p>
+                  <p className="text-sm text-gray-500">
+                    Paid: {formatCurrency(booking.paid_amount)}
+                  </p>
+                </div>
+              </div>
+
+              {/* Status Information */}
+              <div className="text-sm space-y-1 text-gray-600">
+                {booking?.created_by_user && (
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-medium text-gray-700 min-w-[85px]">Created by</span>
+                    <span className="text-gray-900">{booking.created_by_user.email}</span>
+                    <span className="text-gray-500">
+                      on {formatDate(booking.created_at)}, {new Date(booking.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}
+                    </span>
+                  </div>
+                )}
+                {booking.status === 'completed' && booking.completed_by_user && (
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-medium text-gray-700 min-w-[85px]">Completed by</span>
+                    <span className="text-gray-900">{booking.completed_by_user.email}</span>
+                    <span className="text-gray-500">
+                      on {formatDate(booking.completed_at || '')}, {new Date(booking.completed_at || '').toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}
+                    </span>
+                  </div>
+                )}
+                {booking.updated_at && booking.updated_by_user && booking.updated_at !== booking.created_at && (
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-medium text-gray-700 min-w-[85px]">Updated by</span>
+                    <span className="text-gray-900">{booking.updated_by_user.email}</span>
+                    <span className="text-gray-500">
+                      on {formatDate(booking.updated_at)}, {new Date(booking.updated_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}
+                    </span>
+                  </div>
                 )}
               </div>
+            </div>
+          </div>
+
+          {/* Rental Purpose and Outstation Details */}
+          <div className="bg-white shadow rounded-lg p-6 mb-6">
+            <h3 className="text-lg font-medium text-gray-900 mb-4">Rental Details</h3>
+            <div className="space-y-2">
+              <p className="text-sm text-gray-500">
+                <span className="font-medium">Rental Purpose:</span> {booking.rental_purpose === 'outstation' ? 'Outstation' : 'Local'}
+              </p>
+              {booking.rental_purpose === 'outstation' && booking.outstation_details && (
+                <>
+                  <p className="text-sm text-gray-500">
+                    <span className="font-medium">Destination:</span> {booking.outstation_details.destination || 'N/A'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    <span className="font-medium">Estimated Kilometers:</span> {booking.outstation_details.estimated_kilometers?.toString() || 'N/A'}
+                  </p>
+                  <p className="text-sm text-gray-500">
+                    <span className="font-medium">Odometer Reading:</span> {booking.outstation_details.odd_meter_reading?.toString() || 'N/A'}
+                  </p>
+                </>
+              )}
             </div>
           </div>
 
@@ -580,25 +591,7 @@ export default function BookingDetailsPage() {
             </div>
           </div>
 
-          {/* Booking Signature */}
-          <div className="bg-white rounded-lg shadow p-6 space-y-4">
-            <h2 className="text-xl font-semibold text-gray-900">Booking Signature</h2>
-            {booking.signatures?.bookingSignature ? (
-              <div className="border rounded-lg p-4 max-w-md cursor-pointer hover:border-blue-500 transition-colors"
-                   onClick={() => handleImageClick(booking.signatures?.bookingSignature || '', 'Booking Signature')}>
-                <img
-                  src={booking.signatures.bookingSignature}
-                  alt="Booking Signature"
-                  className="max-w-full h-auto max-h-[150px] w-auto object-contain"
-                />
-                <p className="text-sm text-gray-500 mt-2 text-center">Click to view full size</p>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">No booking signature available</p>
-            )}
-          </div>
-
-          {/* Payment Information */}
+          {/* Payment Information - Moved up */}
           <div className="bg-white rounded-lg shadow">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -628,48 +621,76 @@ export default function BookingDetailsPage() {
             </div>
           </div>
 
-          {/* Documents Section */}
-          {booking?.documents && Object.values(booking.documents).some(url => url) && (
-            <div className="bg-white rounded-lg shadow p-6 space-y-4">
-              <h2 className="text-xl font-semibold text-gray-900">Submitted Documents</h2>
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                {Object.entries(booking.documents).map(([key, url]) => {
-                  if (!url) return null;
-                  
-                  const imageUrl = url.startsWith('http') ? url : `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/documents/${url}`;
-                  
-                  return (
-                    <div key={key} className="relative group">
-                      <button
-                        onClick={() => handleImageClick(imageUrl, key.replace(/_/g, ' ').toUpperCase())}
-                        className="w-full aspect-[3/2] relative rounded-lg overflow-hidden border border-gray-200 hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <div className="absolute inset-0">
-                          <Image
-                            src={imageUrl}
-                            alt={key.replace(/_/g, ' ')}
-                            fill
-                            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, 33vw"
-                            className="object-cover transition-transform group-hover:scale-105"
-                            onError={(e) => {
-                              console.error(`Error loading image: ${imageUrl}`);
-                              e.currentTarget.src = '/placeholder-image.jpg';
-                            }}
-                          />
-                        </div>
-                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-opacity flex items-center justify-center">
-                          <ZoomIn className="text-white opacity-0 group-hover:opacity-100 h-6 w-6" />
-                        </div>
-                      </button>
-                      <p className="mt-1 text-sm text-gray-600 text-center">
-                        {key.replace(/_/g, ' ').toUpperCase()}
-                      </p>
+          {/* Documents & Signatures - Moved down */}
+          <div className="bg-white rounded-lg shadow mb-6">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">Documents & Signatures</h2>
+            </div>
+            <div className="p-6">
+              <div className="space-y-6">
+                {/* Booking Signature */}
+                <div>
+                  <h3 className="text-md font-medium text-gray-900 mb-4">Booking Signature</h3>
+                  {booking.signatures?.bookingSignature ? (
+                    <div className="border rounded-lg p-4 max-w-xs cursor-pointer hover:border-blue-500 transition-colors"
+                         onClick={() => handleImageClick(booking.signatures?.bookingSignature || '', 'Booking Signature')}>
+                      <img
+                        src={booking.signatures.bookingSignature}
+                        alt="Booking Signature"
+                        className="w-full h-24 object-contain"
+                      />
+                      <p className="text-xs text-gray-500 mt-2 text-center">Click to view full size</p>
                     </div>
-                  );
-                })}
+                  ) : (
+                    <p className="text-sm text-gray-500">No booking signature available</p>
+                  )}
+                </div>
+
+                {/* Uploaded Documents */}
+                <div>
+                  <h3 className="text-md font-medium text-gray-900 mb-4">Uploaded Documents</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {booking?.uploaded_documents && Object.entries(booking.uploaded_documents).map(([type, url]) => (
+                      url && (
+                        <div key={type} className="relative group">
+                          <div className="aspect-w-3 aspect-h-2 rounded-lg overflow-hidden border border-gray-200">
+                            <img
+                              src={url}
+                              alt={type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                              className="w-full h-32 object-cover cursor-pointer hover:opacity-75 transition-opacity"
+                              onClick={() => handleImageClick(url, type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))}
+                            />
+                          </div>
+                          <div className="mt-1 text-xs font-medium text-gray-700 text-center">
+                            {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                          </div>
+                        </div>
+                      )
+                    ))}
+                  </div>
+                </div>
+
+                {/* Physical Documents */}
+                <div>
+                  <h3 className="text-md font-medium text-gray-900 mb-4">Physical Documents Submitted</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                    {booking?.submitted_documents && Object.entries(booking.submitted_documents).map(([type, isSubmitted]) => (
+                      <div key={type} className="flex items-center space-x-2 bg-gray-50 p-2 rounded">
+                        {isSubmitted ? (
+                          <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <X className="h-4 w-4 text-red-500 flex-shrink-0" />
+                        )}
+                        <span className="text-xs text-gray-700">
+                          {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-          )}
+          </div>
         </div>
 
         {/* Right Column - History and Actions */}
@@ -799,25 +820,36 @@ export default function BookingDetailsPage() {
         />
       )}
 
-      {/* Image Modal */}
+      {/* Image Preview Modal */}
       {selectedImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75" onClick={() => setSelectedImage(null)}>
-          <div className="relative max-w-7xl w-full h-full p-4 flex items-center justify-center">
-            <button
-              onClick={() => setSelectedImage(null)}
-              className="absolute top-4 right-4 p-2 rounded-full bg-white text-gray-800 hover:bg-gray-100"
-            >
-              <X className="h-6 w-6" />
-            </button>
-            <div className="relative w-full h-full flex items-center justify-center">
-              <img
-                src={selectedImage}
-                alt={selectedImageLabel}
-                className="max-w-full max-h-full object-contain"
-              />
-              <p className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-75 text-white px-4 py-2 rounded-md">
-                {selectedImageLabel}
-              </p>
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4" 
+          onClick={() => setSelectedImage(null)}
+        >
+          <div className="relative max-w-4xl w-full h-[90vh] bg-white rounded-lg overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="absolute top-0 right-0 p-4 z-10">
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="bg-white rounded-full p-2 hover:bg-gray-100 transition-colors"
+              >
+                <X className="h-6 w-6 text-gray-600" />
+              </button>
+            </div>
+            
+            <div className="h-full flex flex-col">
+              <div className="p-4 border-b">
+                <h3 className="text-lg font-medium text-gray-900">{selectedImageLabel}</h3>
+              </div>
+              
+              <div className="flex-1 overflow-auto p-4">
+                <div className="min-h-full flex items-center justify-center">
+                  <img
+                    src={selectedImage}
+                    alt={selectedImageLabel}
+                    className="max-w-full max-h-[calc(90vh-8rem)] object-contain"
+                  />
+                </div>
+              </div>
             </div>
           </div>
         </div>

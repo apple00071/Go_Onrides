@@ -47,23 +47,18 @@ const LoginForm = () => {
       if (signInError) throw signInError;
 
       // Redirect based on role
-      const redirectPath = data.user.role === 'admin' ? '/dashboard/settings' : '/dashboard';
-      router.push(redirectPath);
-      router.refresh();
-    } catch (err) {
-      console.error('Login error:', err);
-      let errorMessage = 'An error occurred during login';
-      
-      if (err instanceof Error) {
-        if (err.message?.includes('rate limit') || err.message?.includes('Too Many Requests')) {
-          errorMessage = 'Too many login attempts. Please try again in a moment.';
-        } else if (err.message?.includes('Invalid credentials')) {
-          errorMessage = 'Invalid username/email or password';
-        }
+      if (data.user.role === 'admin') {
+        router.push('/dashboard/admin');
+      } else if (data.user.role === 'worker') {
+        router.push('/dashboard/workers');
+      } else {
+        router.push('/dashboard');
       }
       
-      setError(errorMessage);
-      toast.error(errorMessage);
+      router.refresh();
+    } catch (error) {
+      console.error('Login error:', error);
+      setError(error instanceof Error ? error.message : 'Failed to login');
     } finally {
       setLoading(false);
     }

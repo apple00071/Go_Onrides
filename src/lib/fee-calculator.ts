@@ -1,5 +1,5 @@
 import { getSupabaseClient } from '@/lib/supabase';
-import { differenceInHours, isAfter, startOfDay, endOfDay } from 'date-fns';
+import { differenceInHours, isAfter, endOfDay, parseISO } from 'date-fns';
 
 interface FeeSettings {
   lateFee: {
@@ -63,36 +63,11 @@ export async function getFeeSettings(): Promise<FeeSettings> {
 
 /**
  * Calculates late fee and extension fee based on scheduled and actual return times
- * @param scheduledEndDate Scheduled end date (YYYY-MM-DD)
- * @param scheduledDropoffTime Scheduled dropoff time (HH:MM)
- * @param actualReturnTime Actual return time (ISO string)
+ * @param returnTime Actual return time
+ * @param expectedReturnTime Expected return time
  */
 export async function calculateReturnFees(returnTime: Date, expectedReturnTime: Date) {
-  const supabase = getSupabaseClient();
-
-  // Fetch fee settings
-  const { data: lateFeeData } = await supabase
-    .from('app_settings')
-    .select('setting_value')
-    .eq('setting_key', 'late_fee')
-    .single();
-
-  const { data: extensionFeeData } = await supabase
-    .from('app_settings')
-    .select('setting_value')
-    .eq('setting_key', 'extension_fee')
-    .single();
-
-  const settings: FeeSettings = {
-    lateFee: {
-      amount: lateFeeData?.setting_value?.amount || 1000,
-      gracePeriodHours: lateFeeData?.setting_value?.grace_period_hours || 2
-    },
-    extensionFee: {
-      amount: extensionFeeData?.setting_value?.amount || 1000,
-      thresholdHours: extensionFeeData?.setting_value?.threshold_hours || 6
-    }
-  };
+  const settings = await getFeeSettings();
 
   let lateFee = 0;
   let extensionFee = 0;
@@ -103,10 +78,11 @@ export async function calculateReturnFees(returnTime: Date, expectedReturnTime: 
     lateFee = settings.lateFee.amount;
   }
 
-  // Calculate extension fee
+  // Calculate extension fee - only apply if:
+  // 1. Return time is after midnight of the expected return date, OR
+  // 2. The total duration of the booking exceeds the threshold hours
   const isAfterMidnight = isAfter(returnTime, endOfDay(expectedReturnTime));
-  const hoursExtended = differenceInHours(returnTime, startOfDay(expectedReturnTime));
-  if (isAfterMidnight || hoursExtended > settings.extensionFee.thresholdHours) {
+  if (isAfterMidnight) {
     extensionFee = settings.extensionFee.amount;
   }
 

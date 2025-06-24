@@ -32,11 +32,11 @@ export default function CreatePaymentModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    try {
-      setLoading(true);
-      setError(null);
-      const supabase = getSupabaseClient();
+    setLoading(true);
 
+    try {
+      const supabase = getSupabaseClient();
+      
       // Get current user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -58,7 +58,7 @@ export default function CreatePaymentModal({
       const newPaidAmount = (currentBooking?.paid_amount || 0) + amount;
 
       // Create payment record
-      const { data: paymentData, error: paymentError } = await supabase
+      const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .insert([{
           booking_id: bookingId,
@@ -76,7 +76,7 @@ export default function CreatePaymentModal({
         throw new Error(paymentError.message);
       }
 
-      if (!paymentData) {
+      if (!payment) {
         throw new Error('Payment was created but no data was returned');
       }
 
@@ -98,7 +98,7 @@ export default function CreatePaymentModal({
         await supabase
           .from('payments')
           .delete()
-          .eq('id', paymentData.id);
+          .eq('id', payment.id);
         throw new Error('Failed to update booking payment status');
       }
 
@@ -106,7 +106,7 @@ export default function CreatePaymentModal({
       try {
         await notifyPaymentEvent(
           'PAYMENT_CREATED',
-          paymentData.id,
+          payment.id,
           {
             amount: amount,
             bookingId: bookingNumber,
@@ -119,12 +119,16 @@ export default function CreatePaymentModal({
         // Don't throw here, as the payment was successful
       }
 
-      toast.success('Payment recorded successfully');
-      onPaymentCreated();
+      // Dispatch payment created event
+      window.dispatchEvent(new CustomEvent('payment:created', { detail: payment }));
+      
+      // Close modal and notify parent
       onClose();
+      onPaymentCreated();
+      toast.success('Payment recorded successfully');
     } catch (error) {
-      console.error('Error:', error);
-      setError(error instanceof Error ? error.message : 'Failed to record payment');
+      console.error('Error creating payment:', error);
+      toast.error('Failed to record payment');
     } finally {
       setLoading(false);
     }

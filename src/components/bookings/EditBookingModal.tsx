@@ -1,12 +1,23 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
-import DocumentUpload from './DocumentUpload';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { notifyBookingEvent } from '@/lib/notification';
+import DocumentUpload from '@/components/documents/DocumentUpload';
+import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
+import SignaturePad from 'react-signature-canvas';
+import type SignaturePadType from 'react-signature-canvas';
+import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
+
+interface OutstationDetails {
+  destination: string;
+  estimated_kms: number;
+  start_odo: number;
+  end_odo: number;
+}
 
 interface BookingDetails {
   id: string;
@@ -38,13 +49,11 @@ interface BookingDetails {
   paid_amount: number;
   payment_mode: string;
   status: string;
-  documents?: {
-    customer_photo?: string;
-    aadhar_front?: string;
-    aadhar_back?: string;
-    dl_front?: string;
-    dl_back?: string;
-  };
+  rental_purpose?: 'local' | 'outstation';
+  outstation_details?: OutstationDetails;
+  signature?: string;
+  uploaded_documents?: UploadedDocuments;
+  submitted_documents?: SubmittedDocuments;
 }
 
 interface EditBookingModalProps {
@@ -52,16 +61,6 @@ interface EditBookingModalProps {
   onClose: () => void;
   onBookingUpdated: () => void;
   booking: BookingDetails;
-}
-
-type DocumentType = 'customer_photo' | 'aadhar_front' | 'aadhar_back' | 'dl_front' | 'dl_back';
-
-interface CustomerDocuments {
-  customer_photo?: string;
-  aadhar_front?: string;
-  aadhar_back?: string;
-  dl_front?: string;
-  dl_back?: string;
 }
 
 interface FormData {
@@ -92,7 +91,11 @@ interface FormData {
   paid_amount: string;
   payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
   status: 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
-  documents: CustomerDocuments;
+  rental_purpose: 'local' | 'outstation';
+  outstation_details: OutstationDetails;
+  signature: string;
+  uploaded_documents: UploadedDocuments;
+  submitted_documents: SubmittedDocuments;
 }
 
 // Helper function to convert 24h to 12h format
@@ -111,6 +114,18 @@ const timeSlots = Array.from({ length: 48 }, (_, i) => {
   return { value, label };
 });
 
+const STATUS_OPTIONS = ['pending', 'confirmed', 'in_use', 'completed', 'cancelled'] as const;
+const PAYMENT_STATUS_OPTIONS = ['full', 'partial', 'pending'] as const;
+const PAYMENT_MODE_OPTIONS = ['cash', 'upi', 'card', 'bank_transfer'] as const;
+
+const documentLabels: Record<string, string> = {
+  customer_photo: 'Customer Photo',
+  aadhar_front: 'Aadhar Card - Front',
+  aadhar_back: 'Aadhar Card - Back',
+  dl_front: 'Driving License - Front',
+  dl_back: 'Driving License - Back'
+};
+
 export default function EditBookingModal({
   isOpen,
   onClose,
@@ -119,6 +134,7 @@ export default function EditBookingModal({
 }: EditBookingModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const signaturePadRef = useRef<SignaturePadType>(null);
 
   // Create form data from booking
   const initialFormData = useMemo<FormData>(() => ({
@@ -149,12 +165,21 @@ export default function EditBookingModal({
     paid_amount: booking?.paid_amount?.toString() || '',
     payment_mode: booking?.payment_mode as 'cash' | 'upi' | 'card' | 'bank_transfer' || 'cash',
     status: booking?.status as 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled' || 'confirmed',
-    documents: booking?.documents || {
-      customer_photo: '',
-      aadhar_front: '',
-      aadhar_back: '',
-      dl_front: '',
-      dl_back: ''
+    rental_purpose: booking?.rental_purpose || 'local',
+    outstation_details: booking?.outstation_details || {
+      destination: '',
+      estimated_kms: 0,
+      start_odo: 0,
+      end_odo: 0
+    },
+    signature: booking?.signature || '',
+    uploaded_documents: booking?.uploaded_documents || {},
+    submitted_documents: booking?.submitted_documents || {
+      original_aadhar: false,
+      original_dl: false,
+      passport: false,
+      voter_id: false,
+      other_document: ''
     }
   }), [booking]);
 
@@ -339,113 +364,85 @@ export default function EditBookingModal({
             [child]: value
           }
         }));
+      } else if (parent === 'outstation_details') {
+        setFormData(prev => ({
+          ...prev,
+          outstation_details: {
+            ...prev.outstation_details,
+            [child]: value
+          }
+        }));
       }
     } else {
-      setFormData(prev => ({ ...prev, [name]: value }));
+      // Handle rental purpose change
+      if (name === 'rental_purpose') {
+        if (value !== 'local' && value !== 'outstation') {
+          setError('Invalid rental purpose value');
+          return;
+        }
+        setFormData(prev => ({
+          ...prev,
+          rental_purpose: value,
+          outstation_details: value === 'local' ? {
+            destination: '',
+            estimated_kms: 0,
+            start_odo: 0,
+            end_odo: 0
+          } : prev.outstation_details
+        }));
+      } else {
+        setFormData(prev => ({ ...prev, [name]: value }));
+      }
     }
   };
 
-  const handleDocumentUpload = (type: DocumentType, url: string) => {
+  const handleDocumentsChange = (documents: UploadedDocuments) => {
     setFormData(prev => ({
       ...prev,
-      documents: {
-        ...prev.documents,
-        [type]: url
-      }
+      uploaded_documents: documents
     }));
+  };
+
+  const handleSubmittedDocumentsChange = (documents: SubmittedDocuments) => {
+    setFormData(prev => ({
+      ...prev,
+      submitted_documents: documents
+    }));
+  };
+
+  const handleSignatureClear = () => {
+    if (signaturePadRef.current) {
+      signaturePadRef.current.clear();
+      setFormData(prev => ({ ...prev, signature: '' }));
+    }
+  };
+
+  const handleSignatureEnd = () => {
+    if (signaturePadRef.current) {
+      const signatureData = signaturePadRef.current.toDataURL();
+      setFormData(prev => ({ ...prev, signature: signatureData }));
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
+    
     try {
+      setLoading(true);
+      setError(null);
+
       const supabase = getSupabaseClient();
-
-      // Validate required fields
-      if (!formData.customer_name || !formData.customer_contact || !formData.customer_email ||
-          !formData.alternative_phone || !formData.emergency_contact_phone ||
-          !formData.emergency_contact_phone1 || !formData.aadhar_number || !formData.date_of_birth ||
-          !formData.dl_number || !formData.dl_expiry_date ||
-          !formData.temp_address || !formData.perm_address) {
-        throw new Error('Please fill in all required customer fields');
-      }
-
-      // Validate fields required for booking
-      if (!formData.vehicle_details.model || !formData.vehicle_details.registration ||
-          !formData.start_date || !formData.end_date ||
-          !formData.pickup_time || !formData.dropoff_time ||
-          !formData.booking_amount || !formData.security_deposit_amount) {
-        throw new Error('Please fill in all required booking fields');
-      }
-
-      // Additional date validations
-      const dob = new Date(formData.date_of_birth);
-      const today = new Date();
-      if (dob > today) {
-        throw new Error('Date of birth cannot be in the future');
-      }
-
-      const dlExpiry = new Date(formData.dl_expiry_date);
-      const oneMonthAgo = new Date();
-      oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-      if (dlExpiry < oneMonthAgo) {
-        throw new Error('Driving license should not be expired for more than a month');
-      }
-
-      // Payment validations
-      const totalAmount = parseFloat(formData.total_amount);
-      const paidAmount = parseFloat(formData.paid_amount);
-
-      if (formData.payment_status === 'full' && paidAmount !== totalAmount) {
-        throw new Error('Paid amount must equal total amount for full payment');
-      }
-
-      if (formData.payment_status === 'partial' && paidAmount >= totalAmount) {
-        throw new Error('Paid amount must be less than total amount for partial payment');
-      }
-
-      if (paidAmount < 0) {
-        throw new Error('Paid amount cannot be negative');
-      }
-
-      // Update the customer information
-      const { error: customerUpdateError } = await supabase
-        .from('customers')
-        .update({
-          name: formData.customer_name,
-          email: formData.customer_email,
-          phone: formData.customer_contact,
-          alternative_phone: formData.alternative_phone,
-          emergency_contact_phone: formData.emergency_contact_phone,
-          emergency_contact_phone1: formData.emergency_contact_phone1,
-          date_of_birth: formData.date_of_birth,
-          aadhar_number: formData.aadhar_number,
-          dl_number: formData.dl_number,
-          dl_expiry_date: formData.dl_expiry_date,
-          temp_address: formData.temp_address,
-          perm_address: formData.perm_address,
-          documents: formData.documents
-        })
-        .eq('id', booking.customer_id);
-
-      if (customerUpdateError) {
-        console.error('Customer update error:', customerUpdateError);
-        throw new Error(`Failed to update customer: ${customerUpdateError.message}`);
-      }
 
       // Get the current user's email to use in the notification
       const { data: { user } } = await supabase.auth.getUser();
-      
-      // Update the booking
-      const { data: updatedBooking, error: bookingError } = await supabase
+
+      // Update booking
+      const { error: bookingError } = await supabase
         .from('bookings')
         .update({
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
           customer_email: formData.customer_email,
-          alternative_phone: formData.alternative_phone,
           emergency_contact_phone: formData.emergency_contact_phone,
           emergency_contact_phone1: formData.emergency_contact_phone1,
           aadhar_number: formData.aadhar_number,
@@ -461,22 +458,26 @@ export default function EditBookingModal({
           dropoff_time: formData.dropoff_time,
           booking_amount: parseFloat(formData.booking_amount),
           security_deposit_amount: parseFloat(formData.security_deposit_amount),
+          total_amount: parseFloat(formData.total_amount),
           payment_status: formData.payment_status,
           paid_amount: parseFloat(formData.paid_amount),
           payment_mode: formData.payment_mode,
           status: formData.status,
+          rental_purpose: formData.rental_purpose,
+          outstation_details: formData.outstation_details,
+          signature: formData.signature,
+          uploaded_documents: formData.uploaded_documents,
+          submitted_documents: formData.submitted_documents,
+          updated_at: new Date().toISOString(),
           updated_by: user?.id
         })
-        .eq('id', booking.id)
-        .select()
-        .single();
+        .eq('id', booking.id);
 
       if (bookingError) {
-        console.error('Booking update error:', bookingError);
         throw new Error(`Failed to update booking: ${bookingError.message}`);
       }
 
-      // Send notification to admin users about the updated booking
+      // Send notification about the booking update
       await notifyBookingEvent(
         'BOOKING_UPDATED',
         booking.id,
@@ -494,6 +495,7 @@ export default function EditBookingModal({
     } catch (error) {
       console.error('Error updating booking:', error);
       setError(error instanceof Error ? error.message : 'Failed to update booking');
+      toast.error('Failed to update booking');
     } finally {
       setLoading(false);
     }
@@ -502,473 +504,537 @@ export default function EditBookingModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-xl font-semibold text-gray-900">
-            Edit Booking: {booking.booking_id}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-500"
-          >
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md">
-              {error}
-            </div>
-          )}
-
-          {/* Customer Contact Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Customer Contact *
-              </label>
-              <input
-                type="tel"
-                name="customer_contact"
-                required
-                value={formData.customer_contact}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Customer Email *
-              </label>
-              <input
-                type="email"
-                name="customer_email"
-                required
-                value={formData.customer_email}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
+    <div className={`fixed inset-0 z-50 ${isOpen ? '' : 'hidden'}`}>
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+      <div className="absolute inset-y-0 right-0 w-full max-w-4xl bg-white shadow-xl">
+        <div className="flex h-full flex-col">
+          <div className="flex items-center justify-between border-b px-4 py-3">
+            <h2 className="text-lg font-semibold">Edit Booking</h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          {/* Customer Information */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Customer Name *
-              </label>
-              <input
-                type="text"
-                name="customer_name"
-                required
-                value={formData.customer_name}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Alternative Phone */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Alternative Phone
-              </label>
-              <input
-                type="tel"
-                name="alternative_phone"
-                value={formData.alternative_phone}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Emergency Contact */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Emergency Contact Phone *
-              </label>
-              <input
-                type="tel"
-                name="emergency_contact_phone"
-                required
-                value={formData.emergency_contact_phone}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Emergency Contact Phone 1
-              </label>
-              <input
-                type="tel"
-                name="emergency_contact_phone1"
-                value={formData.emergency_contact_phone1}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Personal Documents */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Aadhar Number *
-              </label>
-              <input
-                type="text"
-                name="aadhar_number"
-                required
-                value={formData.aadhar_number}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Date of Birth *
-              </label>
-              <input
-                type="date"
-                name="date_of_birth"
-                required
-                max={maxDOB}
-                value={formData.date_of_birth}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Driving License */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Driving License Number *
-              </label>
-              <input
-                type="text"
-                name="dl_number"
-                required
-                value={formData.dl_number}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                DL Expiry Date *
-              </label>
-              <input
-                type="date"
-                name="dl_expiry_date"
-                required
-                min={minDLExpiry}
-                value={formData.dl_expiry_date}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Address Information */}
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Temporary Address *
-              </label>
-              <textarea
-                name="temp_address"
-                required
-                value={formData.temp_address}
-                onChange={handleInputChange}
-                rows={2}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Permanent Address *
-              </label>
-              <textarea
-                name="perm_address"
-                required
-                value={formData.perm_address}
-                onChange={handleInputChange}
-                rows={2}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Vehicle Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Vehicle Model *
-              </label>
-              <input
-                type="text"
-                name="vehicle_details.model"
-                required
-                value={formData.vehicle_details.model}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Registration Number *
-              </label>
-              <input
-                type="text"
-                name="vehicle_details.registration"
-                required
-                value={formData.vehicle_details.registration}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-          </div>
-
-          {/* Booking Details */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Start Date *
-              </label>
-              <input
-                type="date"
-                name="start_date"
-                required
-                min={today}
-                max={maxStartDate}
-                value={formData.start_date}
-                onChange={handleInputChange}
-                disabled={booking.status === 'in_use' || booking.status === 'completed'}
-                className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  booking.status === 'in_use' || booking.status === 'completed' ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                End Date *
-              </label>
-              <input
-                type="date"
-                name="end_date"
-                required
-                min={minEndDate}
-                max={maxEndDate}
-                value={formData.end_date}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Pickup Time *
-              </label>
-              <select
-                name="pickup_time"
-                required
-                value={formData.pickup_time}
-                onChange={handleInputChange}
-                disabled={booking.status === 'in_use' || booking.status === 'completed'}
-                className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
-                  booking.status === 'in_use' || booking.status === 'completed' ? 'opacity-50 cursor-not-allowed' : ''
-                }`}
-              >
-                <option value="">Select time</option>
-                {timeSlots.map(slot => (
-                  <option key={slot.value} value={slot.value}>
-                    {slot.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Drop-off Time *
-              </label>
-              <select
-                name="dropoff_time"
-                required
-                value={formData.dropoff_time}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              >
-                <option value="">Select time</option>
-                {timeSlots.map(slot => (
-                  <option key={slot.value} value={slot.value}>
-                    {slot.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Payment Details */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Booking Amount *
-              </label>
-              <CurrencyInput
-                name="booking_amount"
-                required
-                value={formData.booking_amount}
-                onChange={handleInputChange}
-                error={error?.includes('booking_amount')}
-                helperText={error?.includes('booking_amount') ? error : undefined}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Security Deposit Amount *
-              </label>
-              <CurrencyInput
-                name="security_deposit_amount"
-                required
-                value={formData.security_deposit_amount}
-                onChange={handleInputChange}
-                error={error?.includes('security_deposit')}
-                helperText={error?.includes('security_deposit') ? error : undefined}
-              />
-            </div>
-          </div>
-
-          {/* Total Amount and Payment Status */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Total Amount
-              </label>
-              <CurrencyInput
-                name="total_amount"
-                readOnly
-                value={formData.total_amount}
-                onChange={() => {}}
-                className="bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Payment Status *
-              </label>
-              <select
-                name="payment_status"
-                required
-                value={formData.payment_status}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              >
-                <option value="pending">Pending</option>
-                <option value="partial">Partial Payment</option>
-                <option value="full">Full Payment</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Paid Amount and Payment Mode */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Paid Amount
-              </label>
-              <CurrencyInput
-                name="paid_amount"
-                value={formData.paid_amount}
-                onChange={handleInputChange}
-                error={error?.includes('paid_amount')}
-                helperText={error?.includes('paid_amount') ? error : undefined}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Payment Mode
-              </label>
-              <select
-                name="payment_mode"
-                value={formData.payment_mode}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="card">Card</option>
-                <option value="bank_transfer">Bank Transfer</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Booking Status */}
-          <div className="grid grid-cols-1 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Booking Status
-              </label>
-              <select
-                name="status"
-                value={formData.status}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              >
-                <option value="pending">Pending</option>
-                <option value="confirmed">Confirmed</option>
-                <option value="in_use">In Use</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Documents Display */}
-          {booking.documents && Object.keys(booking.documents).length > 0 && (
-            <div className="space-y-6 border-t pt-6">
-              <h3 className="text-lg font-medium text-gray-900">Documents</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {Object.entries(booking.documents).map(([type, url]) => {
-                  if (!url) return null;
-                  const documentType = type as DocumentType;
-                  return (
-                    <DocumentUpload
-                      key={type}
-                      customerId={formData.customer_contact}
-                      documentType={documentType}
-                      onUploadComplete={(url) => handleDocumentUpload(documentType, url)}
-                      existingUrl={url}
+          <div className="flex-1 overflow-y-auto p-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Customer Information */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Customer Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Customer Contact *
+                    </label>
+                    <input
+                      type="tel"
+                      name="customer_contact"
+                      required
+                      value={formData.customer_contact}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Customer Email *
+                    </label>
+                    <input
+                      type="email"
+                      name="customer_email"
+                      required
+                      value={formData.customer_email}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
 
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-            >
-              {loading ? 'Updating...' : 'Update Booking'}
-            </button>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Customer Name *
+                    </label>
+                    <input
+                      type="text"
+                      name="customer_name"
+                      required
+                      value={formData.customer_name}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Alternative Phone
+                    </label>
+                    <input
+                      type="tel"
+                      name="alternative_phone"
+                      value={formData.alternative_phone}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Emergency Contact Phone *
+                    </label>
+                    <input
+                      type="tel"
+                      name="emergency_contact_phone"
+                      required
+                      value={formData.emergency_contact_phone}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Emergency Contact Phone 1
+                    </label>
+                    <input
+                      type="tel"
+                      name="emergency_contact_phone1"
+                      value={formData.emergency_contact_phone1}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Aadhar Number *
+                    </label>
+                    <input
+                      type="text"
+                      name="aadhar_number"
+                      required
+                      value={formData.aadhar_number}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Date of Birth *
+                    </label>
+                    <input
+                      type="date"
+                      name="date_of_birth"
+                      required
+                      max={maxDOB}
+                      value={formData.date_of_birth}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Driving License Number *
+                    </label>
+                    <input
+                      type="text"
+                      name="dl_number"
+                      required
+                      value={formData.dl_number}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      DL Expiry Date *
+                    </label>
+                    <input
+                      type="date"
+                      name="dl_expiry_date"
+                      required
+                      min={minDLExpiry}
+                      value={formData.dl_expiry_date}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Temporary Address *
+                    </label>
+                    <textarea
+                      name="temp_address"
+                      required
+                      value={formData.temp_address}
+                      onChange={handleInputChange}
+                      rows={2}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Permanent Address *
+                    </label>
+                    <textarea
+                      name="perm_address"
+                      required
+                      value={formData.perm_address}
+                      onChange={handleInputChange}
+                      rows={2}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Vehicle Model *
+                    </label>
+                    <input
+                      type="text"
+                      name="vehicle_details.model"
+                      required
+                      value={formData.vehicle_details.model}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Registration Number *
+                    </label>
+                    <input
+                      type="text"
+                      name="vehicle_details.registration"
+                      required
+                      value={formData.vehicle_details.registration}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Booking Details */}
+              <div className="space-y-6 border-t pt-6">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Booking Details</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Start Date *
+                    </label>
+                    <input
+                      type="date"
+                      name="start_date"
+                      required
+                      min={today}
+                      max={maxStartDate}
+                      value={formData.start_date}
+                      onChange={handleInputChange}
+                      disabled={booking.status === 'in_use' || booking.status === 'completed'}
+                      className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                        booking.status === 'in_use' || booking.status === 'completed' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      End Date *
+                    </label>
+                    <input
+                      type="date"
+                      name="end_date"
+                      required
+                      min={minEndDate}
+                      max={maxEndDate}
+                      value={formData.end_date}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Pickup Time *
+                    </label>
+                    <select
+                      name="pickup_time"
+                      required
+                      value={formData.pickup_time}
+                      onChange={handleInputChange}
+                      disabled={booking.status === 'in_use' || booking.status === 'completed'}
+                      className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
+                        booking.status === 'in_use' || booking.status === 'completed' ? 'opacity-50 cursor-not-allowed' : ''
+                      }`}
+                    >
+                      <option value="">Select time</option>
+                      {timeSlots.map(slot => (
+                        <option key={slot.value} value={slot.value}>
+                          {slot.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Drop-off Time *
+                    </label>
+                    <select
+                      name="dropoff_time"
+                      required
+                      value={formData.dropoff_time}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                      <option value="">Select time</option>
+                      {timeSlots.map(slot => (
+                        <option key={slot.value} value={slot.value}>
+                          {slot.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Payment Information */}
+              <div className="space-y-6 border-t pt-6">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Payment Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Booking Amount *
+                    </label>
+                    <CurrencyInput
+                      name="booking_amount"
+                      required
+                      value={formData.booking_amount}
+                      onChange={handleInputChange}
+                      error={error?.includes('booking_amount')}
+                      helperText={error?.includes('booking_amount') ? error : undefined}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Security Deposit Amount *
+                    </label>
+                    <CurrencyInput
+                      name="security_deposit_amount"
+                      required
+                      value={formData.security_deposit_amount}
+                      onChange={handleInputChange}
+                      error={error?.includes('security_deposit')}
+                      helperText={error?.includes('security_deposit') ? error : undefined}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Total Amount
+                      </label>
+                    <CurrencyInput
+                      name="total_amount"
+                      readOnly
+                      value={formData.total_amount}
+                      onChange={() => {}}
+                      className="bg-gray-50"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Payment Status *
+                    </label>
+                    <select
+                      name="payment_status"
+                      required
+                      value={formData.payment_status}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="partial">Partial Payment</option>
+                      <option value="full">Full Payment</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Paid Amount
+                    </label>
+                    <CurrencyInput
+                      name="paid_amount"
+                      value={formData.paid_amount}
+                      onChange={handleInputChange}
+                      error={error?.includes('paid_amount')}
+                      helperText={error?.includes('paid_amount') ? error : undefined}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Payment Mode
+                    </label>
+                    <select
+                      name="payment_mode"
+                      value={formData.payment_mode}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                    >
+                      <option value="cash">Cash</option>
+                      <option value="upi">UPI</option>
+                      <option value="card">Card</option>
+                      <option value="bank_transfer">Bank Transfer</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Outstation Details */}
+              {formData.rental_purpose === 'outstation' && (
+                <div className="space-y-6 border-t pt-6">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900">Outstation Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Destination *
+                      </label>
+                      <input
+                        type="text"
+                        name="outstation_details.destination"
+                        required
+                        value={formData.outstation_details.destination}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Estimated KMs *
+                      </label>
+                      <input
+                        type="number"
+                        name="outstation_details.estimated_kms"
+                        required
+                        value={formData.outstation_details.estimated_kms}
+                        onChange={handleInputChange}
+                        min="0"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Start ODO *
+                      </label>
+                      <input
+                        type="number"
+                        name="outstation_details.start_odo"
+                        required
+                        value={formData.outstation_details.start_odo}
+                        onChange={handleInputChange}
+                        min="0"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        End ODO *
+                      </label>
+                      <input
+                        type="number"
+                        name="outstation_details.end_odo"
+                        required
+                        value={formData.outstation_details.end_odo}
+                        onChange={handleInputChange}
+                        min="0"
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Document Upload Section */}
+              <div className="space-y-6 border-t pt-6">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Document Upload</h3>
+                <DocumentUpload
+                  bookingId={booking.id}
+                  onDocumentsUploaded={handleDocumentsChange}
+                  existingDocuments={formData.uploaded_documents}
+                />
+              </div>
+
+              {/* Physical Documents Verification */}
+              <div className="space-y-6 border-t pt-6">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Physical Documents Verification</h3>
+                <DocumentsChecklist
+                  documents={formData.submitted_documents || {
+                    original_aadhar: false,
+                    original_dl: false,
+                    passport: false,
+                    voter_id: false,
+                    other_document: ''
+                  }}
+                  onDocumentsChange={handleSubmittedDocumentsChange}
+                />
+              </div>
+
+              {/* Signature Section */}
+              <div className="space-y-6 border-t pt-6">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Signature</h3>
+                <div className="border rounded-lg p-4">
+                  <SignaturePad
+                    ref={signaturePadRef}
+                    canvasProps={{
+                      className: 'border rounded-lg w-full touch-none',
+                      style: { width: '100%', height: '200px' }
+                    }}
+                    onEnd={handleSignatureEnd}
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleSignatureClear}
+                      className="text-sm text-gray-600 hover:text-gray-900"
+                    >
+                      Clear Signature
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-4">
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                >
+                  {loading ? 'Updating...' : 'Update Booking'}
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

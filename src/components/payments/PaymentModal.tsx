@@ -23,6 +23,9 @@ interface BookingWithPayments {
   payment_status: string;
   total_amount: number;
   remaining_amount: number;
+  late_fee?: number;
+  extension_fee?: number;
+  damage_charges?: number;
 }
 
 interface PaymentModalProps {
@@ -69,7 +72,10 @@ export default function PaymentModal({
             paid_amount,
             payment_status,
             status,
-            total_amount
+            total_amount,
+            late_fee,
+            extension_fee,
+            damage_charges
           `)
           .eq('id', initialBookingId)
           .single();
@@ -107,7 +113,10 @@ export default function PaymentModal({
             paid_amount,
             payment_status,
             status,
-            total_amount
+            total_amount,
+            late_fee,
+            extension_fee,
+            damage_charges
           `)
           .in('payment_status', ['pending', 'partial'])
           .in('status', ['confirmed', 'in_use'])
@@ -140,7 +149,16 @@ export default function PaymentModal({
 
   // Helper function to process booking data
   const processBookingData = (booking: any) => {
-    const totalAmount = Number(booking.booking_amount) + Number(booking.security_deposit_amount);
+    // Calculate additional fees
+    const lateFee = Number(booking.late_fee) || 0;
+    const extensionFee = Number(booking.extension_fee) || 0;
+    const damageCharges = Number(booking.damage_charges) || 0;
+    
+    // Calculate total including all fees
+    const baseAmount = Number(booking.booking_amount) + Number(booking.security_deposit_amount);
+    const additionalFees = lateFee + extensionFee + damageCharges;
+    const totalAmount = baseAmount + additionalFees;
+    
     const paidAmount = Number(booking.paid_amount) || 0;
     const remainingAmount = totalAmount - paidAmount;
 
@@ -148,7 +166,10 @@ export default function PaymentModal({
       ...booking,
       total_amount: totalAmount,
       paid_amount: paidAmount,
-      remaining_amount: remainingAmount
+      remaining_amount: remainingAmount,
+      late_fee: lateFee,
+      extension_fee: extensionFee,
+      damage_charges: damageCharges
     };
   };
 
@@ -382,6 +403,18 @@ export default function PaymentModal({
               <h3 className="font-medium text-gray-900 mb-3">Payment Details</h3>
               <PaymentRow label="Booking Amount" amount={selectedBooking.booking_amount} />
               <PaymentRow label="Security Deposit" amount={selectedBooking.security_deposit_amount} />
+              
+              {/* Show additional fees only if they exist and are greater than 0 */}
+              {selectedBooking.late_fee && selectedBooking.late_fee > 0 && (
+                <PaymentRow label="Late Fee" amount={selectedBooking.late_fee} />
+              )}
+              {selectedBooking.extension_fee && selectedBooking.extension_fee > 0 && (
+                <PaymentRow label="Extension Fee" amount={selectedBooking.extension_fee} />
+              )}
+              {selectedBooking.damage_charges && selectedBooking.damage_charges > 0 && (
+                <PaymentRow label="Damage Charges" amount={selectedBooking.damage_charges} />
+              )}
+              
               <div className="border-t border-gray-200 my-2" />
               <PaymentRow label="Total Required" amount={selectedBooking.total_amount} />
               <PaymentRow label="Amount Paid" amount={selectedBooking.paid_amount} />

@@ -1,8 +1,26 @@
+-- Create document_type enum
+CREATE TYPE document_type AS ENUM (
+    'customer_photo',
+    'aadhar_front',
+    'aadhar_back',
+    'dl_front',
+    'dl_back',
+    'pan_card',
+    'voter_id',
+    'passport',
+    'rental_agreement',
+    'electricity_bill',
+    'bank_statement',
+    'other_document_1',
+    'other_document_2',
+    'other_document_3'
+);
+
 -- Create customer_documents table
 CREATE TABLE customer_documents (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     customer_id UUID REFERENCES customers(id) ON DELETE CASCADE,
-    type VARCHAR(50) NOT NULL,
+    type document_type NOT NULL,
     url TEXT NOT NULL,
     uploaded_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
@@ -46,9 +64,12 @@ CREATE INDEX idx_customer_documents_customer_id ON customer_documents(customer_i
 CREATE INDEX idx_customer_documents_type ON customer_documents(type);
 
 -- Create storage bucket for customer documents if it doesn't exist
-INSERT INTO storage.buckets (id, name, public)
-VALUES ('customer-documents', 'customer-documents', false)
-ON CONFLICT (id) DO NOTHING;
+DO $$
+BEGIN
+    INSERT INTO storage.buckets (id, name, public)
+    VALUES ('customer-documents', 'customer-documents', false)
+    ON CONFLICT (id) DO NOTHING;
+END $$;
 
 -- Set up storage policies for the customer-documents bucket
 CREATE POLICY "Allow authenticated users to view customer documents"

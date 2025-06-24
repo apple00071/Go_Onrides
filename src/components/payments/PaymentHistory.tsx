@@ -26,13 +26,28 @@ export default function PaymentHistory({ bookingId }: { bookingId: string }) {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
   const { isAdmin, hasPermission, loading: permissionsLoading } = usePermissions();
 
   useEffect(() => {
     if (!permissionsLoading) {
       fetchPayments();
     }
-  }, [bookingId, permissionsLoading]);
+  }, [bookingId, permissionsLoading, refreshKey]);
+
+  useEffect(() => {
+    const handlePaymentUpdate = () => {
+      setRefreshKey(prev => prev + 1);
+    };
+
+    window.addEventListener('payment:created', handlePaymentUpdate);
+    window.addEventListener('payment:updated', handlePaymentUpdate);
+
+    return () => {
+      window.removeEventListener('payment:created', handlePaymentUpdate);
+      window.removeEventListener('payment:updated', handlePaymentUpdate);
+    };
+  }, []);
 
   const fetchPayments = async () => {
     try {

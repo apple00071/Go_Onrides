@@ -61,35 +61,54 @@ export default function DashboardLayout({
           return;
         }
 
+        // Store current path
+        const currentPath = window.location.pathname;
+        console.log('Current path:', currentPath);
+
+        // Only redirect if we're on the exact /dashboard path
+        if (currentPath === '/dashboard') {
+          if (profile.role === 'admin') {
+            console.log('Redirecting admin to admin dashboard...');
+            router.replace('/dashboard/admin');
+            return;
+          } else if (profile.role === 'worker') {
+            console.log('Redirecting worker to worker dashboard...');
+            router.replace('/dashboard/workers');
+            return;
+          }
+        } else if (profile.role === 'worker' && currentPath.startsWith('/dashboard/admin')) {
+          // Prevent workers from accessing admin routes
+          console.log('Worker attempting to access admin route, redirecting...');
+          router.replace('/dashboard/workers');
+          return;
+        }
+
         // Only update state if component is still mounted
         if (mounted) {
-          console.log('Profile found:', profile);
+          console.log('Setting user profile:', profile);
           setUser(profile);
           setError(null);
+          setLoading(false); // Set loading to false here
         }
       } catch (error) {
         console.error('Error in checkSession:', error);
         if (mounted) {
           setError(error instanceof Error ? error.message : 'An error occurred');
+          setLoading(false); // Make sure to set loading to false even on error
           
-          // Only redirect to login if we've tried a few times and still have errors
           if (retryCount >= 2) {
             router.replace('/login');
           } else {
-            // Increment retry count and try again after a delay
             setRetryCount(prev => prev + 1);
-            setTimeout(checkSession, 1000); // Retry after 1 second
+            setTimeout(checkSession, 1000);
           }
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
         }
       }
     };
 
     // Set up auth state change listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
+      console.log('Auth state changed:', event);
       if (event === 'SIGNED_OUT') {
         router.replace('/login');
       } else if (event === 'SIGNED_IN' && mounted) {
@@ -97,6 +116,7 @@ export default function DashboardLayout({
       }
     });
 
+    // Initial session check
     checkSession();
 
     // Cleanup function
