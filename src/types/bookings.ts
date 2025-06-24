@@ -2,8 +2,9 @@ export type BookingStatus = 'pending' | 'confirmed' | 'in_use' | 'completed' | '
 
 export interface OutstationDetails {
   destination: string;
-  estimated_kilometers: number;
-  odd_meter_reading: number;
+  estimated_kms: number;
+  start_odo: number;
+  end_odo: number;
 }
 
 export interface UploadedDocuments {
