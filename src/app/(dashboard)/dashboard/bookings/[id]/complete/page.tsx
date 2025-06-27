@@ -183,18 +183,21 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
       const damageCharges = parseFloat(formData.damageCharges) || 0;
       const remainingAmount = currentBooking.total_amount - currentBooking.paid_amount;
       
-      // Create payment record for the remaining amount
+      // Calculate the new total paid amount including this payment
+      const newPaidAmount = currentBooking.paid_amount + remainingAmount;
+
+      // If there's a remaining amount being paid, create a payment record
       if (remainingAmount > 0) {
         const { error: paymentError } = await supabase
           .from('payments')
-          .insert({
+          .insert([{
             booking_id: booking?.id,
             amount: remainingAmount,
-            payment_mode: formData.paymentMethod,
+            payment_mode: formData.paymentMethod || 'cash',
             payment_status: 'completed',
             created_at: new Date().toISOString(),
             created_by: session.user.id
-          });
+          }]);
 
         if (paymentError) {
           throw new Error(`Failed to create payment record: ${paymentError.message}`);
@@ -204,9 +207,6 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
       // The final total amount should be:
       // Original booking amount + damage charges (not including security deposit)
       const finalTotalAmount = currentBooking.booking_amount + damageCharges;
-
-      // Calculate the new total paid amount including this payment
-      const newPaidAmount = currentBooking.paid_amount + remainingAmount;
 
       // Prepare update data
       const updateData: any = {
@@ -220,7 +220,7 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
         extension_fee: parseFloat(formData.extensionFee) || 0,
         total_amount: finalTotalAmount,
         paid_amount: newPaidAmount,
-        payment_status: 'full'
+        payment_status: newPaidAmount >= finalTotalAmount ? 'full' : 'partial'
       };
 
       // Only add odometer_reading and fuel_level for outstation bookings

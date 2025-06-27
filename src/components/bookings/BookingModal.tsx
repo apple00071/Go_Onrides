@@ -378,10 +378,167 @@ export default function BookingModal({
         'security_deposit_amount'
       ];
 
-      // ... rest of the submit handler code ...
+      const supabase = getSupabaseClient();
+      
+      // Get current user's session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No active session');
+
+      // Generate a unique booking ID
+      const bookingId = await generateBookingId(supabase);
+
+      // Create customer if not existing
+      let customerId;
+      if (!isExistingCustomer) {
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .insert({
+            name: formData.customer_name,
+            phone: formData.customer_contact,
+            email: formData.customer_email,
+            alternative_phone: formData.alternative_phone,
+            emergency_contact_phone: formData.emergency_contact_phone,
+            emergency_contact_phone1: formData.emergency_contact_phone1,
+            aadhar_number: formData.aadhar_number,
+            dob: formData.date_of_birth,
+            dl_number: formData.dl_number,
+            dl_expiry_date: formData.dl_expiry_date,
+            temp_address_street: formData.temp_address,
+            perm_address_street: formData.perm_address,
+            created_at: new Date().toISOString(),
+            created_by: session.user.id
+          })
+          .select('id')
+          .single();
+
+        if (customerError) throw customerError;
+        customerId = customer.id;
+      } else {
+        // Get existing customer ID
+        const { data: customer, error: customerError } = await supabase
+          .from('customers')
+          .select('id')
+          .eq('phone', formData.customer_contact)
+          .single();
+
+        if (customerError) throw customerError;
+        customerId = customer.id;
+      }
+
+      // Create booking
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .insert({
+          booking_id: bookingId,
+          customer_id: customerId,
+          customer_name: formData.customer_name,
+          customer_contact: formData.customer_contact,
+          customer_email: formData.customer_email,
+          alternative_phone: formData.alternative_phone,
+          emergency_contact_phone: formData.emergency_contact_phone,
+          emergency_contact_phone1: formData.emergency_contact_phone1,
+          aadhar_number: formData.aadhar_number,
+          date_of_birth: formData.date_of_birth,
+          dl_number: formData.dl_number,
+          dl_expiry_date: formData.dl_expiry_date,
+          temp_address: formData.temp_address,
+          perm_address: formData.perm_address,
+          vehicle_details: formData.vehicle_details,
+          start_date: formData.start_date,
+          end_date: formData.end_date,
+          pickup_time: formData.pickup_time,
+          dropoff_time: formData.dropoff_time,
+          booking_amount: parseFloat(formData.booking_amount),
+          security_deposit_amount: parseFloat(formData.security_deposit_amount),
+          total_amount: parseFloat(formData.total_amount),
+          payment_status: formData.payment_status,
+          paid_amount: parseFloat(formData.paid_amount),
+          payment_mode: formData.payment_mode,
+          status: formData.status,
+          created_at: new Date().toISOString(),
+          created_by: session.user.id
+        })
+        .select('id')
+        .single();
+
+      if (bookingError) throw bookingError;
+
+      // Create payment record if any payment is made
+      const paidAmount = parseFloat(formData.paid_amount);
+      console.log('Creating payment record:', {
+        paidAmount,
+        paymentMode: formData.payment_mode,
+        bookingId: booking.id,
+        bookingDetails: booking
+      });
+      
+      if (paidAmount > 0) {
+        // First verify the booking exists
+        const { data: bookingCheck, error: bookingCheckError } = await supabase
+          .from('bookings')
+          .select('id, booking_id')
+          .eq('id', booking.id)
+          .single();
+
+        if (bookingCheckError) {
+          console.error('Error verifying booking:', bookingCheckError);
+          throw new Error(`Failed to verify booking: ${bookingCheckError.message}`);
+        }
+
+        console.log('Verified booking exists:', bookingCheck);
+
+        const { data: paymentData, error: paymentError } = await supabase
+          .from('payments')
+          .insert({
+            booking_id: booking.id,
+            amount: paidAmount,
+            payment_mode: formData.payment_mode,
+            payment_status: 'completed',
+            created_at: new Date().toISOString(),
+            created_by: session.user.id
+          })
+          .select()
+          .single();
+
+        if (paymentError) {
+          console.error('Payment creation error:', {
+            error: paymentError,
+            message: paymentError.message,
+            details: paymentError.details,
+            hint: paymentError.hint,
+            code: paymentError.code,
+            bookingId: booking.id
+          });
+          throw new Error(`Failed to create payment record: ${paymentError.message}`);
+        }
+
+        console.log('Payment record created:', {
+          payment: paymentData,
+          bookingId: booking.id,
+          amount: paidAmount
+        });
+      } else {
+        console.log('No payment record created - amount is 0');
+      }
+
+      // Send notification about the new booking
+      await notifyBookingEvent(
+        'BOOKING_CREATED',
+        booking.id,
+        {
+          customerName: formData.customer_name,
+          bookingId: bookingId,
+          actionBy: session.user.id,
+          vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
+        }
+      );
+
+      toast.success('Booking created successfully!');
+      onBookingCreated();
+      onClose();
     } catch (error) {
       console.error('Error creating booking:', error);
-      setError('Failed to create booking. Please try again.');
+      setError(error instanceof Error ? error.message : 'Failed to create booking');
       toast.error('Failed to create booking');
     } finally {
       setLoading(false);
@@ -728,37 +885,26 @@ export default function BookingModal({
             </div>
           </div>
 
-          {/* Total Amount and Payment Status - Always shown */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Total Amount
-              </label>
-              <CurrencyInput
-                name="total_amount"
-                readOnly
-                value={formData.total_amount}
-                onChange={() => {}}
-                className="bg-gray-50"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">
-                Payment Status *
-              </label>
-              <select
-                name="payment_status"
-                required
-                value={formData.payment_status}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              >
-                <option value="pending">Pending</option>
-                <option value="partial">Partial Payment</option>
-                <option value="full">Full Payment</option>
-              </select>
-            </div>
+          {/* Total Amount - Always shown */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Total Amount
+            </label>
+            <CurrencyInput
+              name="total_amount"
+              readOnly
+              value={formData.total_amount}
+              onChange={() => {}}
+              className="bg-gray-50"
+            />
           </div>
+
+          {/* Hidden payment status - always pending for new bookings */}
+          <input
+            type="hidden"
+            name="payment_status"
+            value="pending"
+          />
 
           {/* Paid Amount and Payment Mode - Always shown */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

@@ -61,7 +61,7 @@ export default function DashboardPage() {
       console.log('Fetching payments for total income calculation...');
       const { data: completedPayments, error: paymentsError } = await supabase
         .from('payments')
-        .select('amount, payment_status')
+        .select('amount')
         .eq('payment_status', 'completed');
 
       if (paymentsError) {
@@ -80,7 +80,7 @@ export default function DashboardPage() {
           console.log(`Processing payment amount:`, {
             amount,
             type: typeof payment.amount,
-            status: payment.payment_status
+            rawValue: payment.amount
           });
 
           return !isNaN(amount) ? sum + amount : sum;
@@ -99,7 +99,8 @@ export default function DashboardPage() {
       // Get all payments to ensure we have the most recent payment data
       const { data: allPayments, error: allPaymentsError } = await supabase
         .from('payments')
-        .select('booking_id, amount');
+        .select('booking_id, amount')
+        .eq('payment_status', 'completed');
       
       if (allPaymentsError) {
         console.error('Error fetching all payments:', allPaymentsError);
@@ -110,9 +111,16 @@ export default function DashboardPage() {
       if (allPayments) {
         allPayments.forEach(payment => {
           const currentTotal = paymentTotals.get(payment.booking_id) || 0;
-          paymentTotals.set(payment.booking_id, currentTotal + payment.amount);
+          const amount = typeof payment.amount === 'string' 
+            ? parseFloat(payment.amount) 
+            : payment.amount;
+          if (!isNaN(amount)) {
+            paymentTotals.set(payment.booking_id, currentTotal + amount);
+          }
         });
       }
+      
+      console.log('Payment totals by booking:', Object.fromEntries(paymentTotals));
       
       const pendingPayments = pendingBookings?.reduce((sum, booking) => {
         try {

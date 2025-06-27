@@ -4,10 +4,10 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
-import { generateBookingId } from '@/lib/utils';
+import { generateBookingId, formatCurrency } from '@/lib/utils';
 import SignaturePad from 'react-signature-canvas';
 import type SignaturePadType from 'react-signature-canvas';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Download } from 'lucide-react';
 import Link from 'next/link';
 import DocumentUpload from '@/components/documents/DocumentUpload';
 import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
@@ -15,6 +15,7 @@ import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
 import { type FormEvent } from 'react';
 import { RefreshCw, Upload, Camera, X } from 'lucide-react';
 import { notifyBookingEvent } from '@/lib/notification';
+import { generateInvoice } from '@/lib/generateInvoice';
 
 interface BookingFormData {
   customer_name: string;
@@ -113,6 +114,8 @@ export default function NewBookingPage() {
   const [signaturePad, setSignaturePad] = useState<SignaturePadType | null>(null);
   const [debouncedAadhar, setDebouncedAadhar] = useState('');
   const [tempBookingId, setTempBookingId] = useState<string>('');
+  const [bookingCreated, setBookingCreated] = useState(false);
+  const [createdBookingData, setCreatedBookingData] = useState<{ id: string; bookingId: string; invoicePdfBlob?: Blob } | null>(null);
 
   const initialFormData: BookingFormData = {
     customer_name: '',
@@ -492,6 +495,25 @@ export default function NewBookingPage() {
         throw new Error(`Failed to create booking: ${bookingError.message}`);
       }
 
+      // Create payment record if paid amount is greater than zero
+      if (formData.paid_amount > 0) {
+        const { error: paymentError } = await supabase
+          .from('payments')
+          .insert({
+            booking_id: newBooking.id,
+            amount: formData.paid_amount,
+            payment_mode: formData.payment_mode,
+            payment_status: 'completed',
+            created_at: new Date().toISOString(),
+            created_by: user?.id
+          });
+          
+        if (paymentError) {
+          console.error('Error creating payment record:', paymentError);
+          toast.error('Warning: Booking created but failed to record payment history');
+        }
+      }
+
       // If there are uploaded documents, store them in the documents table
       if (formData.uploaded_documents && Object.keys(formData.uploaded_documents).length > 0) {
         const documentsToInsert = Object.entries(formData.uploaded_documents).map(([type, url]) => ({
@@ -536,15 +558,79 @@ export default function NewBookingPage() {
         actionBy: user?.id || 'Unknown',
         vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
       });
+      
+      // Generate and download invoice/receipt
+      let invoicePdfBlob;
+      try {
+        // Prepare data for invoice generation
+        const invoiceData = {
+          id: newBooking.id,
+          booking_id: tempBookingId,
+          customer_name: formData.customer_name,
+          customer_contact: formData.customer_contact,
+          customer_email: formData.customer_email,
+          vehicle_details: formData.vehicle_details,
+          start_date: formData.start_date,
+          end_date: formData.end_date,
+          pickup_time: formData.pickup_time,
+          dropoff_time: formData.dropoff_time,
+          booking_amount: formData.booking_amount,
+          security_deposit_amount: formData.security_deposit_amount,
+          paid_amount: formData.paid_amount,
+          payment_status: formData.payment_status,
+          payment_mode: formData.payment_mode,
+          status: 'confirmed',
+          created_at: new Date().toISOString(),
+          signature: formData.signature
+        };
+        
+        // Generate invoice but don't automatically download it
+        invoicePdfBlob = await generateInvoice(invoiceData);
+        
+        // Store the PDF blob in state for the download button to use
+        toast.success('Invoice ready for download');
+      } catch (invoiceError) {
+        console.error('Error generating invoice:', invoiceError);
+        toast.error('Failed to generate invoice, but booking was created successfully');
+      }
+
+      // Set booking created state to true and store data for download button
+      setBookingCreated(true);
+      setCreatedBookingData({
+        id: newBooking.id,
+        bookingId: tempBookingId,
+        invoicePdfBlob
+      });
 
       toast.success('Booking created successfully!');
-      router.push('/dashboard/bookings');
+      
+      // Delay redirect to allow user to download invoice
+      setTimeout(() => {
+        router.push('/dashboard/bookings');
+      }, 5000);
     } catch (error) {
       console.error('Error creating booking:', error);
       setError(error instanceof Error ? error.message : 'Failed to create booking');
       toast.error(error instanceof Error ? error.message : 'Failed to create booking');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  // Function to handle manual invoice download
+  const handleDownloadInvoice = () => {
+    if (createdBookingData?.invoicePdfBlob) {
+      const url = window.URL.createObjectURL(createdBookingData.invoicePdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `invoice-${createdBookingData.bookingId}.pdf`);
+      
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } else {
+      toast.error('Invoice not available for download');
     }
   };
 
@@ -597,656 +683,708 @@ export default function NewBookingPage() {
           </button>
         </div>
 
-        <div className="bg-white rounded-lg shadow">
-          <div className="px-6 py-4 border-b">
-            <h1 className="text-xl font-semibold text-gray-900">
-              Create New Booking
-            </h1>
+        {bookingCreated ? (
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="text-center py-8">
+              <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+                <svg
+                  className="h-6 w-6 text-green-600"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth="1.5"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+                </svg>
+              </div>
+              <h3 className="mt-4 text-lg font-medium text-gray-900">Booking Created Successfully!</h3>
+              <p className="mt-2 text-sm text-gray-600">
+                Your booking has been created with ID: {createdBookingData?.bookingId}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                {formData.paid_amount > 0 ? (
+                  <span className="text-green-600">
+                    Initial payment of {formatCurrency(formData.paid_amount)} recorded successfully.
+                  </span>
+                ) : (
+                  <span className="text-yellow-600">
+                    No payment recorded. Please use the Payments section to track payments.
+                  </span>
+                )}
+              </p>
+              <p className="text-sm text-gray-500 mt-1">
+                You will be redirected to the bookings list in a few seconds.
+              </p>
+              <div className="mt-6">
+                <button
+                  onClick={handleDownloadInvoice}
+                  className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Download Invoice
+                </button>
+                <button
+                  onClick={() => router.push('/dashboard/bookings')}
+                  className="ml-4 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Go to Bookings List
+                </button>
+              </div>
+            </div>
           </div>
+        ) : (
+          <div className="bg-white rounded-lg shadow">
+            <div className="px-6 py-4 border-b">
+              <h1 className="text-xl font-semibold text-gray-900">
+                Create New Booking
+              </h1>
+            </div>
 
-          <form onSubmit={handleSubmit} className="p-6">
-            {error && (
-              <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md mb-6">
-                {error}
-              </div>
-            )}
-
-            <div className="space-y-6">
-              {/* Customer Information */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Customer Information</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label htmlFor="aadhar_number" className="block text-sm font-medium text-gray-700 mb-1">
-                      Aadhar Number *
-                    </label>
-                    <input
-                      id="aadhar_number"
-                      type="text"
-                      name="aadhar_number"
-                      required
-                      value={formData.aadhar_number}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                      maxLength={12}
-                      pattern="\d{12}"
-                      title="Please enter a valid 12-digit Aadhar number"
-                      placeholder="Enter 12-digit Aadhar number to search"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-1">
-                      Customer Name *
-                    </label>
-                    <input
-                      id="customer_name"
-                      type="text"
-                      name="customer_name"
-                      required
-                      value={formData.customer_name}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="customer_contact" className="block text-sm font-medium text-gray-700 mb-1">
-                      Phone Number *
-                    </label>
-                    <input
-                      id="customer_contact"
-                      type="tel"
-                      name="customer_contact"
-                      required
-                      value={formData.customer_contact}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                      maxLength={10}
-                      pattern="\d{10}"
-                      title="Please enter a valid 10-digit phone number"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="customer_email" className="block text-sm font-medium text-gray-700 mb-1">
-                      Email
-                    </label>
-                    <input
-                      id="customer_email"
-                      type="email"
-                      name="customer_email"
-                      value={formData.customer_email}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="alternative_phone" className="block text-sm font-medium text-gray-700 mb-1">
-                      Alternative Phone
-                    </label>
-                    <input
-                      id="alternative_phone"
-                      type="tel"
-                      name="alternative_phone"
-                      value={formData.alternative_phone}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      maxLength={10}
-                      pattern="\d{10}"
-                      title="Please enter a valid 10-digit phone number"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
-                      Emergency Contact Phone *
-                    </label>
-                    <input
-                      id="emergency_contact_phone"
-                      type="tel"
-                      name="emergency_contact_phone"
-                      required
-                      value={formData.emergency_contact_phone}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                      maxLength={10}
-                      pattern="\d{10}"
-                      title="Please enter a valid 10-digit phone number"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="emergency_contact_phone1" className="block text-sm font-medium text-gray-700 mb-1">
-                      Secondary Emergency Contact Phone
-                    </label>
-                    <input
-                      id="emergency_contact_phone1"
-                      type="tel"
-                      name="emergency_contact_phone1"
-                      value={formData.emergency_contact_phone1}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      maxLength={10}
-                      pattern="\d{10}"
-                      title="Please enter a valid 10-digit phone number"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 mb-1">
-                      Date of Birth *
-                    </label>
-                    <input
-                      id="date_of_birth"
-                      type="date"
-                      name="date_of_birth"
-                      required
-                      max={maxDOB}
-                      value={formData.date_of_birth}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="dl_number" className="block text-sm font-medium text-gray-700 mb-1">
-                      Driving License Number *
-                    </label>
-                    <input
-                      id="dl_number"
-                      type="text"
-                      name="dl_number"
-                      required
-                      value={formData.dl_number}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="dl_expiry_date" className="block text-sm font-medium text-gray-700 mb-1">
-                      DL Expiry Date *
-                    </label>
-                    <input
-                      id="dl_expiry_date"
-                      type="date"
-                      name="dl_expiry_date"
-                      required
-                      min={minDLExpiry}
-                      value={formData.dl_expiry_date}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label htmlFor="temp_address" className="block text-sm font-medium text-gray-700 mb-1">
-                      Temporary Address *
-                    </label>
-                    <textarea
-                      id="temp_address"
-                      name="temp_address"
-                      required
-                      value={formData.temp_address}
-                      onChange={handleInputChange}
-                      rows={2}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label htmlFor="perm_address" className="block text-sm font-medium text-gray-700 mb-1">
-                      Permanent Address *
-                    </label>
-                    <textarea
-                      id="perm_address"
-                      name="perm_address"
-                      required
-                      value={formData.perm_address}
-                      onChange={handleInputChange}
-                      rows={2}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
+            <form onSubmit={handleSubmit} className="p-6">
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md mb-6">
+                  {error}
                 </div>
-              </div>
+              )}
 
-              {/* Vehicle Details */}
               <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Vehicle Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label htmlFor="vehicle_model" className="block text-sm font-medium text-gray-700 mb-1">
-                      Vehicle Model *
-                    </label>
-                    <input
-                      id="vehicle_model"
-                      type="text"
-                      name="vehicle_details.model"
-                      required
-                      value={formData.vehicle_details.model}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="vehicle_registration" className="block text-sm font-medium text-gray-700 mb-1">
-                      Registration Number *
-                    </label>
-                    <input
-                      id="vehicle_registration"
-                      type="text"
-                      name="vehicle_details.registration"
-                      required
-                      value={formData.vehicle_details.registration}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-                </div>
-              </div>
+                {/* Customer Information */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Customer Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="aadhar_number" className="block text-sm font-medium text-gray-700 mb-1">
+                        Aadhar Number *
+                      </label>
+                      <input
+                        id="aadhar_number"
+                        type="text"
+                        name="aadhar_number"
+                        required
+                        value={formData.aadhar_number}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                        maxLength={12}
+                        pattern="\d{12}"
+                        title="Please enter a valid 12-digit Aadhar number"
+                        placeholder="Enter 12-digit Aadhar number to search"
+                      />
+                    </div>
 
-              {/* Rental Purpose and Outstation Details */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Rental Details</h3>
-                <div>
-                  <label htmlFor="rental_purpose" className="block text-sm font-medium text-gray-700">
-                    Purpose of Rent
-                  </label>
-                  <select
-                    id="rental_purpose"
-                    name="rental_purpose"
-                    value={formData.rental_purpose}
-                    onChange={handleInputChange}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="local">Local</option>
-                    <option value="outstation">Outstation</option>
-                  </select>
-                </div>
+                    <div>
+                      <label htmlFor="customer_name" className="block text-sm font-medium text-gray-700 mb-1">
+                        Customer Name *
+                      </label>
+                      <input
+                        id="customer_name"
+                        type="text"
+                        name="customer_name"
+                        required
+                        value={formData.customer_name}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
 
-                {formData.rental_purpose === 'outstation' && (
-                  <div className="space-y-6 border-t pt-6">
-                    <h3 className="text-lg font-medium leading-6 text-gray-900">Outstation Details</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label htmlFor="outstation_details.destination" className="block text-sm font-medium text-gray-700">
-                          Destination *
-                        </label>
-                        <input
-                          type="text"
-                          id="outstation_details.destination"
-                          name="outstation_details.destination"
-                          required
-                          value={formData.outstation_details?.destination || ''}
-                          onChange={handleInputChange}
-                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="outstation_details.estimated_kms" className="block text-sm font-medium text-gray-700">
-                          Estimated Kilometers *
-                        </label>
-                        <input
-                          type="number"
-                          id="outstation_details.estimated_kms"
-                          name="outstation_details.estimated_kms"
-                          required
-                          min="0"
-                          value={formData.outstation_details?.estimated_kms || ''}
-                          onChange={handleInputChange}
-                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="outstation_details.start_odo" className="block text-sm font-medium text-gray-700">
-                          Start Odometer *
-                        </label>
-                        <input
-                          type="number"
-                          id="outstation_details.start_odo"
-                          name="outstation_details.start_odo"
-                          required
-                          min="0"
-                          value={formData.outstation_details?.start_odo || ''}
-                          onChange={handleInputChange}
-                          className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                        />
-                      </div>
+                    <div>
+                      <label htmlFor="customer_contact" className="block text-sm font-medium text-gray-700 mb-1">
+                        Phone Number *
+                      </label>
+                      <input
+                        id="customer_contact"
+                        type="tel"
+                        name="customer_contact"
+                        required
+                        value={formData.customer_contact}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                        maxLength={10}
+                        pattern="\d{10}"
+                        title="Please enter a valid 10-digit phone number"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="customer_email" className="block text-sm font-medium text-gray-700 mb-1">
+                        Email
+                      </label>
+                      <input
+                        id="customer_email"
+                        type="email"
+                        name="customer_email"
+                        value={formData.customer_email}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="alternative_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                        Alternative Phone
+                      </label>
+                      <input
+                        id="alternative_phone"
+                        type="tel"
+                        name="alternative_phone"
+                        value={formData.alternative_phone}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        maxLength={10}
+                        pattern="\d{10}"
+                        title="Please enter a valid 10-digit phone number"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                        Emergency Contact Phone *
+                      </label>
+                      <input
+                        id="emergency_contact_phone"
+                        type="tel"
+                        name="emergency_contact_phone"
+                        required
+                        value={formData.emergency_contact_phone}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                        maxLength={10}
+                        pattern="\d{10}"
+                        title="Please enter a valid 10-digit phone number"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="emergency_contact_phone1" className="block text-sm font-medium text-gray-700 mb-1">
+                        Secondary Emergency Contact Phone
+                      </label>
+                      <input
+                        id="emergency_contact_phone1"
+                        type="tel"
+                        name="emergency_contact_phone1"
+                        value={formData.emergency_contact_phone1}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        maxLength={10}
+                        pattern="\d{10}"
+                        title="Please enter a valid 10-digit phone number"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 mb-1">
+                        Date of Birth *
+                      </label>
+                      <input
+                        id="date_of_birth"
+                        type="date"
+                        name="date_of_birth"
+                        required
+                        max={maxDOB}
+                        value={formData.date_of_birth}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="dl_number" className="block text-sm font-medium text-gray-700 mb-1">
+                        Driving License Number *
+                      </label>
+                      <input
+                        id="dl_number"
+                        type="text"
+                        name="dl_number"
+                        required
+                        value={formData.dl_number}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+
+                    <div>
+                      <label htmlFor="dl_expiry_date" className="block text-sm font-medium text-gray-700 mb-1">
+                        DL Expiry Date *
+                      </label>
+                      <input
+                        id="dl_expiry_date"
+                        type="date"
+                        name="dl_expiry_date"
+                        required
+                        min={minDLExpiry}
+                        value={formData.dl_expiry_date}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label htmlFor="temp_address" className="block text-sm font-medium text-gray-700 mb-1">
+                        Temporary Address *
+                      </label>
+                      <textarea
+                        id="temp_address"
+                        name="temp_address"
+                        required
+                        value={formData.temp_address}
+                        onChange={handleInputChange}
+                        rows={2}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label htmlFor="perm_address" className="block text-sm font-medium text-gray-700 mb-1">
+                        Permanent Address *
+                      </label>
+                      <textarea
+                        id="perm_address"
+                        name="perm_address"
+                        required
+                        value={formData.perm_address}
+                        onChange={handleInputChange}
+                        rows={2}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
 
-              {/* Booking Details */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Booking Details</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div>
-                    <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
-                      Start Date *
-                    </label>
-                    <input
-                      id="start_date"
-                      type="date"
-                      name="start_date"
-                      required
-                      min={today}
-                      max={maxStartDate}
-                      value={formData.start_date}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
-                      End Date *
-                    </label>
-                    <input
-                      id="end_date"
-                      type="date"
-                      name="end_date"
-                      required
-                      min={minEndDate}
-                      max={maxEndDate}
-                      value={formData.end_date}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Pickup Time *
-                    </label>
-                    <select
-                      name="pickup_time"
-                      required
-                      value={formData.pickup_time}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    >
-                      <option value="">Select time</option>
-                      {Array.from({ length: 48 }, (_, i) => {
-                        const hour = Math.floor(i / 2);
-                        const minute = i % 2 === 0 ? '00' : '30';
-                        const time = `${hour.toString().padStart(2, '0')}:${minute}`;
-                        // Only show future times
-                        if (!isTimeInPast(time)) {
-                          return (
-                            <option key={time} value={time}>
-                              {formatTimeDisplay(time)}
-                            </option>
-                          );
-                        }
-                        return null;
-                      }).filter(Boolean)}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Drop-off Time *
-                    </label>
-                    <select
-                      name="dropoff_time"
-                      required
-                      value={formData.dropoff_time}
-                      onChange={handleInputChange}
-                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                    >
-                      <option value="">Select time</option>
-                      {Array.from({ length: 48 }, (_, i) => {
-                        const hour = Math.floor(i / 2);
-                        const minute = i % 2 === 0 ? '00' : '30';
-                        const time = `${hour.toString().padStart(2, '0')}:${minute}`;
-                        // Only show future times
-                        if (!isTimeInPast(time)) {
-                          return (
-                            <option key={time} value={time}>
-                              {formatTimeDisplay(time)}
-                            </option>
-                          );
-                        }
-                        return null;
-                      }).filter(Boolean)}
-                    </select>
+                {/* Vehicle Details */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Vehicle Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="vehicle_model" className="block text-sm font-medium text-gray-700 mb-1">
+                        Vehicle Model *
+                      </label>
+                      <input
+                        id="vehicle_model"
+                        type="text"
+                        name="vehicle_details.model"
+                        required
+                        value={formData.vehicle_details.model}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="vehicle_registration" className="block text-sm font-medium text-gray-700 mb-1">
+                        Registration Number *
+                      </label>
+                      <input
+                        id="vehicle_registration"
+                        type="text"
+                        name="vehicle_details.registration"
+                        required
+                        value={formData.vehicle_details.registration}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Payment Details */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Payment Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Rental Purpose and Outstation Details */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Rental Details</h3>
                   <div>
-                    <label htmlFor="booking_amount" className="block text-sm font-medium text-gray-700 mb-1">
-                      Booking Amount *
-                    </label>
-                    <input
-                      id="booking_amount"
-                      type="number"
-                      name="booking_amount"
-                      required
-                      value={formData.booking_amount}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="security_deposit" className="block text-sm font-medium text-gray-700 mb-1">
-                      Security Deposit Amount *
-                    </label>
-                    <input
-                      id="security_deposit"
-                      type="number"
-                      name="security_deposit_amount"
-                      required
-                      value={formData.security_deposit_amount}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="total_amount" className="block text-sm font-medium text-gray-700 mb-1">
-                      Total Amount
-                    </label>
-                    <input
-                      id="total_amount"
-                      type="number"
-                      name="total_amount"
-                      value={formData.total_amount}
-                      readOnly
-                      className="block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="payment_status" className="block text-sm font-medium text-gray-700 mb-1">
-                      Payment Status *
+                    <label htmlFor="rental_purpose" className="block text-sm font-medium text-gray-700">
+                      Purpose of Rent
                     </label>
                     <select
-                      id="payment_status"
-                      name="payment_status"
+                      id="rental_purpose"
+                      name="rental_purpose"
+                      value={formData.rental_purpose}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
                       required
-                      value={formData.payment_status}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
                     >
-                      <option value="pending">Pending</option>
-                      <option value="partial">Partial Payment</option>
-                      <option value="full">Full Payment</option>
+                      <option value="local">Local</option>
+                      <option value="outstation">Outstation</option>
                     </select>
                   </div>
-                  <div>
-                    <label htmlFor="paid_amount" className="block text-sm font-medium text-gray-700 mb-1">
-                      Paid Amount
-                    </label>
-                    <input
-                      id="paid_amount"
-                      type="number"
-                      name="paid_amount"
-                      value={formData.paid_amount}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="payment_mode" className="block text-sm font-medium text-gray-700 mb-1">
-                      Payment Mode
-                    </label>
-                    <select
-                      id="payment_mode"
-                      name="payment_mode"
-                      value={formData.payment_mode}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    >
-                      <option value="cash">Cash</option>
-                      <option value="upi">UPI</option>
-                      <option value="card">Card</option>
-                      <option value="bank_transfer">Bank Transfer</option>
-                    </select>
+
+                  {formData.rental_purpose === 'outstation' && (
+                    <div className="space-y-6 border-t pt-6">
+                      <h3 className="text-lg font-medium leading-6 text-gray-900">Outstation Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="outstation_details.destination" className="block text-sm font-medium text-gray-700">
+                            Destination *
+                          </label>
+                          <input
+                            type="text"
+                            id="outstation_details.destination"
+                            name="outstation_details.destination"
+                            required
+                            value={formData.outstation_details?.destination || ''}
+                            onChange={handleInputChange}
+                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="outstation_details.estimated_kms" className="block text-sm font-medium text-gray-700">
+                            Estimated Kilometers *
+                          </label>
+                          <input
+                            type="number"
+                            id="outstation_details.estimated_kms"
+                            name="outstation_details.estimated_kms"
+                            required
+                            min="0"
+                            value={formData.outstation_details?.estimated_kms || ''}
+                            onChange={handleInputChange}
+                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="outstation_details.start_odo" className="block text-sm font-medium text-gray-700">
+                            Start Odometer *
+                          </label>
+                          <input
+                            type="number"
+                            id="outstation_details.start_odo"
+                            name="outstation_details.start_odo"
+                            required
+                            min="0"
+                            value={formData.outstation_details?.start_odo || ''}
+                            onChange={handleInputChange}
+                            className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Booking Details */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Booking Details</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                    <div>
+                      <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
+                        Start Date *
+                      </label>
+                      <input
+                        id="start_date"
+                        type="date"
+                        name="start_date"
+                        required
+                        min={today}
+                        max={maxStartDate}
+                        value={formData.start_date}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
+                        End Date *
+                      </label>
+                      <input
+                        id="end_date"
+                        type="date"
+                        name="end_date"
+                        required
+                        min={minEndDate}
+                        max={maxEndDate}
+                        value={formData.end_date}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Pickup Time *
+                      </label>
+                      <select
+                        name="pickup_time"
+                        required
+                        value={formData.pickup_time}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      >
+                        <option value="">Select time</option>
+                        {Array.from({ length: 48 }, (_, i) => {
+                          const hour = Math.floor(i / 2);
+                          const minute = i % 2 === 0 ? '00' : '30';
+                          const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+                          // Only show future times
+                          if (!isTimeInPast(time)) {
+                            return (
+                              <option key={time} value={time}>
+                                {formatTimeDisplay(time)}
+                              </option>
+                            );
+                          }
+                          return null;
+                        }).filter(Boolean)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Drop-off Time *
+                      </label>
+                      <select
+                        name="dropoff_time"
+                        required
+                        value={formData.dropoff_time}
+                        onChange={handleInputChange}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      >
+                        <option value="">Select time</option>
+                        {Array.from({ length: 48 }, (_, i) => {
+                          const hour = Math.floor(i / 2);
+                          const minute = i % 2 === 0 ? '00' : '30';
+                          const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+                          // Only show future times
+                          if (!isTimeInPast(time)) {
+                            return (
+                              <option key={time} value={time}>
+                                {formatTimeDisplay(time)}
+                              </option>
+                            );
+                          }
+                          return null;
+                        }).filter(Boolean)}
+                      </select>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Documents Section */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Documents</h3>
-                {tempBookingId && (
-                  <DocumentUpload
-                    bookingId={tempBookingId}
-                    onDocumentsUploaded={handleDocumentsUploaded}
-                    existingDocuments={formData.uploaded_documents}
+                {/* Payment Details */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Payment Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label htmlFor="booking_amount" className="block text-sm font-medium text-gray-700 mb-1">
+                        Booking Amount *
+                      </label>
+                      <input
+                        id="booking_amount"
+                        type="number"
+                        name="booking_amount"
+                        required
+                        value={formData.booking_amount}
+                        onChange={handleInputChange}
+                        min="0"
+                        step="0.01"
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="security_deposit" className="block text-sm font-medium text-gray-700 mb-1">
+                        Security Deposit Amount *
+                      </label>
+                      <input
+                        id="security_deposit"
+                        type="number"
+                        name="security_deposit_amount"
+                        required
+                        value={formData.security_deposit_amount}
+                        onChange={handleInputChange}
+                        min="0"
+                        step="0.01"
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="total_amount" className="block text-sm font-medium text-gray-700 mb-1">
+                        Total Amount
+                      </label>
+                      <input
+                        id="total_amount"
+                        type="number"
+                        name="total_amount"
+                        value={formData.total_amount}
+                        readOnly
+                        className="block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="payment_status" className="block text-sm font-medium text-gray-700 mb-1">
+                        Payment Status *
+                      </label>
+                      <select
+                        id="payment_status"
+                        name="payment_status"
+                        required
+                        value={formData.payment_status}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="partial">Partial Payment</option>
+                        <option value="full">Full Payment</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="paid_amount" className="block text-sm font-medium text-gray-700 mb-1">
+                        Paid Amount
+                      </label>
+                      <input
+                        id="paid_amount"
+                        type="number"
+                        name="paid_amount"
+                        value={formData.paid_amount}
+                        onChange={handleInputChange}
+                        min="0"
+                        step="0.01"
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="payment_mode" className="block text-sm font-medium text-gray-700 mb-1">
+                        Payment Mode
+                      </label>
+                      <select
+                        id="payment_mode"
+                        name="payment_mode"
+                        value={formData.payment_mode}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      >
+                        <option value="cash">Cash</option>
+                        <option value="upi">UPI</option>
+                        <option value="card">Card</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Documents Section */}
+                <div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-4">Documents</h3>
+                  {tempBookingId && (
+                    <DocumentUpload
+                      bookingId={tempBookingId}
+                      onDocumentsUploaded={handleDocumentsUploaded}
+                      existingDocuments={formData.uploaded_documents}
+                    />
+                  )}
+                </div>
+
+                {/* Physical Documents Checklist */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Physical Documents Verification</h3>
+                  <DocumentsChecklist
+                    documents={formData.submitted_documents as SubmittedDocuments}
+                    onDocumentsChange={handleSubmittedDocumentsChange}
                   />
-                )}
-              </div>
-
-              {/* Physical Documents Checklist */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Physical Documents Verification</h3>
-                <DocumentsChecklist
-                  documents={formData.submitted_documents as SubmittedDocuments}
-                  onDocumentsChange={handleSubmittedDocumentsChange}
-                />
-              </div>
-
-              {/* Terms and Conditions */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Terms and Conditions</h3>
-                <div className="bg-gray-50 p-4 rounded-md text-sm text-gray-700 mb-4">
-                  <ul className="list-disc pl-5 space-y-2">
-                    <li>Day implies 24 hours. A maximum of a 1-hour grace period is accepted on 1 day prior intimation.</li>
-                    <li>The vehicle should be given back with the same amount of fuel available while taking the vehicle, and if in case fuel is not topped up fuel charges + 10% fuel charges are levied.</li>
-                    <li>The vehicle shall be collected and dropped off at our garage. Vehicle pickup/drop-off charges shall be Rs.300 each way in case pickup/drop-off of the vehicle at your location is required. (Subject to the availability of drivers.)</li>
-                    <li>Any accident/damages shall be the client cost and shall be charged at actuals. The decision of GO-ON RIDERS.</li>
-                    <li>Any maintenance charges accrued due to misuse of the vehicle shall be to the client's account.</li>
-                    <li>Routine maintenance is to GO-ON RIDERS account.</li>
-                    <li>The vehicle shall not be used for motor sports or any such activity that may impair the long term performance and condition of the vehicle.</li>
-                    <li>The minimum age of the renter shall be 21 years, and he/she shall possess a minimum driving experience of 1 years.</li>
-                    <li>The vehicle shall not be used for any other purpose other than the given purpose in the agreement form.</li>
-                    <li>Any extension of the Vehicle should be informed in advance and is possible with the acceptance of GO-ON RIDERS.</li>
-                    <li>Any violation of the terms will lead to termination of the deposit.</li>
-                    <li>Without prior intimation of extension of vehicle lead to penalty of Rs. 1000 per day.</li>
-                  </ul>
                 </div>
-                <div className="flex items-start">
-                  <div className="flex items-center h-5">
-                    <input
-                      id="terms"
-                      name="terms"
-                      type="checkbox"
-                      checked={formData.terms_accepted}
-                      onChange={(e) => setFormData(prev => ({ ...prev, terms_accepted: e.target.checked }))}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
+
+                {/* Terms and Conditions */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Terms and Conditions</h3>
+                  <div className="bg-gray-50 p-4 rounded-md text-sm text-gray-700 mb-4">
+                    <ul className="list-disc pl-5 space-y-2">
+                      <li>Day implies 24 hours. A maximum of a 1-hour grace period is accepted on 1 day prior intimation.</li>
+                      <li>The vehicle should be given back with the same amount of fuel available while taking the vehicle, and if in case fuel is not topped up fuel charges + 10% fuel charges are levied.</li>
+                      <li>The vehicle shall be collected and dropped off at our garage. Vehicle pickup/drop-off charges shall be Rs.300 each way in case pickup/drop-off of the vehicle at your location is required. (Subject to the availability of drivers.)</li>
+                      <li>Any accident/damages shall be the client cost and shall be charged at actuals. The decision of GO-ON RIDERS.</li>
+                      <li>Any maintenance charges accrued due to misuse of the vehicle shall be to the client's account.</li>
+                      <li>Routine maintenance is to GO-ON RIDERS account.</li>
+                      <li>The vehicle shall not be used for motor sports or any such activity that may impair the long term performance and condition of the vehicle.</li>
+                      <li>The minimum age of the renter shall be 21 years, and he/she shall possess a minimum driving experience of 1 years.</li>
+                      <li>The vehicle shall not be used for any other purpose other than the given purpose in the agreement form.</li>
+                      <li>Any extension of the Vehicle should be informed in advance and is possible with the acceptance of GO-ON RIDERS.</li>
+                      <li>Any violation of the terms will lead to termination of the deposit.</li>
+                      <li>Without prior intimation of extension of vehicle lead to penalty of Rs. 1000 per day.</li>
+                    </ul>
                   </div>
-                  <div className="ml-3 text-sm">
-                    <label htmlFor="terms" className="font-medium text-gray-700">
-                      I accept the terms and conditions
-                    </label>
-                    <p className="text-gray-500">
-                      By checking this box, you agree to our{' '}
-                      <Link href="/terms" className="text-blue-600 hover:text-blue-500">
-                        Terms of Service
-                      </Link>{' '}
-                      and{' '}
-                      <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
-                        Privacy Policy
-                      </Link>
-                    </p>
+                  <div className="flex items-start">
+                    <div className="flex items-center h-5">
+                      <input
+                        id="terms"
+                        name="terms"
+                        type="checkbox"
+                        checked={formData.terms_accepted}
+                        onChange={(e) => setFormData(prev => ({ ...prev, terms_accepted: e.target.checked }))}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      />
+                    </div>
+                    <div className="ml-3 text-sm">
+                      <label htmlFor="terms" className="font-medium text-gray-700">
+                        I accept the terms and conditions
+                      </label>
+                      <p className="text-gray-500">
+                        By checking this box, you agree to our{' '}
+                        <Link href="/terms" className="text-blue-600 hover:text-blue-500">
+                          Terms of Service
+                        </Link>{' '}
+                        and{' '}
+                        <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
+                          Privacy Policy
+                        </Link>
+                      </p>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Signature */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Signature</h3>
-                <div className="border rounded-lg p-4">
-                  <div className="border border-gray-300 rounded-lg bg-white">
-                    <SignaturePad
-                      ref={(ref: SignaturePadType | null) => setSignaturePad(ref)}
-                      onEnd={handleSignatureEnd}
-                      canvasProps={{
-                        className: 'w-full h-48',
-                        'aria-label': 'Signature Canvas'
-                      }}
-                    />
-                  </div>
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleSignatureClear}
-                      className="text-sm text-gray-600 hover:text-gray-900"
-                    >
-                      Clear Signature
-                    </button>
+                {/* Signature */}
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Signature</h3>
+                  <div className="border rounded-lg p-4">
+                    <div className="border border-gray-300 rounded-lg bg-white">
+                      <SignaturePad
+                        ref={(ref: SignaturePadType | null) => setSignaturePad(ref)}
+                        onEnd={handleSignatureEnd}
+                        canvasProps={{
+                          className: 'w-full h-48',
+                          'aria-label': 'Signature Canvas'
+                        }}
+                      />
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSignatureClear}
+                        className="text-sm text-gray-600 hover:text-gray-900"
+                      >
+                        Clear Signature
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={() => router.back()}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50"
-              >
-                {submitting ? 'Creating...' : 'Create Booking'}
-              </button>
-            </div>
-          </form>
-        </div>
+              <div className="mt-6 flex justify-end space-x-4">
+                <button
+                  type="button"
+                  onClick={() => router.back()}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {submitting ? 'Creating...' : 'Create Booking'}
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );

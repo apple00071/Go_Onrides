@@ -21,7 +21,7 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
       try {
         const { data: signedUrl, error: urlError } = await supabase.storage
           .from('documents')
-          .createSignedUrl(document.document_url, 3600); // 1 hour expiry
+          .createSignedUrl(document.url, 3600); // 1 hour expiry
 
         if (urlError) throw urlError;
         if (!signedUrl?.signedUrl) throw new Error('Failed to generate signed URL');
@@ -34,7 +34,7 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
     }
 
     loadDocument();
-  }, [document.document_url, supabase.storage]);
+  }, [document.url, supabase.storage]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">

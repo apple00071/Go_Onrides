@@ -43,21 +43,7 @@ export default function CreatePaymentModal({
         throw new Error('User not authenticated');
       }
 
-      // Get current booking details to calculate new paid amount
-      const { data: currentBooking, error: bookingFetchError } = await supabase
-        .from('bookings')
-        .select('paid_amount')
-        .eq('id', bookingId)
-        .single();
-
-      if (bookingFetchError) {
-        console.error('Error fetching current booking:', bookingFetchError);
-        throw new Error('Failed to fetch current booking details');
-      }
-
-      const newPaidAmount = (currentBooking?.paid_amount || 0) + amount;
-
-      // Create payment record
+      // Create payment record first
       const { data: payment, error: paymentError } = await supabase
         .from('payments')
         .insert([{
@@ -80,7 +66,22 @@ export default function CreatePaymentModal({
         throw new Error('Payment was created but no data was returned');
       }
 
-      // Update booking's payment status and paid amount
+      // Then update the booking's payment status and amount
+      const { data: currentBooking, error: bookingFetchError } = await supabase
+        .from('bookings')
+        .select('paid_amount')
+        .eq('id', bookingId)
+        .single();
+
+      if (bookingFetchError) {
+        console.error('Error fetching current booking:', bookingFetchError);
+        // Rollback payment creation
+        await supabase.from('payments').delete().eq('id', payment.id);
+        throw new Error('Failed to fetch current booking details');
+      }
+
+      const newPaidAmount = (currentBooking?.paid_amount || 0) + amount;
+
       const { error: bookingUpdateError } = await supabase
         .from('bookings')
         .update({
@@ -95,10 +96,7 @@ export default function CreatePaymentModal({
       if (bookingUpdateError) {
         console.error('Booking update error:', bookingUpdateError);
         // Rollback payment creation if booking update fails
-        await supabase
-          .from('payments')
-          .delete()
-          .eq('id', payment.id);
+        await supabase.from('payments').delete().eq('id', payment.id);
         throw new Error('Failed to update booking payment status');
       }
 
@@ -120,7 +118,7 @@ export default function CreatePaymentModal({
       }
 
       // Dispatch payment created event
-      window.dispatchEvent(new CustomEvent('payment:created', { detail: payment }));
+      window.dispatchEvent(new CustomEvent('payment:created'));
       
       // Close modal and notify parent
       onClose();
@@ -128,6 +126,7 @@ export default function CreatePaymentModal({
       toast.success('Payment recorded successfully');
     } catch (error) {
       console.error('Error creating payment:', error);
+      setError(error instanceof Error ? error.message : 'Failed to record payment');
       toast.error('Failed to record payment');
     } finally {
       setLoading(false);

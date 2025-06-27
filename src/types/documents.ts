@@ -5,7 +5,6 @@ export interface Document {
   customer_id?: string;
   document_type: string;
   document_url: string;
-  type: string;  // MIME type of the document (e.g., 'image/jpeg', 'application/pdf')
   created_at: string;
   updated_at?: string;
 }

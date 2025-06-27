@@ -213,6 +213,22 @@ export default function BookingDetailsPage() {
     fetchBookingDetails();
   }, [params?.id]);
 
+  // Add automatic payment history refresh if payment is full or partial
+  useEffect(() => {
+    if (booking && (booking.payment_status === 'full' || booking.payment_status === 'partial') && booking.paid_amount > 0) {
+      console.log('Booking has payment but may not have payment records, triggering refresh', {
+        id: booking.id,
+        payment_status: booking.payment_status,
+        paid_amount: booking.paid_amount
+      });
+      
+      // Dispatch event to ensure payment history component refreshes
+      window.dispatchEvent(new CustomEvent('payment:created', { 
+        detail: { bookingId: booking?.id, refreshTimestamp: Date.now() }
+      }));
+    }
+  }, [booking?.id, booking?.payment_status, booking?.paid_amount]);
+
   const handleStatusChange = async (newStatus: BookingStatus) => {
     if (!booking) return;
     
@@ -284,8 +300,10 @@ export default function BookingDetailsPage() {
       await fetchBookingDetails();
       toast.success('Payment recorded successfully');
       
-      // Dispatch event to refresh other components
-      window.dispatchEvent(new CustomEvent('payment:created'));
+      // Dispatch event to refresh other components - explicitly for payment history
+      window.dispatchEvent(new CustomEvent('payment:created', { 
+        detail: { bookingId: booking?.id, refreshTimestamp: Date.now() }
+      }));
     } catch (error) {
       console.error('Error refreshing booking data:', error);
       toast.error('Failed to refresh booking data');
