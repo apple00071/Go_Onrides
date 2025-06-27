@@ -21,7 +21,7 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
       try {
         const { data: signedUrl, error: urlError } = await supabase.storage
           .from('documents')
-          .createSignedUrl(document.url, 3600); // 1 hour expiry
+          .createSignedUrl(document.document_url, 3600); // 1 hour expiry
 
         if (urlError) throw urlError;
         if (!signedUrl?.signedUrl) throw new Error('Failed to generate signed URL');
@@ -34,7 +34,7 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
     }
 
     loadDocument();
-  }, [document.url, supabase.storage]);
+  }, [document.document_url, supabase.storage]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
@@ -60,7 +60,7 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
             <div className="flex justify-center items-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          ) : document.type.startsWith('image/') ? (
+          ) : document.document_type.startsWith('image/') ? (
             <div className="relative">
               <Image
                 src={url}
@@ -70,7 +70,7 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
                 className="w-full h-auto max-h-[80vh] object-contain"
               />
             </div>
-          ) : document.type === 'application/pdf' ? (
+          ) : document.document_type === 'application/pdf' ? (
             <iframe
               src={url}
               className="w-full h-full min-h-[60vh]"
