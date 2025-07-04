@@ -118,6 +118,8 @@ export default function NewBookingPage() {
   const [tempBookingId, setTempBookingId] = useState<string>('');
   const [bookingCreated, setBookingCreated] = useState(false);
   const [createdBookingData, setCreatedBookingData] = useState<{ id: string; bookingId: string; invoicePdfBlob?: Blob } | null>(null);
+  const [userData, setUserData] = useState<{ id: string } | null>(null);
+  const supabase = getSupabaseClient();
 
   const initialFormData: BookingFormData = {
     customer_name: '',
@@ -365,8 +367,6 @@ export default function NewBookingPage() {
       setLoading(true);
       setError(null);
       
-      const supabase = getSupabaseClient();
-      
       const { data: customers, error } = await supabase
         .from('customers')
         .select('*, documents')
@@ -477,70 +477,49 @@ export default function NewBookingPage() {
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
+    setError(null);
+
+    if (!userData) {
+      setError('User session not found. Please login again.');
+      setSubmitting(false);
+      return;
+    }
 
     try {
       // Validate required fields
       if (!formData.customer_name || !formData.customer_contact || !formData.aadhar_number) {
-        throw new Error('Please fill in all required customer information');
+        throw new Error('Please fill in all required fields');
       }
 
-      // Validate outstation details
-      if (formData.rental_purpose === 'outstation') {
-        if (!formData.outstation_details?.destination) {
-          throw new Error('Please enter the destination for outstation booking');
-        }
-        if (!formData.outstation_details?.estimated_kms || formData.outstation_details.estimated_kms <= 0) {
-          throw new Error('Please enter the estimated kilometers');
-        }
-        if (!formData.outstation_details?.start_odo || formData.outstation_details.start_odo < 0) {
-          throw new Error('Please enter the start odometer reading');
-        }
-      }
-
-      const supabase = getSupabaseClient();
-
-      // Get the current user's email to use in the notification
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // Create or update customer first
+      // Prepare customer data
       const customerData = {
         name: formData.customer_name,
-        phone: formData.customer_contact,
-        email: formData.customer_email,
-        alternative_phone: formData.alternative_phone,
-        emergency_contact_phone: formData.emergency_contact_phone,
-        emergency_contact_phone1: formData.emergency_contact_phone1,
+        contact: formData.customer_contact,
+        email: formData.customer_email || null,
         aadhar_number: formData.aadhar_number,
-        dob: formData.date_of_birth,
-        dl_number: formData.dl_number,
-        dl_expiry_date: formData.dl_expiry_date,
-        temp_address_street: formData.temp_address,
-        perm_address_street: formData.perm_address,
-        documents: formData.uploaded_documents,
-        updated_at: new Date().toISOString(),
-        created_by: user?.id
+        date_of_birth: formData.date_of_birth || null,
+        dl_number: formData.dl_number || null,
+        dl_expiry_date: formData.dl_expiry_date || null,
+        temp_address: formData.temp_address || null,
+        perm_address: formData.perm_address,
+        emergency_contact_phone: formData.emergency_contact_phone || null,
+        emergency_contact_phone1: formData.emergency_contact_phone1 || null,
+        colleague_phone: formData.colleague_phone || null,
+        created_at: new Date().toISOString(),
+        created_by: userData.id
       };
 
-      // First try to get the existing customer
-      const { data: existingCustomer, error: customerCheckError } = await supabase
-        .from('customers')
-        .select('id')
-        .eq('aadhar_number', formData.aadhar_number)
-        .single();
-
-      let customerId;
-
-      if (existingCustomer) {
-        // Update existing customer
-        const { error: updateError } = await supabase
+      // Check if customer exists
+      let customerId: string;
+      if (isExistingCustomer) {
+        const { data: existingCustomer, error: fetchError } = await supabase
           .from('customers')
-          .update(customerData)
-          .eq('id', existingCustomer.id)
-          .select()
+          .select('id')
+          .eq('aadhar_number', formData.aadhar_number)
           .single();
 
-        if (updateError) {
-          throw new Error(`Failed to update customer: ${updateError.message}`);
+        if (fetchError) {
+          throw new Error(`Failed to fetch customer: ${fetchError.message}`);
         }
         customerId = existingCustomer.id;
       } else {
@@ -565,14 +544,14 @@ export default function NewBookingPage() {
           customer_id: customerId,
           customer_name: formData.customer_name,
           customer_contact: formData.customer_contact,
-          customer_email: formData.customer_email,
-          emergency_contact_phone: formData.emergency_contact_phone,
-          emergency_contact_phone1: formData.emergency_contact_phone1,
+          customer_email: formData.customer_email || null,
+          emergency_contact_phone: formData.emergency_contact_phone || null,
+          emergency_contact_phone1: formData.emergency_contact_phone1 || null,
           aadhar_number: formData.aadhar_number,
-          date_of_birth: formData.date_of_birth,
-          dl_number: formData.dl_number,
-          dl_expiry_date: formData.dl_expiry_date,
-          temp_address: formData.temp_address,
+          date_of_birth: formData.date_of_birth || null,
+          dl_number: formData.dl_number || null,
+          dl_expiry_date: formData.dl_expiry_date || null,
+          temp_address: formData.temp_address || null,
           perm_address: formData.perm_address,
           vehicle_details: formData.vehicle_details,
           start_date: formData.start_date,
@@ -588,7 +567,7 @@ export default function NewBookingPage() {
           rental_purpose: formData.rental_purpose,
           outstation_details: formData.outstation_details,
           created_at: new Date().toISOString(),
-          created_by: user?.id,
+          created_by: userData.id,
           status: 'confirmed',
           submitted_documents: formData.submitted_documents
         })
@@ -609,7 +588,7 @@ export default function NewBookingPage() {
             payment_mode: formData.payment_mode,
             payment_status: 'completed',
             created_at: new Date().toISOString(),
-            created_by: user?.id
+            created_by: userData.id
           });
           
         if (paymentError) {
@@ -636,7 +615,7 @@ export default function NewBookingPage() {
       await notifyBookingEvent('BOOKING_CREATED', newBooking.id, {
         customerName: formData.customer_name,
         bookingId: tempBookingId,
-        actionBy: user?.id || 'Unknown',
+        actionBy: userData.id || 'Unknown',
         vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
       });
 
@@ -699,12 +678,33 @@ export default function NewBookingPage() {
   useEffect(() => {
     // Generate a temporary booking ID when component mounts
     const generateTempId = async () => {
-      const supabase = getSupabaseClient();
       const id = await generateBookingId(supabase);
       setTempBookingId(id);
     };
     generateTempId();
   }, []);
+
+  // Add useEffect to get user data
+  useEffect(() => {
+    const getUser = async () => {
+      try {
+        const { data: { user }, error } = await supabase.auth.getUser();
+        if (error) {
+          throw error;
+        }
+        if (user) {
+          setUserData(user);
+        } else {
+          router.push('/login');
+        }
+      } catch (error) {
+        console.error('Error fetching user:', error);
+        router.push('/login');
+      }
+    };
+
+    getUser();
+  }, [router]);
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">

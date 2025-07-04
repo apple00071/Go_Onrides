@@ -50,12 +50,50 @@ export async function middleware(req: NextRequest) {
 
       console.log('Middleware - User profile:', profile);
 
-      // Redirect based on role - matching the login form logic
-      const redirectPath = profile?.role === 'admin' ? '/dashboard/settings' : '/dashboard';
-      const redirectUrl = new URL(redirectPath, req.url);
+      // Redirect based on role
+      let redirectPath;
+      if (profile?.role === 'admin') {
+        redirectPath = '/dashboard/settings';
+      } else if (profile?.role === 'worker') {
+        redirectPath = '/dashboard/workers';
+      } else {
+        redirectPath = '/dashboard';
+      }
 
+      const redirectUrl = new URL(redirectPath, req.url);
       console.log('Middleware - Redirecting to:', redirectUrl.pathname);
       return NextResponse.redirect(redirectUrl);
+    }
+
+    // Handle role-based access to dashboard routes
+    if (session && user && isProtectedRoute) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      const currentPath = req.nextUrl.pathname;
+
+      // Prevent workers from accessing admin routes
+      if (profile?.role === 'worker' && 
+          (currentPath.startsWith('/dashboard/admin') || 
+           currentPath.startsWith('/dashboard/settings'))) {
+        console.log('Middleware - Worker attempting to access admin route, redirecting...');
+        return NextResponse.redirect(new URL('/dashboard/workers', req.url));
+      }
+
+      // Redirect workers to their dashboard if they try to access the main dashboard
+      if (profile?.role === 'worker' && currentPath === '/dashboard') {
+        console.log('Middleware - Redirecting worker to worker dashboard...');
+        return NextResponse.redirect(new URL('/dashboard/workers', req.url));
+      }
+
+      // Redirect admins to settings if they try to access worker routes
+      if (profile?.role === 'admin' && currentPath.startsWith('/dashboard/workers')) {
+        console.log('Middleware - Admin attempting to access worker route, redirecting...');
+        return NextResponse.redirect(new URL('/dashboard/settings', req.url));
+      }
     }
 
     return res;

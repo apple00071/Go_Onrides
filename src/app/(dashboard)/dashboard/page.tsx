@@ -14,6 +14,11 @@ interface DashboardStats {
   pendingPayments: number;
 }
 
+interface UserProfile {
+  role: 'admin' | 'worker';
+  id: string;
+}
+
 export default function DashboardPage() {
   const [stats, setStats] = useState<DashboardStats>({
     totalBookings: 0,
@@ -22,24 +27,60 @@ export default function DashboardPage() {
     pendingPayments: 0
   });
   const [loading, setLoading] = useState(true);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
   useEffect(() => {
-    fetchDashboardStats();
-    
-    // Listen for dashboard refresh events from other pages
-    const handleDashboardRefresh = () => {
-      console.log('Dashboard refresh event received, refreshing stats...');
-      fetchDashboardStats();
-    };
-    
-    window.addEventListener('dashboard:refresh', handleDashboardRefresh);
-    
-    return () => {
-      window.removeEventListener('dashboard:refresh', handleDashboardRefresh);
-    };
+    fetchUserProfile();
   }, []);
 
+  useEffect(() => {
+    if (userProfile) {
+      fetchDashboardStats();
+      
+      // Listen for dashboard refresh events from other pages
+      const handleDashboardRefresh = () => {
+        console.log('Dashboard refresh event received, refreshing stats...');
+        fetchDashboardStats();
+      };
+      
+      window.addEventListener('dashboard:refresh', handleDashboardRefresh);
+      
+      return () => {
+        window.removeEventListener('dashboard:refresh', handleDashboardRefresh);
+      };
+    }
+  }, [userProfile]);
+
+  const fetchUserProfile = async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) throw userError;
+
+      if (!user) {
+        throw new Error('No authenticated user found');
+      }
+
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+
+      if (profile) {
+        setUserProfile({ role: profile.role, id: user.id });
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    }
+  };
+
   const fetchDashboardStats = async () => {
+    if (!userProfile) return;
+
     try {
       console.log('Fetching dashboard stats...');
       const supabase = getSupabaseClient();
@@ -57,54 +98,45 @@ export default function DashboardPage() {
         
       console.log(`Found ${totalBookings} total bookings and ${activeRentals} active rentals`);
 
-      // Get total income from completed payments
-      console.log('Fetching payments for total income calculation...');
-      const { data: completedPayments, error: paymentsError } = await supabase
-        .from('payments')
-        .select('amount')
-        .eq('payment_status', 'completed');
-
-      if (paymentsError) {
-        console.error('Error fetching payments:', paymentsError);
-        throw paymentsError;
-      }
-
-      // Calculate total income from completed payments
       let totalIncome = 0;
-      if (completedPayments && completedPayments.length > 0) {
-        totalIncome = completedPayments.reduce((sum, payment) => {
-          const amount = typeof payment.amount === 'string' 
-            ? parseFloat(payment.amount) 
-            : payment.amount;
+      let pendingPayments = 0;
 
-          console.log(`Processing payment amount:`, {
-            amount,
-            type: typeof payment.amount,
-            rawValue: payment.amount
-          });
+      // Only fetch total income for admins
+      if (userProfile.role === 'admin') {
+        // Get total income from completed payments
+        console.log('Fetching payments for total income calculation...');
+        const { data: completedPayments, error: paymentsError } = await supabase
+          .from('payments')
+          .select('amount')
+          .eq('payment_status', 'completed');
 
-          return !isNaN(amount) ? sum + amount : sum;
-        }, 0);
+        if (paymentsError) {
+          console.error('Error fetching payments:', paymentsError);
+          throw paymentsError;
+        }
+
+        // Calculate total income from completed payments
+        if (completedPayments && completedPayments.length > 0) {
+          totalIncome = completedPayments.reduce((sum, payment) => {
+            const amount = typeof payment.amount === 'string' 
+              ? parseFloat(payment.amount) 
+              : payment.amount;
+            return !isNaN(amount) ? sum + amount : sum;
+          }, 0);
+        }
       }
 
-      console.log('Final calculated total income:', totalIncome);
-
-      // Get pending payments total
+      // Get pending payments total - visible to all
       const { data: pendingBookings } = await supabase
         .from('bookings')
         .select('id, booking_amount, security_deposit_amount, paid_amount')
         .or('payment_status.eq.pending,payment_status.eq.partial')
         .not('status', 'eq', 'cancelled');
 
-      // Get all payments to ensure we have the most recent payment data
-      const { data: allPayments, error: allPaymentsError } = await supabase
+      const { data: allPayments } = await supabase
         .from('payments')
         .select('booking_id, amount')
         .eq('payment_status', 'completed');
-      
-      if (allPaymentsError) {
-        console.error('Error fetching all payments:', allPaymentsError);
-      }
       
       // Create a map of booking_id to total paid amount
       const paymentTotals = new Map<string, number>();
@@ -120,20 +152,13 @@ export default function DashboardPage() {
         });
       }
       
-      console.log('Payment totals by booking:', Object.fromEntries(paymentTotals));
-      
-      const pendingPayments = pendingBookings?.reduce((sum, booking) => {
+      pendingPayments = pendingBookings?.reduce((sum, booking) => {
         try {
           const bookingAmount = Number(booking.booking_amount) || 0;
           const securityDeposit = Number(booking.security_deposit_amount) || 0;
           const total = bookingAmount + securityDeposit;
-          
-          // Use actual payment data from payments table if available
           const actualPaidAmount = paymentTotals.get(booking.id) || Number(booking.paid_amount) || 0;
-          
           const remaining = total - actualPaidAmount;
-          console.log(`Booking ${booking.id}: Total=${total}, Paid=${actualPaidAmount}, Remaining=${remaining}`);
-          
           return sum + (remaining > 0 ? remaining : 0);
         } catch (err) {
           console.error('Error calculating pending payments for booking:', booking.id, err);
@@ -154,6 +179,14 @@ export default function DashboardPage() {
     }
   };
 
+  if (!userProfile) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -171,7 +204,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Total Bookings */}
+        {/* Total Bookings - visible to all */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="p-2 bg-blue-100 rounded">
@@ -186,7 +219,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Active Rentals */}
+        {/* Active Rentals - visible to all */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
             <div className="p-2 bg-green-100 rounded">
@@ -201,27 +234,28 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Total Income */}
-        <div className="bg-white rounded-lg shadow p-6">
-          <div className="flex items-center">
-            <div className="p-2 bg-purple-100 rounded">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.418 0-8-3.582-8-8s3.582-8 8-8 8 3.582 8 8-3.582 8-8 8zm-1-13v2h2v1h-2v1h2v1h-2v3h-1v-3H9v-1h1v-1H9v-1h1V7h1zm3 0v2h1v5h-1V7z" />
-              </svg>
-            </div>
-            <div className="ml-4">
-              <h2 className="text-sm font-medium text-gray-600">Total Income</h2>
-              <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.totalIncome)}</p>
+        {/* Total Income - admin only */}
+        {userProfile.role === 'admin' && (
+          <div className="bg-white rounded-lg shadow p-6">
+            <div className="flex items-center">
+              <div className="p-2 bg-blue-100 rounded">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
+                </svg>
+              </div>
+              <div className="ml-4">
+                <h2 className="text-sm font-medium text-gray-600">Total Income</h2>
+                <p className="text-2xl font-semibold text-gray-900">{formatCurrency(stats.totalIncome)}</p>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Pending Payments */}
+        {/* Pending Payments - visible to all */}
         <div className="bg-white rounded-lg shadow p-6">
           <div className="flex items-center">
-            <div className="p-2 bg-red-100 rounded">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <div className="p-2 bg-yellow-100 rounded">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-yellow-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </div>
@@ -233,6 +267,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Vehicle Returns and Pending Payments components - visible to all */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <VehicleReturns />
         <PendingPayments />
