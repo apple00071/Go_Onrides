@@ -35,6 +35,7 @@ export interface BookingDetails {
   alternative_phone: string;
   emergency_contact_phone: string;
   emergency_contact_phone1: string;
+  colleague_phone?: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;

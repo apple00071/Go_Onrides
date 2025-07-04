@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
@@ -8,8 +8,7 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { notifyBookingEvent } from '@/lib/notification';
 import DocumentUpload from '@/components/documents/DocumentUpload';
 import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
-import SignaturePad from 'react-signature-canvas';
-import type SignaturePadType from 'react-signature-canvas';
+import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRotation';
 import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
 
 interface OutstationDetails {
@@ -29,6 +28,7 @@ interface BookingDetails {
   alternative_phone: string;
   emergency_contact_phone: string;
   emergency_contact_phone1: string;
+  colleague_phone?: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;
@@ -70,6 +70,7 @@ interface FormData {
   alternative_phone: string;
   emergency_contact_phone: string;
   emergency_contact_phone1: string;
+  colleague_phone: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;
@@ -98,6 +99,8 @@ interface FormData {
   submitted_documents: SubmittedDocuments;
 }
 
+type PaymentStatus = 'pending' | 'partial' | 'full';
+
 // Helper function to convert 24h to 12h format
 const formatTimeDisplay = (hour: number, minute: string) => {
   const period = hour >= 12 ? 'PM' : 'AM';
@@ -106,11 +109,11 @@ const formatTimeDisplay = (hour: number, minute: string) => {
 };
 
 // Generate time slots
-const timeSlots = Array.from({ length: 48 }, (_, i) => {
-  const hour = Math.floor(i / 2);
-  const minute = i % 2 === 0 ? '00' : '30';
-  const value = `${hour.toString().padStart(2, '0')}:${minute}`;
-  const label = formatTimeDisplay(hour, minute);
+const timeSlots = Array.from({ length: 1440 }, (_, i) => {
+  const hour = Math.floor(i / 60);
+  const minute = i % 60;
+  const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+  const label = formatTimeDisplay(hour, minute.toString().padStart(2, '0'));
   return { value, label };
 });
 
@@ -134,7 +137,6 @@ export default function EditBookingModal({
 }: EditBookingModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const signaturePadRef = useRef<SignaturePadType>(null);
 
   // Create form data from booking
   const initialFormData = useMemo<FormData>(() => ({
@@ -144,6 +146,7 @@ export default function EditBookingModal({
     alternative_phone: booking?.alternative_phone || '',
     emergency_contact_phone: booking?.emergency_contact_phone || '',
     emergency_contact_phone1: booking?.emergency_contact_phone1 || '',
+    colleague_phone: booking?.colleague_phone || '',
     aadhar_number: booking?.aadhar_number || '',
     date_of_birth: booking?.date_of_birth || '',
     dl_number: booking?.dl_number || '',
@@ -246,6 +249,51 @@ export default function EditBookingModal({
     const { name, value } = e.target;
     setError(null);
     
+    // Handle amount fields - remove leading zeros and validate
+    if (name === 'booking_amount' || name === 'security_deposit_amount' || name === 'paid_amount') {
+      // Remove leading zeros but keep single zero
+      const cleanValue = value.replace(/^0+(?=\d)/, '');
+      
+      // Validate if it's a valid number
+      if (cleanValue === '' || /^\d*\.?\d*$/.test(cleanValue)) {
+        const numValue = cleanValue === '' ? 0 : parseFloat(cleanValue);
+        
+        if (numValue < 0) {
+          setError('Amount cannot be negative');
+          return;
+        }
+
+        if (name === 'paid_amount') {
+          const totalAmount = parseFloat(formData.total_amount);
+          if (numValue > totalAmount) {
+            setError('Paid amount cannot exceed total amount');
+            return;
+          }
+
+          // Update payment status based on paid amount
+          let newPaymentStatus: PaymentStatus = 'pending';
+          if (numValue === 0) {
+            newPaymentStatus = 'pending';
+          } else if (numValue === totalAmount) {
+            newPaymentStatus = 'full';
+          } else if (numValue > 0 && numValue < totalAmount) {
+            newPaymentStatus = 'partial';
+          }
+
+          setFormData(prev => ({ 
+            ...prev, 
+            [name]: cleanValue,
+            payment_status: newPaymentStatus
+          }));
+          return;
+        }
+
+        setFormData(prev => ({ ...prev, [name]: cleanValue }));
+        return;
+      }
+      return;
+    }
+    
     // Date validation
     if (name === 'date_of_birth') {
       const selectedDate = new Date(value);
@@ -329,30 +377,6 @@ export default function EditBookingModal({
       }
     }
 
-    if (name === 'paid_amount') {
-      const amount = parseFloat(value);
-      const totalAmount = parseFloat(formData.total_amount);
-      
-      if (amount < 0) {
-        setError('Paid amount cannot be negative');
-        return;
-      }
-
-      if (amount > totalAmount) {
-        setError('Paid amount cannot exceed total amount');
-        return;
-      }
-
-      // Update payment status based on paid amount
-      if (amount === 0) {
-        setFormData(prev => ({ ...prev, payment_status: 'pending' }));
-      } else if (amount === totalAmount) {
-        setFormData(prev => ({ ...prev, payment_status: 'full' }));
-      } else if (amount > 0 && amount < totalAmount) {
-        setFormData(prev => ({ ...prev, payment_status: 'partial' }));
-      }
-    }
-
     // Handle nested object updates
     if (name.includes('.')) {
       const [parent, child] = name.split('.');
@@ -396,6 +420,64 @@ export default function EditBookingModal({
     }
   };
 
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    
+    // Handle empty input
+    if (value === '') {
+      setFormData(prev => ({ ...prev, [name]: '0' }));
+      return;
+    }
+
+    // Remove any non-numeric characters except decimal point
+    const sanitizedValue = value.replace(/[^\d.]/g, '');
+    
+    // Handle decimal values
+    if (sanitizedValue.includes('.')) {
+      const [whole, decimal] = sanitizedValue.split('.');
+      // Remove leading zeros from whole number part, but keep single zero
+      const formattedWhole = whole.replace(/^0+/, '') || '0';
+      const formattedValue = decimal ? `${formattedWhole}.${decimal}` : formattedWhole;
+      
+      if (/^\d*\.?\d*$/.test(formattedValue)) {
+        const numValue = parseFloat(formattedValue);
+        
+        if (name === 'paid_amount') {
+          const totalAmount = parseFloat(formData.total_amount);
+          
+          if (numValue > totalAmount) {
+            setError('Paid amount cannot exceed total amount');
+            return;
+          }
+
+          // Update payment status based on paid amount
+          let newPaymentStatus: PaymentStatus = 'pending';
+          if (numValue === 0) {
+            newPaymentStatus = 'pending';
+          } else if (numValue === totalAmount) {
+            newPaymentStatus = 'full';
+          } else if (numValue > 0 && numValue < totalAmount) {
+            newPaymentStatus = 'partial';
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            [name]: formattedValue,
+            payment_status: newPaymentStatus
+          }));
+        } else {
+          setFormData(prev => ({ ...prev, [name]: formattedValue }));
+        }
+      }
+    } else {
+      // Handle non-decimal values
+      const formattedValue = sanitizedValue.replace(/^0+/, '') || '0';
+      if (/^\d+$/.test(formattedValue)) {
+        setFormData(prev => ({ ...prev, [name]: formattedValue }));
+      }
+    }
+  };
+
   const handleDocumentsChange = (documents: UploadedDocuments) => {
     setFormData(prev => ({
       ...prev,
@@ -408,20 +490,6 @@ export default function EditBookingModal({
       ...prev,
       submitted_documents: documents
     }));
-  };
-
-  const handleSignatureClear = () => {
-    if (signaturePadRef.current) {
-      signaturePadRef.current.clear();
-      setFormData(prev => ({ ...prev, signature: '' }));
-    }
-  };
-
-  const handleSignatureEnd = () => {
-    if (signaturePadRef.current) {
-      const signatureData = signaturePadRef.current.toDataURL();
-      setFormData(prev => ({ ...prev, signature: signatureData }));
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -532,6 +600,8 @@ export default function EditBookingModal({
                       value={formData.customer_contact}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                     />
                   </div>
                   <div>
@@ -561,6 +631,7 @@ export default function EditBookingModal({
                       value={formData.customer_name}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="text"
                     />
                   </div>
                 </div>
@@ -576,6 +647,8 @@ export default function EditBookingModal({
                       value={formData.alternative_phone}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                     />
                   </div>
                 </div>
@@ -583,7 +656,7 @@ export default function EditBookingModal({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Emergency Contact Phone *
+                      Father Phone Number *
                     </label>
                     <input
                       type="tel"
@@ -592,11 +665,13 @@ export default function EditBookingModal({
                       value={formData.emergency_contact_phone}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Emergency Contact Phone 1
+                      Brother/Friend Phone Number
                     </label>
                     <input
                       type="tel"
@@ -604,6 +679,22 @@ export default function EditBookingModal({
                       value={formData.emergency_contact_phone1}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Colleague/Relative Phone Number
+                    </label>
+                    <input
+                      type="tel"
+                      name="colleague_phone"
+                      value={formData.colleague_phone}
+                      onChange={handleInputChange}
+                      className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
                     />
                   </div>
                 </div>
@@ -620,16 +711,18 @@ export default function EditBookingModal({
                       value={formData.aadhar_number}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={12}
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Date of Birth *
+                      Date of Birth
                     </label>
                     <input
                       type="date"
                       name="date_of_birth"
-                      required
                       max={maxDOB}
                       value={formData.date_of_birth}
                       onChange={handleInputChange}
@@ -650,16 +743,16 @@ export default function EditBookingModal({
                       value={formData.dl_number}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="text"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      DL Expiry Date *
+                      DL Expiry Date
                     </label>
                     <input
                       type="date"
                       name="dl_expiry_date"
-                      required
                       min={minDLExpiry}
                       value={formData.dl_expiry_date}
                       onChange={handleInputChange}
@@ -671,14 +764,13 @@ export default function EditBookingModal({
                 <div className="grid grid-cols-1 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Temporary Address *
+                      Temporary Address
                     </label>
                     <textarea
                       name="temp_address"
-                      required
                       value={formData.temp_address}
                       onChange={handleInputChange}
-                      rows={2}
+                      rows={3}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
                   </div>
@@ -709,6 +801,7 @@ export default function EditBookingModal({
                       value={formData.vehicle_details.model}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="text"
                     />
                   </div>
                   <div>
@@ -722,6 +815,7 @@ export default function EditBookingModal({
                       value={formData.vehicle_details.registration}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      inputMode="text"
                     />
                   </div>
                 </div>
@@ -816,26 +910,32 @@ export default function EditBookingModal({
                     <label className="block text-sm font-medium text-gray-700">
                       Booking Amount *
                     </label>
-                    <CurrencyInput
+                    <input
+                      type="text"
                       name="booking_amount"
                       required
                       value={formData.booking_amount}
-                      onChange={handleInputChange}
-                      error={error?.includes('booking_amount')}
-                      helperText={error?.includes('booking_amount') ? error : undefined}
+                      onChange={handleAmountChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
+                      placeholder="0"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
                       Security Deposit Amount *
                     </label>
-                    <CurrencyInput
+                    <input
+                      type="text"
                       name="security_deposit_amount"
                       required
                       value={formData.security_deposit_amount}
-                      onChange={handleInputChange}
-                      error={error?.includes('security_deposit')}
-                      helperText={error?.includes('security_deposit') ? error : undefined}
+                      onChange={handleAmountChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
+                      placeholder="0"
                     />
                   </div>
                 </div>
@@ -876,12 +976,15 @@ export default function EditBookingModal({
                     <label className="block text-sm font-medium text-gray-700">
                       Paid Amount
                     </label>
-                    <CurrencyInput
+                    <input
+                      type="text"
                       name="paid_amount"
                       value={formData.paid_amount}
-                      onChange={handleInputChange}
-                      error={error?.includes('paid_amount')}
-                      helperText={error?.includes('paid_amount') ? error : undefined}
+                      onChange={handleAmountChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
+                      placeholder="0"
                     />
                   </div>
                   <div>
@@ -995,25 +1098,10 @@ export default function EditBookingModal({
               {/* Signature Section */}
               <div className="space-y-6 border-t pt-6">
                 <h3 className="text-lg font-medium leading-6 text-gray-900">Signature</h3>
-                <div className="border rounded-lg p-4">
-                  <SignaturePad
-                    ref={signaturePadRef}
-                    canvasProps={{
-                      className: 'border rounded-lg w-full touch-none',
-                      style: { width: '100%', height: '200px' }
-                    }}
-                    onEnd={handleSignatureEnd}
-                  />
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleSignatureClear}
-                      className="text-sm text-gray-600 hover:text-gray-900"
-                    >
-                      Clear Signature
-                    </button>
-                  </div>
-                </div>
+                <SignaturePadWithRotation
+                  initialSignature={formData.signature}
+                  onSignatureChange={(signature) => setFormData(prev => ({ ...prev, signature }))}
+                />
               </div>
 
               <div className="flex justify-end space-x-4">

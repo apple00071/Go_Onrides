@@ -571,13 +571,19 @@ export default function BookingDetailsPage() {
                 {booking?.emergency_contact_phone && (
                   <div className="flex items-center mt-1">
                     <Phone className="h-4 w-4 mr-2 text-red-400" />
-                    <p className="text-sm text-red-600">{booking.emergency_contact_phone} (Emergency)</p>
+                    <p className="text-sm text-red-600">{booking.emergency_contact_phone} (Father)</p>
                   </div>
                 )}
                 {booking?.emergency_contact_phone1 && (
                   <div className="flex items-center mt-1">
                     <Phone className="h-4 w-4 mr-2 text-red-400" />
-                    <p className="text-sm text-red-600">{booking.emergency_contact_phone1} (Secondary Emergency)</p>
+                    <p className="text-sm text-red-600">{booking.emergency_contact_phone1} (Brother/Friend)</p>
+                  </div>
+                )}
+                {booking?.colleague_phone && (
+                  <div className="flex items-center mt-1">
+                    <Phone className="h-4 w-4 mr-2 text-red-400" />
+                    <p className="text-sm text-red-600">{booking.colleague_phone} (Colleague/Relative)</p>
                   </div>
                 )}
                 {booking?.customer_email && (

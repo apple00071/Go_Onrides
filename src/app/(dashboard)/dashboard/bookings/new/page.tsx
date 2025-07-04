@@ -11,6 +11,7 @@ import { ArrowLeft, Download } from 'lucide-react';
 import Link from 'next/link';
 import DocumentUpload from '@/components/documents/DocumentUpload';
 import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
+import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRotation';
 import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
 import { type FormEvent } from 'react';
 import { RefreshCw, Upload, Camera, X } from 'lucide-react';
@@ -24,6 +25,7 @@ interface BookingFormData {
   alternative_phone: string;
   emergency_contact_phone: string;
   emergency_contact_phone1: string;
+  colleague_phone: string;
   aadhar_number: string;
   date_of_birth: string;
   dl_number: string;
@@ -124,6 +126,7 @@ export default function NewBookingPage() {
     alternative_phone: '',
     emergency_contact_phone: '',
     emergency_contact_phone1: '',
+    colleague_phone: '',
     aadhar_number: '',
     date_of_birth: '',
     dl_number: '',
@@ -184,6 +187,51 @@ export default function NewBookingPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
+    // Handle amount fields - remove leading zeros and validate
+    if (name === 'booking_amount' || name === 'security_deposit_amount' || name === 'paid_amount') {
+      // Remove leading zeros but keep single zero
+      const cleanValue = value.replace(/^0+(?=\d)/, '');
+      
+      // Validate if it's a valid number
+      if (cleanValue === '' || /^\d*\.?\d*$/.test(cleanValue)) {
+        const numValue = cleanValue === '' ? 0 : parseFloat(cleanValue);
+        
+        if (numValue < 0) {
+          setError('Amount cannot be negative');
+          return;
+        }
+
+        if (name === 'paid_amount') {
+          const totalAmount = formData.total_amount;
+          if (numValue > totalAmount) {
+            setError('Paid amount cannot exceed total amount');
+            return;
+          }
+
+          // Update payment status based on paid amount
+          let newPaymentStatus: 'pending' | 'partial' | 'full' = 'pending';
+          if (numValue === 0) {
+            newPaymentStatus = 'pending';
+          } else if (numValue === totalAmount) {
+            newPaymentStatus = 'full';
+          } else if (numValue > 0 && numValue < totalAmount) {
+            newPaymentStatus = 'partial';
+          }
+
+          setFormData(prev => ({ 
+            ...prev, 
+            [name]: numValue,
+            payment_status: newPaymentStatus
+          }));
+          return;
+        }
+
+        setFormData(prev => ({ ...prev, [name]: numValue }));
+        return;
+      }
+      return;
+    }
+    
     if (name === 'aadhar_number') {
       setFormData(prev => ({ ...prev, [name]: value }));
       
@@ -234,6 +282,64 @@ export default function NewBookingPage() {
         ...prev,
         [name]: name.includes('amount') ? Number(value) : value
       }));
+    }
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    
+    // Handle empty input
+    if (value === '') {
+      setFormData(prev => ({ ...prev, [name]: 0 }));
+      return;
+    }
+
+    // Remove any non-numeric characters except decimal point
+    const sanitizedValue = value.replace(/[^\d.]/g, '');
+    
+    // Handle decimal values
+    if (sanitizedValue.includes('.')) {
+      const [whole, decimal] = sanitizedValue.split('.');
+      // Remove leading zeros from whole number part, but keep single zero
+      const formattedWhole = whole.replace(/^0+/, '') || '0';
+      const formattedValue = decimal ? `${formattedWhole}.${decimal}` : formattedWhole;
+      
+      if (/^\d*\.?\d*$/.test(formattedValue)) {
+        const numValue = parseFloat(formattedValue);
+        
+        if (name === 'paid_amount') {
+          const totalAmount = formData.total_amount;
+          
+          if (numValue > totalAmount) {
+            setError('Paid amount cannot exceed total amount');
+            return;
+          }
+
+          // Update payment status based on paid amount
+          let newPaymentStatus: 'pending' | 'partial' | 'full' = 'pending';
+          if (numValue === 0) {
+            newPaymentStatus = 'pending';
+          } else if (numValue === totalAmount) {
+            newPaymentStatus = 'full';
+          } else if (numValue > 0 && numValue < totalAmount) {
+            newPaymentStatus = 'partial';
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            [name]: numValue,
+            payment_status: newPaymentStatus
+          }));
+        } else {
+          setFormData(prev => ({ ...prev, [name]: numValue }));
+        }
+      }
+    } else {
+      // Handle non-decimal values
+      const formattedValue = sanitizedValue.replace(/^0+/, '') || '0';
+      if (/^\d+$/.test(formattedValue)) {
+        setFormData(prev => ({ ...prev, [name]: parseFloat(formattedValue) }));
+      }
     }
   };
 
@@ -649,6 +755,7 @@ export default function NewBookingPage() {
                       pattern="\d{12}"
                       title="Please enter a valid 12-digit Aadhar number"
                       placeholder="Enter 12-digit Aadhar number to search"
+                      inputMode="numeric"
                     />
                   </div>
 
@@ -665,6 +772,7 @@ export default function NewBookingPage() {
                       onChange={handleInputChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
+                      inputMode="text"
                     />
                   </div>
 
@@ -684,6 +792,7 @@ export default function NewBookingPage() {
                       maxLength={10}
                       pattern="\d{10}"
                       title="Please enter a valid 10-digit phone number"
+                      inputMode="numeric"
                     />
                   </div>
 
@@ -715,12 +824,13 @@ export default function NewBookingPage() {
                       maxLength={10}
                       pattern="\d{10}"
                       title="Please enter a valid 10-digit phone number"
+                      inputMode="numeric"
                     />
                   </div>
 
                   <div>
                     <label htmlFor="emergency_contact_phone" className="block text-sm font-medium text-gray-700 mb-1">
-                      Emergency Contact Phone *
+                      Father Phone Number *
                     </label>
                     <input
                       id="emergency_contact_phone"
@@ -734,12 +844,13 @@ export default function NewBookingPage() {
                       maxLength={10}
                       pattern="\d{10}"
                       title="Please enter a valid 10-digit phone number"
+                      inputMode="numeric"
                     />
                   </div>
 
                   <div>
                     <label htmlFor="emergency_contact_phone1" className="block text-sm font-medium text-gray-700 mb-1">
-                      Secondary Emergency Contact Phone
+                      Brother/Friend Phone Number
                     </label>
                     <input
                       id="emergency_contact_phone1"
@@ -751,23 +862,40 @@ export default function NewBookingPage() {
                       maxLength={10}
                       pattern="\d{10}"
                       title="Please enter a valid 10-digit phone number"
+                      inputMode="numeric"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="colleague_phone" className="block text-sm font-medium text-gray-700 mb-1">
+                      Colleague/Relative Phone Number
+                    </label>
+                    <input
+                      id="colleague_phone"
+                      type="tel"
+                      name="colleague_phone"
+                      value={formData.colleague_phone}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      maxLength={10}
+                      pattern="\d{10}"
+                      title="Please enter a valid 10-digit phone number"
+                      inputMode="numeric"
                     />
                   </div>
 
                   <div>
                     <label htmlFor="date_of_birth" className="block text-sm font-medium text-gray-700 mb-1">
-                      Date of Birth *
+                      Date of Birth
                     </label>
                     <input
                       id="date_of_birth"
                       type="date"
                       name="date_of_birth"
-                      required
                       max={maxDOB}
                       value={formData.date_of_birth}
                       onChange={handleInputChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
                     />
                   </div>
 
@@ -784,39 +912,36 @@ export default function NewBookingPage() {
                       onChange={handleInputChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
+                      inputMode="text"
                     />
                   </div>
 
                   <div>
                     <label htmlFor="dl_expiry_date" className="block text-sm font-medium text-gray-700 mb-1">
-                      DL Expiry Date *
+                      DL Expiry Date
                     </label>
                     <input
                       id="dl_expiry_date"
                       type="date"
                       name="dl_expiry_date"
-                      required
                       min={minDLExpiry}
                       value={formData.dl_expiry_date}
                       onChange={handleInputChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
                     />
                   </div>
 
                   <div className="md:col-span-2">
                     <label htmlFor="temp_address" className="block text-sm font-medium text-gray-700 mb-1">
-                      Temporary Address *
+                      Temporary Address
                     </label>
                     <textarea
                       id="temp_address"
                       name="temp_address"
-                      required
                       value={formData.temp_address}
                       onChange={handleInputChange}
-                      rows={2}
+                      rows={3}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
                     />
                   </div>
 
@@ -855,6 +980,7 @@ export default function NewBookingPage() {
                       onChange={handleInputChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
+                      inputMode="text"
                     />
                   </div>
                   <div>
@@ -870,6 +996,7 @@ export default function NewBookingPage() {
                       onChange={handleInputChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
+                      inputMode="text"
                     />
                   </div>
                 </div>
@@ -998,10 +1125,10 @@ export default function NewBookingPage() {
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     >
                       <option value="">Select time</option>
-                      {Array.from({ length: 48 }, (_, i) => {
-                        const hour = Math.floor(i / 2);
-                        const minute = i % 2 === 0 ? '00' : '30';
-                        const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+                      {Array.from({ length: 1440 }, (_, i) => {
+                        const hour = Math.floor(i / 60);
+                        const minute = i % 60;
+                        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
                         // Only show future times
                         if (!isTimeInPast(time)) {
                           return (
@@ -1026,10 +1153,10 @@ export default function NewBookingPage() {
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     >
                       <option value="">Select time</option>
-                      {Array.from({ length: 48 }, (_, i) => {
-                        const hour = Math.floor(i / 2);
-                        const minute = i % 2 === 0 ? '00' : '30';
-                        const time = `${hour.toString().padStart(2, '0')}:${minute}`;
+                      {Array.from({ length: 1440 }, (_, i) => {
+                        const hour = Math.floor(i / 60);
+                        const minute = i % 60;
+                        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
                         // Only show future times
                         if (!isTimeInPast(time)) {
                           return (
@@ -1055,15 +1182,16 @@ export default function NewBookingPage() {
                     </label>
                     <input
                       id="booking_amount"
-                      type="number"
+                      type="text"
                       name="booking_amount"
                       required
                       value={formData.booking_amount}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
+                      onChange={handleAmountChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
+                      placeholder="0"
                     />
                   </div>
                   <div>
@@ -1072,15 +1200,16 @@ export default function NewBookingPage() {
                     </label>
                     <input
                       id="security_deposit"
-                      type="number"
+                      type="text"
                       name="security_deposit_amount"
                       required
                       value={formData.security_deposit_amount}
-                      onChange={handleInputChange}
-                      min="0"
-                      step="0.01"
+                      onChange={handleAmountChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
+                      inputMode="decimal"
+                      pattern="[0-9]*\.?[0-9]*"
+                      placeholder="0"
                     />
                   </div>
                   <div>
@@ -1218,30 +1347,13 @@ export default function NewBookingPage() {
                 </div>
               </div>
 
-              {/* Signature */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Signature</h3>
-                <div className="border rounded-lg p-4">
-                  <div className="border border-gray-300 rounded-lg bg-white">
-                    <SignaturePad
-                      ref={(ref: SignaturePadType | null) => setSignaturePad(ref)}
-                      onEnd={handleSignatureEnd}
-                      canvasProps={{
-                        className: 'w-full h-48',
-                        'aria-label': 'Signature Canvas'
-                      }}
-                    />
-                  </div>
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      onClick={handleSignatureClear}
-                      className="text-sm text-gray-600 hover:text-gray-900"
-                    >
-                      Clear Signature
-                    </button>
-                  </div>
-                </div>
+              {/* Signature Section */}
+              <div className="space-y-6 border-t pt-6">
+                <h3 className="text-lg font-medium leading-6 text-gray-900">Signature</h3>
+                <SignaturePadWithRotation
+                  initialSignature={formData.signature}
+                  onSignatureChange={(signature) => setFormData(prev => ({ ...prev, signature }))}
+                />
               </div>
             </div>
 
