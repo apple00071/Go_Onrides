@@ -10,6 +10,7 @@ import DocumentUpload from '@/components/documents/DocumentUpload';
 import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
 import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRotation';
 import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
+import { formatCurrency, formatDateForInput } from '@/lib/utils';
 
 interface OutstationDetails {
   destination: string;
@@ -492,6 +493,25 @@ export default function EditBookingModal({
     }));
   };
 
+  const handleUppercaseInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => {
+      if (name === 'vehicle_details.registration') {
+        return {
+          ...prev,
+          vehicle_details: {
+            ...prev.vehicle_details,
+            registration: value.toUpperCase()
+          }
+        };
+      }
+      return {
+        ...prev,
+        [name]: value.toUpperCase()
+      };
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -741,9 +761,9 @@ export default function EditBookingModal({
                       name="dl_number"
                       required
                       value={formData.dl_number}
-                      onChange={handleInputChange}
+                      onChange={handleUppercaseInput}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      inputMode="text"
+                      style={{ textTransform: 'uppercase' }}
                     />
                   </div>
                   <div>
@@ -813,9 +833,9 @@ export default function EditBookingModal({
                       name="vehicle_details.registration"
                       required
                       value={formData.vehicle_details.registration}
-                      onChange={handleInputChange}
+                      onChange={handleUppercaseInput}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                      inputMode="text"
+                      style={{ textTransform: 'uppercase' }}
                     />
                   </div>
                 </div>
@@ -833,10 +853,10 @@ export default function EditBookingModal({
                       type="date"
                       name="start_date"
                       required
-                      min={today}
-                      max={maxStartDate}
                       value={formData.start_date}
                       onChange={handleInputChange}
+                      min={formatDateForInput(today)}
+                      max={formatDateForInput(maxStartDate)}
                       disabled={booking.status === 'in_use' || booking.status === 'completed'}
                       className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
                         booking.status === 'in_use' || booking.status === 'completed' ? 'opacity-50 cursor-not-allowed' : ''
@@ -851,10 +871,10 @@ export default function EditBookingModal({
                       type="date"
                       name="end_date"
                       required
-                      min={minEndDate}
-                      max={maxEndDate}
                       value={formData.end_date}
                       onChange={handleInputChange}
+                      min={formatDateForInput(minEndDate)}
+                      max={formatDateForInput(maxEndDate)}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
                   </div>

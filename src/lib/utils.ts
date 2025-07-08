@@ -11,10 +11,10 @@ export function getISTDate(date: string | Date = new Date()) {
 }
 
 export function formatDate(date: string | Date): string {
-  return new Intl.DateTimeFormat('en-US', {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
     year: 'numeric',
-    month: 'long',
-    day: 'numeric',
     timeZone: 'Asia/Kolkata'
   }).format(new Date(date));
 }
@@ -28,17 +28,17 @@ export function formatCurrency(amount: number): string {
   }).format(amount);
 }
 
-export const formatDateTime = (date: string | Date) => {
-  return new Date(date).toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: 'numeric',
-    month: 'short',
+export function formatDateTime(date: string | Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
     year: 'numeric',
-    hour: 'numeric',
-    minute: 'numeric',
-    hour12: true
-  });
-};
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata'
+  }).format(new Date(date));
+}
 
 interface BookingRecord {
   booking_id: string | null;
@@ -100,9 +100,9 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDateShort(date: string | Date): string {
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
   }).format(new Date(date));
 }
 
@@ -116,4 +116,10 @@ export function formatPercentage(number: number): string {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   }).format(number / 100);
+}
+
+// Add a new function for date input field format (YYYY-MM-DD)
+export function formatDateForInput(date: string | Date): string {
+  const d = new Date(date);
+  return d.toISOString().split('T')[0];
 } 

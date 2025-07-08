@@ -52,10 +52,8 @@ export async function middleware(req: NextRequest) {
 
       // Redirect based on role
       let redirectPath;
-      if (profile?.role === 'admin') {
-        redirectPath = '/dashboard/settings';
-      } else if (profile?.role === 'worker') {
-        redirectPath = '/dashboard/workers';
+      if (profile?.role === 'admin' || profile?.role === 'worker') {
+        redirectPath = '/dashboard';
       } else {
         redirectPath = '/dashboard';
       }
@@ -80,19 +78,18 @@ export async function middleware(req: NextRequest) {
           (currentPath.startsWith('/dashboard/admin') || 
            currentPath.startsWith('/dashboard/settings'))) {
         console.log('Middleware - Worker attempting to access admin route, redirecting...');
-        return NextResponse.redirect(new URL('/dashboard/workers', req.url));
+        return NextResponse.redirect(new URL('/dashboard', req.url));
       }
 
       // Redirect workers to their dashboard if they try to access the main dashboard
       if (profile?.role === 'worker' && currentPath === '/dashboard') {
-        console.log('Middleware - Redirecting worker to worker dashboard...');
-        return NextResponse.redirect(new URL('/dashboard/workers', req.url));
+        console.log('Middleware - Worker accessing main dashboard...');
+        return NextResponse.next();
       }
 
-      // Redirect admins to settings if they try to access worker routes
-      if (profile?.role === 'admin' && currentPath.startsWith('/dashboard/workers')) {
-        console.log('Middleware - Admin attempting to access worker route, redirecting...');
-        return NextResponse.redirect(new URL('/dashboard/settings', req.url));
+      // Allow admins to access all routes
+      if (profile?.role === 'admin') {
+        return NextResponse.next();
       }
     }
 

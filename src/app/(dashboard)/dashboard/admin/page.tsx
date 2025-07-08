@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
-export default function WorkerDashboardPage() {
+export default function AdminDashboardPage() {
   const router = useRouter();
 
   useEffect(() => {

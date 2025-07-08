@@ -1,39 +1,32 @@
 import React from 'react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { User, Clock } from 'lucide-react';
 
+interface BookingVehicleDetails {
+  model: string;
+  registration: string;
+}
+
 interface Booking {
   id: string;
-  booking_id: string;
+  booking_id?: string;
   customer_name: string;
   customer_contact: string;
-  vehicle_details: {
-    model: string;
-    registration: string;
-  };
+  vehicle_details: BookingVehicleDetails;
   start_date: string;
   end_date: string;
   booking_amount: number;
   security_deposit_amount: number;
-  payment_status: 'full' | 'partial' | 'pending';
-  status: 'confirmed' | 'pending' | 'cancelled' | 'in_use' | 'completed';
-  created_at: string;
-  updated_at: string;
-  created_by: string | null;
-  updated_by: string | null;
-  created_by_user?: {
-    email: string;
-    username: string;
-  };
-  updated_by_user?: {
-    email: string;
-    username: string;
-  };
-  paid_amount?: number;
   damage_charges?: number;
   late_fee?: number;
   extension_fee?: number;
+  paid_amount?: number;
+  status: string;
+  created_at: string;
+  created_by_user?: {
+    username: string;
+  };
 }
 
 interface BookingsTableProps {
@@ -76,23 +69,6 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
       pending: 'bg-gray-100 text-gray-800'
     };
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric'
-    });
-  };
-
-  const formatTime = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
   };
 
   const handleRowClick = (bookingId: string) => {
@@ -166,7 +142,7 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                     </div>
                     <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
                       <Clock className="h-3 w-3" />
-                      <span>{formatDate(booking.created_at)}</span>
+                      <span>{formatDateTime(booking.created_at)}</span>
                     </div>
                   </div>
                 </td>

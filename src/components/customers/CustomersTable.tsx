@@ -2,6 +2,7 @@ import React from 'react';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 import { ResponsiveTable, ResponsiveCard, ResponsiveCardList } from '@/components/ui/responsive-table';
+import { formatDate } from '@/lib/utils';
 
 interface Customer {
   id: string;
@@ -88,7 +89,7 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers }) => {
               </td>
               <td className="whitespace-nowrap px-6 py-4 min-h-[44px]">
                 <span className="text-sm text-gray-500">
-                  {format(new Date(customer.created_at), 'MMM d, yyyy')}
+                  {formatDate(customer.created_at)}
                 </span>
               </td>
             </tr>
@@ -105,7 +106,7 @@ const CustomersTable: React.FC<CustomersTableProps> = ({ customers }) => {
               { label: 'Name', value: customer.name },
               { label: 'Contact', value: customer.phone },
               { label: 'Address', value: formatAddress(customer) },
-              { label: 'Joined', value: format(new Date(customer.created_at), 'MMM d, yyyy') }
+              { label: 'Joined', value: formatDate(customer.created_at) }
             ]}
             onClick={() => handleRowClick(customer.id)}
           />

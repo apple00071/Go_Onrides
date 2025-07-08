@@ -706,6 +706,26 @@ export default function NewBookingPage() {
     getUser();
   }, [router]);
 
+  // Add this function near the top with other handlers
+  const handleUppercaseInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => {
+      if (name === 'vehicle_details.registration') {
+        return {
+          ...prev,
+          vehicle_details: {
+            ...prev.vehicle_details,
+            registration: value.toUpperCase()
+          }
+        };
+      }
+      return {
+        ...prev,
+        [name]: value.toUpperCase()
+      };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -909,10 +929,10 @@ export default function NewBookingPage() {
                       name="dl_number"
                       required
                       value={formData.dl_number}
-                      onChange={handleInputChange}
+                      onChange={handleUppercaseInput}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
-                      inputMode="text"
+                      style={{ textTransform: 'uppercase' }}
                     />
                   </div>
 
@@ -993,10 +1013,10 @@ export default function NewBookingPage() {
                       name="vehicle_details.registration"
                       required
                       value={formData.vehicle_details.registration}
-                      onChange={handleInputChange}
+                      onChange={handleUppercaseInput}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
-                      inputMode="text"
+                      style={{ textTransform: 'uppercase' }}
                     />
                   </div>
                 </div>

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { format } from 'date-fns';
 import { User } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
+import { formatDateTime } from '@/lib/utils';
 
 interface EntityAuditInfoProps {
   entityType: 'booking' | 'payment' | 'document';
@@ -62,7 +62,7 @@ export function EntityAuditInfo({
             <div className="flex items-center gap-1">
               <User className="h-3 w-3" />
               <span>
-                {format(new Date(createdAt), 'MMM d, yyyy h:mm a')}
+                {formatDateTime(createdAt)}
               </span>
             </div>
           </TooltipTrigger>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/utils';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, IndianRupee } from 'lucide-react';
 import Link from 'next/link';
 
 interface PendingPayment {
@@ -169,13 +169,18 @@ export default function PendingPayments() {
                     </div>
                     <div className="text-xs text-gray-500 mt-1">
                       <div className="mt-1">
-                        Paid: <span className="font-medium">{formatCurrency(booking.paid_amount)}</span> of <span className="font-medium">{formatCurrency(totalAmount)}</span>
+                        Paid: <span className="font-medium flex items-center inline-flex">
+                          {formatCurrency(booking.paid_amount)}
+                        </span> of <span className="font-medium flex items-center inline-flex">
+                          {formatCurrency(totalAmount)}
+                        </span>
                       </div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-sm font-medium text-yellow-600">
-                      {formatCurrency(remainingAmount)}
+                    <div className="text-sm font-medium text-yellow-600 flex items-center justify-end gap-1">
+                      <IndianRupee className="w-4 h-4" />
+                      {formatCurrency(remainingAmount).replace('₹', '')}
                     </div>
                     <div className="text-xs text-gray-500">
                       remaining

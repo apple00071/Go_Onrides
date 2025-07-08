@@ -46,14 +46,8 @@ const LoginForm = () => {
 
       if (signInError) throw signInError;
 
-      // Redirect based on role
-      if (data.user.role === 'admin') {
-        router.push('/dashboard/settings');
-      } else if (data.user.role === 'worker') {
-        router.push('/dashboard/workers');
-      } else {
-        router.push('/dashboard');
-      }
+      // Redirect all roles to the main dashboard
+      router.push('/dashboard');
       
       router.refresh();
     } catch (error) {

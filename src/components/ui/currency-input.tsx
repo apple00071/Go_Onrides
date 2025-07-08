@@ -3,6 +3,7 @@
 import React, { InputHTMLAttributes } from 'react';
 import { forwardRef } from 'react';
 import { cn } from '@/lib/utils';
+import { IndianRupee } from 'lucide-react';
 
 interface CurrencyInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange'> {
   value: string;
@@ -43,7 +44,7 @@ const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(
         <div className="relative rounded-md shadow-sm">
           {!hideSymbol && (
             <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
-              <span className="text-gray-500 sm:text-sm">₹</span>
+              <IndianRupee className="w-4 h-4 text-gray-500" />
             </div>
           )}
           <input

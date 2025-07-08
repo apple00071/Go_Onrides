@@ -219,7 +219,7 @@ export async function PATCH(
     if (role) updateData.role = role
     if (permissions) updateData.permissions = permissions
     
-    const { data: updatedUser, error: updateError } = await supabase
+    const { data: updatedUser, error: updateError } = await adminSupabase
       .from('profiles')
       .update(updateData)
       .eq('id', params.id)

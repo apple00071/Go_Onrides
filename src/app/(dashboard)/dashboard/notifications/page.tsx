@@ -6,6 +6,7 @@ import { Notification } from '@/types/notifications';
 import { formatDistanceToNow, format } from 'date-fns';
 import { Bell, Check, CheckCheck, Search, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
+import { formatDateTime } from '@/lib/utils';
 
 export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
@@ -160,7 +161,7 @@ export default function NotificationsPage() {
                   <div className="flex justify-between">
                     <h3 className="text-sm font-medium text-gray-900">{notification.title}</h3>
                     <span className="text-xs text-gray-500">
-                      {format(new Date(notification.created_at), 'MMM dd, yyyy h:mm a')}
+                      {formatDateTime(notification.created_at)}
                     </span>
                   </div>
                   <p className="text-sm text-gray-600 mt-1">{notification.message}</p>

@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { X } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { toast } from 'react-hot-toast';
+import { formatCurrency, formatDate } from '@/lib/utils';
 
 interface Customer {
   id: string
@@ -130,15 +131,6 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
   const handleImageClick = (url: string, label: string) => {
     setSelectedImage(url);
     setSelectedImageLabel(label);
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
   };
 
   const calculateTotalAmount = (booking: Booking) => {
@@ -267,7 +259,7 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
           <div className="border-t pt-4">
             <h3 className="text-sm font-medium text-gray-500">Customer Since</h3>
             <p className="mt-1 text-lg text-gray-900">
-              {new Date(customer.created_at).toLocaleDateString()}
+              {formatDate(customer.created_at)}
             </p>
           </div>
         </div>
@@ -333,7 +325,7 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
                   {bookings.map((booking) => (
                     <tr key={booking.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {new Date(booking.created_at).toLocaleDateString()}
+                        {formatDate(booking.created_at)}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {booking.vehicle_details.model}

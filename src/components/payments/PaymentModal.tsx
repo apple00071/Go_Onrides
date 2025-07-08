@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X } from 'lucide-react';
+import { X, IndianRupee } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { formatCurrency } from '@/lib/utils';
 import { CurrencyInput } from '@/components/ui/currency-input';
@@ -433,7 +433,7 @@ export default function PaymentModal({
               </label>
               <div className="relative">
                 <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
-                  ₹
+                  <IndianRupee className="w-4 h-4" />
                 </span>
                 <input
                   type="number"
