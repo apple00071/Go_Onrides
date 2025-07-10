@@ -22,6 +22,8 @@ interface Booking {
   payment_status: string;
   status: string;
   created_at: string;
+  pickup_time: string;
+  dropoff_time: string;
 }
 
 interface BookingListProps {
@@ -56,6 +58,15 @@ export default function BookingList({ bookings }: BookingListProps) {
     const totalRequired = booking.booking_amount + booking.security_deposit_amount;
     const paidAmount = booking.paid_amount || 0;
     return paidAmount >= totalRequired ? 'full' : paidAmount > 0 ? 'partial' : 'pending';
+  };
+
+  const formatTimeDisplay = (time: string | undefined) => {
+    if (!time) return '';
+    const [hourStr, minutes] = time.split(':');
+    const hours = parseInt(hourStr, 10);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes} ${period}`;
   };
 
   return (
@@ -119,9 +130,15 @@ export default function BookingList({ bookings }: BookingListProps) {
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">
                     {formatDate(booking.start_date)}
+                    <span className="text-gray-500 ml-2">
+                      {formatTimeDisplay(booking.pickup_time)}
+                    </span>
                   </div>
                   <div className="text-sm text-gray-500">
                     to {formatDate(booking.end_date)}
+                    <span className="ml-2">
+                      {formatTimeDisplay(booking.dropoff_time)}
+                    </span>
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { User, Clock } from 'lucide-react';
 
@@ -10,21 +10,21 @@ interface BookingVehicleDetails {
 
 interface Booking {
   id: string;
-  booking_id?: string;
+  booking_id: string;
   customer_name: string;
   customer_contact: string;
   vehicle_details: BookingVehicleDetails;
   start_date: string;
   end_date: string;
+  pickup_time?: string;
+  dropoff_time?: string;
   booking_amount: number;
   security_deposit_amount: number;
-  damage_charges?: number;
-  late_fee?: number;
-  extension_fee?: number;
   paid_amount?: number;
   status: string;
   created_at: string;
   created_by_user?: {
+    email: string;
     username: string;
   };
 }
@@ -47,12 +47,17 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
+  const formatTimeDisplay = (time: string | undefined) => {
+    if (!time) return '';
+    const [hourStr, minutes] = time.split(':');
+    const hours = parseInt(hourStr, 10);
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    return `${displayHours}:${minutes} ${period}`;
+  };
+
   const calculateTotalAmount = (booking: Booking) => {
-    const baseAmount = booking.booking_amount + booking.security_deposit_amount;
-    const additionalFees = (booking.status === 'completed' || booking.status === 'in_use')
-      ? (booking.damage_charges || 0) + (booking.late_fee || 0) + (booking.extension_fee || 0)
-      : 0;
-    return baseAmount + additionalFees;
+    return booking.booking_amount + booking.security_deposit_amount;
   };
 
   const getPaymentStatusDisplay = (booking: Booking) => {
@@ -61,8 +66,7 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
     return paidAmount >= totalRequired ? 'full' : paidAmount > 0 ? 'partial' : 'pending';
   };
 
-  const getPaymentStatusColor = (booking: Booking) => {
-    const status = getPaymentStatusDisplay(booking);
+  const getPaymentStatusColor = (status: string) => {
     const colors = {
       full: 'bg-green-100 text-green-800',
       partial: 'bg-yellow-100 text-yellow-800',
@@ -140,10 +144,6 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                       <User className="h-3 w-3" />
                       <span>{booking.created_by_user?.username || 'Unknown'}</span>
                     </div>
-                    <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-                      <Clock className="h-3 w-3" />
-                      <span>{formatDateTime(booking.created_at)}</span>
-                    </div>
                   </div>
                 </td>
                 <td className="px-6 py-4 hidden md:table-cell">
@@ -168,12 +168,23 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                 </td>
                 <td className="px-6 py-4 hidden lg:table-cell">
                   <div className="flex flex-col">
-                    <span className="text-sm font-medium text-gray-900">
-                      {formatDate(booking.start_date)}
-                    </span>
-                    <span className="text-sm text-gray-500">
-                      to {formatDate(booking.end_date)}
-                    </span>
+                    <div>
+                      <span className="text-sm font-medium text-gray-900">
+                        {formatDate(booking.start_date)}
+                      </span>
+                      <span className="text-sm text-gray-500 ml-2">
+                        {formatTimeDisplay(booking.pickup_time)}
+                      </span>
+                    </div>
+                    <div className="mt-1">
+                      <span className="text-sm text-gray-500">to </span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {formatDate(booking.end_date)}
+                      </span>
+                      <span className="text-sm text-gray-500 ml-2">
+                        {formatTimeDisplay(booking.dropoff_time)}
+                      </span>
+                    </div>
                   </div>
                 </td>
                 <td className="whitespace-nowrap px-6 py-4">
@@ -196,7 +207,7 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                       {booking.status}
                     </span>
                     <span
-                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(booking)}`}
+                      className={`inline-flex rounded-full px-2 py-1 text-xs font-medium capitalize ${getPaymentStatusColor(getPaymentStatusDisplay(booking))}`}
                     >
                       {getPaymentStatusDisplay(booking)}
                     </span>

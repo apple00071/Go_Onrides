@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { formatDate, formatDateTime, getISTDate } from '@/lib/utils';
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
@@ -22,6 +23,7 @@ interface VehicleReturn {
 }
 
 export default function VehicleReturns() {
+  const router = useRouter();
   const [returns, setReturns] = useState<{
     overdue: VehicleReturn[];
     today: VehicleReturn[];
@@ -91,6 +93,10 @@ export default function VehicleReturns() {
     }
   };
 
+  const handleBookingClick = (bookingId: string) => {
+    router.push(`/dashboard/bookings/${bookingId}`);
+  };
+
   if (loading) {
     return (
       <div className="animate-pulse">
@@ -126,13 +132,20 @@ export default function VehicleReturns() {
           </h3>
           <div className="space-y-3">
             {returns.overdue.map((booking) => (
-              <div key={booking.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+              <div
+                key={booking.id}
+                className="flex items-center justify-between p-3 bg-red-50 rounded-lg cursor-pointer hover:bg-red-100 transition-colors"
+                onClick={() => handleBookingClick(booking.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleBookingClick(booking.id)}
+              >
                 <div>
                   <div className="text-sm font-medium text-gray-900">
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    {booking.customer_name} • Due: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
+                    #{booking.booking_id} • {booking.customer_name} • Due: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-red-600">
@@ -152,13 +165,20 @@ export default function VehicleReturns() {
           </h3>
           <div className="space-y-3">
             {returns.today.map((booking) => (
-              <div key={booking.id} className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+              <div
+                key={booking.id}
+                className="flex items-center justify-between p-3 bg-blue-50 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors"
+                onClick={() => handleBookingClick(booking.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleBookingClick(booking.id)}
+              >
                 <div>
                   <div className="text-sm font-medium text-gray-900">
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    {booking.customer_name} • Return by: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
+                    #{booking.booking_id} • {booking.customer_name} • Return by: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-blue-600">
@@ -178,13 +198,20 @@ export default function VehicleReturns() {
           </h3>
           <div className="space-y-3">
             {returns.upcoming.map((booking) => (
-              <div key={booking.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+              <div
+                key={booking.id}
+                className="flex items-center justify-between p-3 bg-green-50 rounded-lg cursor-pointer hover:bg-green-100 transition-colors"
+                onClick={() => handleBookingClick(booking.id)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => e.key === 'Enter' && handleBookingClick(booking.id)}
+              >
                 <div>
                   <div className="text-sm font-medium text-gray-900">
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    {booking.customer_name} • Return by: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
+                    #{booking.booking_id} • {booking.customer_name} • Return by: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-green-600">

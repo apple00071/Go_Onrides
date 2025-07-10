@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, User, Phone, MapPin, Calendar, Mail, X } from 'lucide-react';
+import { ArrowLeft, User, Phone, MapPin, Calendar, Mail, X, CheckCircle, XCircle } from 'lucide-react';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -30,6 +30,7 @@ interface Customer {
   perm_address_pincode: string | null;
   emergency_contact_name: string | null;
   emergency_contact_phone: string | null;
+  emergency_contact_phone1: string | null;
   emergency_contact_relationship: string | null;
   created_at: string;
   documents: {
@@ -44,20 +45,61 @@ interface Customer {
   dl_expiry_date: string | null;
   dob: string | null;
   signature?: string | null;
+  submitted_documents?: {
+    passport?: boolean;
+    voter_id?: boolean;
+    original_dl?: boolean;
+    original_aadhar?: boolean;
+    other_document?: boolean;
+  };
 }
 
-interface CustomerDetails extends Customer {
-  bookings: Array<{
+interface CustomerDetails {
+  id: string;
+  name: string;
+  phone: string;
+  email: string;
+  alternative_phone: string | null;
+  temp_address_street: string | null;
+  temp_address_city: string | null;
+  temp_address_state: string | null;
+  temp_address_pincode: string | null;
+  perm_address_street: string | null;
+  perm_address_city: string | null;
+  perm_address_state: string | null;
+  perm_address_pincode: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
+  emergency_contact_phone1: string | null;
+  emergency_contact_relationship: string | null;
+  created_at: string;
+  documents: {
+    customer_photo?: string;
+    aadhar_front?: string;
+    aadhar_back?: string;
+    dl_front?: string;
+    dl_back?: string;
+  };
+  aadhar_number: string | null;
+  dl_number: string | null;
+  dl_expiry_date: string | null;
+  dob: string | null;
+  signature?: string | null;
+  submitted_documents?: {
+    passport?: boolean;
+    voter_id?: boolean;
+    original_dl?: boolean;
+    original_aadhar?: boolean;
+    other_document?: boolean;
+  };
+  bookings?: Array<{
     id: string;
     booking_id: string;
     start_date: string;
     end_date: string;
     status: string;
     booking_amount: number;
-    vehicle_details: {
-      model: string;
-      registration: string;
-    };
+    vehicle_details: any;
   }>;
 }
 
@@ -90,6 +132,7 @@ export default function CustomerDetailsPage() {
             name,
             email,
             phone,
+            alternative_phone,
             temp_address_street,
             temp_address_city,
             temp_address_state,
@@ -100,13 +143,15 @@ export default function CustomerDetailsPage() {
             perm_address_pincode,
             emergency_contact_name,
             emergency_contact_phone,
+            emergency_contact_phone1,
             emergency_contact_relationship,
             created_at,
             documents,
             aadhar_number,
             dl_number,
             dl_expiry_date,
-            dob
+            dob,
+            submitted_documents
           `)
           .eq('id', params.id)
           .single();
@@ -249,9 +294,32 @@ export default function CustomerDetailsPage() {
                   <span className="text-sm font-medium text-gray-500">Name</span>
                   <span className="text-sm text-gray-900">{customer.name}</span>
                 </div>
-                <div className="flex flex-col sm:flex-row sm:justify-between">
-                  <span className="text-sm font-medium text-gray-500">Phone</span>
-                  <span className="text-sm text-gray-900">{customer.phone}</span>
+                <div className="flex flex-col space-y-2">
+                  <span className="text-sm font-medium text-gray-500">Contact Information</span>
+                  <div className="space-y-1">
+                    <div className="flex items-center">
+                      <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                      <span className="text-sm text-gray-900">{customer.phone} (Primary)</span>
+                    </div>
+                    {customer.alternative_phone && (
+                      <div className="flex items-center">
+                        <Phone className="h-4 w-4 mr-2 text-gray-400" />
+                        <span className="text-sm text-gray-600">{customer.alternative_phone} (Alternative)</span>
+                      </div>
+                    )}
+                    {customer.emergency_contact_phone && (
+                      <div className="flex items-center">
+                        <Phone className="h-4 w-4 mr-2 text-red-400" />
+                        <span className="text-sm text-red-600">{customer.emergency_contact_phone} (Father)</span>
+                      </div>
+                    )}
+                    {customer.emergency_contact_phone1 && (
+                      <div className="flex items-center">
+                        <Phone className="h-4 w-4 mr-2 text-red-400" />
+                        <span className="text-sm text-red-600">{customer.emergency_contact_phone1} (Brother/Friend)</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="flex flex-col sm:flex-row sm:justify-between">
                   <span className="text-sm font-medium text-gray-500">Email</span>
@@ -335,23 +403,17 @@ export default function CustomerDetailsPage() {
           </div>
         </div>
 
-        {/* Documents Section */}
+        {/* Documents & Signatures Section */}
         <div className="bg-white rounded-lg shadow mb-6">
           <div className="p-4 sm:p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Documents</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Documents & Signatures</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {customer.documents && typeof customer.documents === 'object' && (
                 <>
                   {customer.documents.customer_photo && (
-                    <div 
-                      className="cursor-pointer hover:opacity-75 transition-opacity"
-                      onClick={() => {
-                        setSelectedImage(customer.documents.customer_photo);
-                        setSelectedImageLabel('Customer Photo');
-                      }}
-                    >
+                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden">
+                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                         <Image
                           src={customer.documents.customer_photo}
                           alt="Customer Photo"
@@ -361,35 +423,10 @@ export default function CustomerDetailsPage() {
                       </div>
                     </div>
                   )}
-                  {signature && (
-                    <div 
-                      className="cursor-pointer hover:opacity-75 transition-opacity"
-                      onClick={() => {
-                        setSelectedImage(signature);
-                        setSelectedImageLabel('Customer Signature');
-                      }}
-                    >
-                      <p className="text-sm font-medium text-gray-500 mb-2">Customer Signature</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200 bg-white">
-                        <Image
-                          src={signature}
-                          alt="Customer Signature"
-                          fill
-                          className="object-contain p-2"
-                        />
-                      </div>
-                    </div>
-                  )}
                   {customer.documents.aadhar_front && (
-                    <div 
-                      className="cursor-pointer hover:opacity-75 transition-opacity"
-                      onClick={() => {
-                        setSelectedImage(customer.documents.aadhar_front);
-                        setSelectedImageLabel('Aadhar Front');
-                      }}
-                    >
+                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden">
+                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                         <Image
                           src={customer.documents.aadhar_front}
                           alt="Aadhar Front"
@@ -400,15 +437,9 @@ export default function CustomerDetailsPage() {
                     </div>
                   )}
                   {customer.documents.aadhar_back && (
-                    <div 
-                      className="cursor-pointer hover:opacity-75 transition-opacity"
-                      onClick={() => {
-                        setSelectedImage(customer.documents.aadhar_back);
-                        setSelectedImageLabel('Aadhar Back');
-                      }}
-                    >
+                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden">
+                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                         <Image
                           src={customer.documents.aadhar_back}
                           alt="Aadhar Back"
@@ -419,15 +450,9 @@ export default function CustomerDetailsPage() {
                     </div>
                   )}
                   {customer.documents.dl_front && (
-                    <div 
-                      className="cursor-pointer hover:opacity-75 transition-opacity"
-                      onClick={() => {
-                        setSelectedImage(customer.documents.dl_front);
-                        setSelectedImageLabel('DL Front');
-                      }}
-                    >
+                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden">
+                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                         <Image
                           src={customer.documents.dl_front}
                           alt="DL Front"
@@ -438,15 +463,9 @@ export default function CustomerDetailsPage() {
                     </div>
                   )}
                   {customer.documents.dl_back && (
-                    <div 
-                      className="cursor-pointer hover:opacity-75 transition-opacity"
-                      onClick={() => {
-                        setSelectedImage(customer.documents.dl_back);
-                        setSelectedImageLabel('DL Back');
-                      }}
-                    >
+                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden">
+                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                         <Image
                           src={customer.documents.dl_back}
                           alt="DL Back"
@@ -456,41 +475,72 @@ export default function CustomerDetailsPage() {
                       </div>
                     </div>
                   )}
-                  {Object.values(customer.documents).every(doc => !doc) && (
-                    <div className="col-span-5 text-center py-8 text-gray-500">
-                      No documents uploaded
-                    </div>
-                  )}
-                  {selectedImage && (
-                    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50 p-4">
-                      <div className="bg-white rounded-lg overflow-hidden max-w-3xl w-full max-h-[90vh] flex flex-col">
-                        <div className="flex items-center justify-between p-4 border-b">
-                          <h3 className="text-lg font-medium text-gray-900">{selectedImageLabel}</h3>
-                          <button
-                            onClick={() => setSelectedImage(null)}
-                            className="text-gray-400 hover:text-gray-500"
-                          >
-                            <X className="h-5 w-5" aria-hidden="true" />
-                          </button>
-                        </div>
-                        <div className="flex-1 overflow-hidden relative min-h-[60vh]">
-                          <Image
-                            src={selectedImage}
-                            alt={selectedImageLabel}
-                            fill
-                            className="object-contain"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </>
               )}
-              {(!customer.documents || typeof customer.documents !== 'object') && (
+              {(!customer.documents || Object.values(customer.documents).every(doc => !doc)) && (
                 <div className="col-span-5 text-center py-8 text-gray-500">
-                  No documents available
+                  No documents uploaded
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+
+        {/* Physical Documents Section */}
+        <div className="bg-white rounded-lg shadow mb-6">
+          <div className="p-4 sm:p-6">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Physical Documents Submitted</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-5 h-5 flex items-center justify-center">
+                  {customer.submitted_documents?.passport ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">Passport</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-5 h-5 flex items-center justify-center">
+                  {customer.submitted_documents?.voter_id ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">Voter ID</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-5 h-5 flex items-center justify-center">
+                  {customer.submitted_documents?.original_dl ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">Original DL</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-5 h-5 flex items-center justify-center">
+                  {customer.submitted_documents?.original_aadhar ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">Original Aadhar</span>
+              </div>
+              <div className="flex items-center space-x-2">
+                <div className="w-5 h-5 flex items-center justify-center">
+                  {customer.submitted_documents?.other_document ? (
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                  ) : (
+                    <XCircle className="w-5 h-5 text-red-500" />
+                  )}
+                </div>
+                <span className="text-sm text-gray-700">Other Document</span>
+              </div>
             </div>
           </div>
         </div>
