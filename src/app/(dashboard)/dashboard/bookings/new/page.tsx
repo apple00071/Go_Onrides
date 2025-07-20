@@ -178,17 +178,109 @@ export default function NewBookingPage() {
     return `${hours.toString().padStart(2, '0')}:${minutes < 30 ? '30' : '00'}`;
   };
 
-  const isTimeInPast = (time: string) => {
-    if (!time) return false;
+  // Get current time minus 2 hours
+  const getCurrentTimeMinus2Hours = () => {
+    const now = new Date();
+    now.setHours(now.getHours() - 2);
+    const hours = now.getHours();
+    const minutes = now.getMinutes();
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+
+  // Get default dropoff time (same time next day)
+  const getDefaultDropoffTime = (pickupTime: string) => {
+    if (!pickupTime) return '';
+    return pickupTime;
+  };
+
+  // Generate time slots for pickup/dropoff
+  const getTimeSlots = () => {
+    const slots = [];
     const today = new Date().toISOString().split('T')[0];
-    if (formData.start_date !== today) return false;
-    const currentTime = getCurrentTime();
-    return time <= currentTime;
+    const isToday = formData.start_date === today;
+    const currentTimeMinus2Hours = isToday ? getCurrentTimeMinus2Hours() : '00:00';
+    const now = new Date();
+    // Add a buffer of 5 minutes to prevent validation issues
+    now.setMinutes(now.getMinutes() - 5);
+    const currentTime = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+
+    // Generate slots with 1-minute intervals
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute = 0; minute < 60; minute++) {
+        const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        
+        // For today, only show times from 2 hours ago up to current time
+        if (!isToday || (timeStr >= currentTimeMinus2Hours && timeStr <= currentTime)) {
+          slots.push(timeStr);
+        }
+      }
+    }
+    return slots;
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
+    // Handle start date changes
+    if (name === 'start_date') {
+      const selectedDate = new Date(value);
+      const todayDate = new Date();
+      todayDate.setHours(0, 0, 0, 0);
+      
+      // Always set end date to next day from start date
+      const nextDay = new Date(selectedDate);
+      nextDay.setDate(nextDay.getDate() + 1);
+      const nextDayStr = nextDay.toISOString().split('T')[0];
+
+      setFormData(prev => ({
+        ...prev,
+        [name]: value,
+        end_date: nextDayStr,
+        // Reset times when date changes
+        pickup_time: '',
+        dropoff_time: ''
+      }));
+      return;
+    }
+
+    // Handle pickup time changes
+    if (name === 'pickup_time') {
+      const dropoffTime = getDefaultDropoffTime(value);
+      setFormData(prev => ({
+        ...prev,
+        pickup_time: value,
+        dropoff_time: dropoffTime
+      }));
+      return;
+    }
+
+    // Handle end date changes
+    if (name === 'end_date') {
+      const startDate = formData.start_date ? new Date(formData.start_date) : new Date();
+      const selectedEndDate = new Date(value);
+      
+      // Ensure end date is at least one day after start date
+      const minEndDate = new Date(startDate);
+      minEndDate.setDate(minEndDate.getDate() + 1);
+      
+      if (selectedEndDate < minEndDate) {
+        const minEndDateStr = minEndDate.toISOString().split('T')[0];
+        setFormData(prev => ({
+          ...prev,
+          end_date: minEndDateStr,
+          dropoff_time: formData.pickup_time // Set dropoff time same as pickup time
+        }));
+        return;
+      }
+
+      setFormData(prev => ({
+        ...prev,
+        end_date: value,
+        dropoff_time: formData.pickup_time // Set dropoff time same as pickup time
+      }));
+      return;
+    }
+
     // Handle amount fields - remove leading zeros and validate
     if (name === 'booking_amount' || name === 'security_deposit_amount' || name === 'paid_amount') {
       // Remove leading zeros but keep single zero
@@ -1145,20 +1237,11 @@ export default function NewBookingPage() {
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     >
                       <option value="">Select time</option>
-                      {Array.from({ length: 1440 }, (_, i) => {
-                        const hour = Math.floor(i / 60);
-                        const minute = i % 60;
-                        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                        // Only show future times
-                        if (!isTimeInPast(time)) {
-                          return (
-                            <option key={time} value={time}>
-                              {formatTimeDisplay(time)}
-                            </option>
-                          );
-                        }
-                        return null;
-                      }).filter(Boolean)}
+                      {getTimeSlots().map(time => (
+                        <option key={time} value={time}>
+                          {formatTimeDisplay(time)}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div>
@@ -1173,20 +1256,11 @@ export default function NewBookingPage() {
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     >
                       <option value="">Select time</option>
-                      {Array.from({ length: 1440 }, (_, i) => {
-                        const hour = Math.floor(i / 60);
-                        const minute = i % 60;
-                        const time = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-                        // Only show future times
-                        if (!isTimeInPast(time)) {
-                          return (
-                            <option key={time} value={time}>
-                              {formatTimeDisplay(time)}
-                            </option>
-                          );
-                        }
-                        return null;
-                      }).filter(Boolean)}
+                      {getTimeSlots().map(time => (
+                        <option key={time} value={time}>
+                          {formatTimeDisplay(time)}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>

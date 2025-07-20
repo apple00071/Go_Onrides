@@ -5,13 +5,15 @@ import { usePathname } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { 
   Home,
-  Calendar,
-  CreditCard,
-  BarChart,
-  Settings,
-  LogOut,
+  CalendarRange,
   Users,
-  X
+  Car,
+  Settings,
+  Bell,
+  FileText,
+  X,
+  RotateCcw,
+  Clock
 } from 'lucide-react';
 import type { UserProfile } from '@/types/database';
 
@@ -26,13 +28,13 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
 
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: Calendar },
-    { name: 'Payments', href: '/dashboard/payments', icon: CreditCard },
-    { name: 'Reports', href: '/dashboard/reports', icon: BarChart },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: CalendarRange },
+    { name: "Today's Returns", href: '/dashboard/returns/today', icon: Clock },
     { name: 'Customers', href: '/dashboard/customers', icon: Users },
-    ...(user?.role === 'admin' ? [
-      { name: 'Settings', href: '/dashboard/settings', icon: Settings }
-    ] : [])
+    { name: 'Vehicles', href: '/dashboard/vehicles', icon: Car },
+    { name: 'Reports', href: '/dashboard/reports', icon: FileText },
+    { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
+    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
   ];
 
   const isActive = (href: string) => {
@@ -114,7 +116,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
             onClick={handleSignOut}
             className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-secondary-text hover:bg-gray-50 hover:text-primary-text transition-colors min-h-[44px]"
           >
-            <LogOut
+            <RotateCcw
               className="h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-primary-text transition-colors"
               aria-hidden="true"
             />

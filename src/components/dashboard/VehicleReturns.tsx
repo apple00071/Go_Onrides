@@ -192,10 +192,6 @@ export default function VehicleReturns() {
 
       {returns.upcoming.length > 0 && (
         <div className="p-4">
-          <h3 className="text-sm font-medium text-green-600 flex items-center mb-3">
-            <CheckCircle2 className="h-4 w-4 mr-1" />
-            Due Tomorrow
-          </h3>
           <div className="space-y-3">
             {returns.upcoming.map((booking) => (
               <div
