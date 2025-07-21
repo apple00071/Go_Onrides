@@ -218,9 +218,54 @@ export default function NewBookingPage() {
     return slots;
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    
+
+    // Special handling for vehicle registration input
+    if (name === 'vehicle_details.registration') {
+      const registration = value.toUpperCase();
+      
+      // Check vehicle status in vehicles table
+      const supabase = getSupabaseClient();
+      const { data: vehicleData, error: vehicleError } = await supabase
+        .from('vehicles')
+        .select('status, model')
+        .eq('registration', registration)
+        .single();
+
+      if (vehicleError && vehicleError.code !== 'PGRST116') { // PGRST116 is "not found" error
+        console.error('Error checking vehicle status:', vehicleError);
+        toast.error('Failed to check vehicle status');
+        return;
+      }
+
+      if (vehicleData?.status === 'maintenance') {
+        toast.error('This vehicle is currently under maintenance and cannot be booked');
+        setFormData(prev => ({
+          ...prev,
+          vehicle_details: {
+            ...prev.vehicle_details,
+            registration: registration,
+            model: ''
+          }
+        }));
+        return;
+      }
+
+      // If vehicle exists, auto-fill the model
+      if (vehicleData) {
+        setFormData(prev => ({
+          ...prev,
+          vehicle_details: {
+            ...prev.vehicle_details,
+            registration: registration,
+            model: vehicleData.model
+          }
+        }));
+        return;
+      }
+    }
+
     // Handle start date changes
     if (name === 'start_date') {
       const selectedDate = new Date(value);
