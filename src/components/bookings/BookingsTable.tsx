@@ -1,5 +1,5 @@
 import React from 'react';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 import { User, Clock } from 'lucide-react';
 
@@ -45,15 +45,6 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
       completed: 'bg-gray-100 text-gray-800'
     };
     return colors[status as keyof typeof colors] || 'bg-gray-100 text-gray-800';
-  };
-
-  const formatTimeDisplay = (time: string | undefined) => {
-    if (!time) return '';
-    const [hourStr, minutes] = time.split(':');
-    const hours = parseInt(hourStr, 10);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    return `${displayHours}:${minutes} ${period}`;
   };
 
   const calculateTotalAmount = (booking: Booking) => {
@@ -173,7 +164,7 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                         {formatDate(booking.start_date)}
                       </span>
                       <span className="text-sm text-gray-500 ml-2">
-                        {formatTimeDisplay(booking.pickup_time)}
+                        {formatTime(booking.pickup_time || '')}
                       </span>
                     </div>
                     <div className="mt-1">
@@ -182,7 +173,7 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                         {formatDate(booking.end_date)}
                       </span>
                       <span className="text-sm text-gray-500 ml-2">
-                        {formatTimeDisplay(booking.dropoff_time)}
+                        {formatTime(booking.dropoff_time || '')}
                       </span>
                     </div>
                   </div>

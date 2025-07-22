@@ -3,20 +3,20 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
+import { parseISO } from 'date-fns';
 import { formatDate, formatTime } from '@/lib/utils';
 import { Phone } from 'lucide-react';
 
 interface Booking {
   id: string;
-  booking_id: string;
   customer_name: string;
   customer_contact: string;
   vehicle_details: {
     model: string;
     registration: string;
   };
-  end_date: string;
   dropoff_time: string;
+  end_date: string;
 }
 
 export default function TodaysReturnsPage() {
@@ -32,26 +32,26 @@ export default function TodaysReturnsPage() {
     try {
       const supabase = getSupabaseClient();
       const today = new Date().toISOString().split('T')[0];
-
+      
       const { data, error } = await supabase
         .from('bookings')
         .select(`
           id,
-          booking_id,
           customer_name,
           customer_contact,
           vehicle_details,
-          end_date,
-          dropoff_time
+          dropoff_time,
+          end_date
         `)
         .eq('end_date', today)
         .eq('status', 'in_use');
 
       if (error) throw error;
+      
       setBookings(data || []);
+      setLoading(false);
     } catch (error) {
       console.error('Error fetching returns:', error);
-    } finally {
       setLoading(false);
     }
   };
@@ -60,7 +60,7 @@ export default function TodaysReturnsPage() {
     try {
       const now = new Date();
       const [hours, minutes] = returnTime.split(':');
-      const returnDateTime = new Date(returnDate);
+      const returnDateTime = parseISO(returnDate);
       returnDateTime.setHours(parseInt(hours, 10), parseInt(minutes, 10));
       return returnDateTime < now;
     } catch (error) {
@@ -83,7 +83,7 @@ export default function TodaysReturnsPage() {
     <div className="p-6">
       <h1 className="text-2xl font-semibold text-gray-900">Today's Returns</h1>
       <p className="mt-1 text-sm text-gray-500">{bookings.length} vehicle{bookings.length !== 1 ? 's' : ''} to be returned</p>
-
+      
       <div className="mt-6 space-y-4">
         {bookings.map((booking) => (
           <div key={booking.id} className="bg-white rounded-lg shadow">
@@ -110,9 +110,6 @@ export default function TodaysReturnsPage() {
 
               <div className="mt-4">
                 <div className="text-sm font-medium text-gray-900">
-                  Booking ID: #{booking.booking_id}
-                </div>
-                <div className="text-sm font-medium text-gray-900 mt-2">
                   Customer: {booking.customer_name}
                 </div>
                 <div className="text-sm text-gray-500">
@@ -142,4 +139,4 @@ export default function TodaysReturnsPage() {
       </div>
     </div>
   );
-} 
+}

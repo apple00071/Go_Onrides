@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrency, formatDate } from '@/lib/utils';
+import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
 
 interface Booking {
   id: string;
@@ -58,15 +58,6 @@ export default function BookingList({ bookings }: BookingListProps) {
     const totalRequired = booking.booking_amount + booking.security_deposit_amount;
     const paidAmount = booking.paid_amount || 0;
     return paidAmount >= totalRequired ? 'full' : paidAmount > 0 ? 'partial' : 'pending';
-  };
-
-  const formatTimeDisplay = (time: string | undefined) => {
-    if (!time) return '';
-    const [hourStr, minutes] = time.split(':');
-    const hours = parseInt(hourStr, 10);
-    const period = hours >= 12 ? 'PM' : 'AM';
-    const displayHours = hours % 12 || 12;
-    return `${displayHours}:${minutes} ${period}`;
   };
 
   return (
@@ -131,13 +122,13 @@ export default function BookingList({ bookings }: BookingListProps) {
                   <div className="text-sm text-gray-900">
                     {formatDate(booking.start_date)}
                     <span className="text-gray-500 ml-2">
-                      {formatTimeDisplay(booking.pickup_time)}
+                      {formatTime(booking.pickup_time)}
                     </span>
                   </div>
                   <div className="text-sm text-gray-500">
                     to {formatDate(booking.end_date)}
                     <span className="ml-2">
-                      {formatTimeDisplay(booking.dropoff_time)}
+                      {formatTime(booking.dropoff_time)}
                     </span>
                   </div>
                 </td>

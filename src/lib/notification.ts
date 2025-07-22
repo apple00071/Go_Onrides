@@ -98,24 +98,33 @@ export async function notifyBookingEvent(
     previousEndDate?: string;
     newEndDate?: string;
     additionalAmount?: string;
+    oldStatus?: string;
+    newStatus?: string;
   }
 ): Promise<boolean | undefined> {
   try {
     const supabase = getSupabaseClient();
 
-    // Get the user's profile to get their username
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('id', details.actionBy)
-      .single();
+    // Check if actionBy is a valid UUID
+    const isValidUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(details.actionBy);
 
-    if (profileError) {
-      console.error('Error fetching user profile:', profileError);
-      // Fall back to 'Unknown user' if we can't get the username
-      details.actionBy = 'Unknown user';
+    if (isValidUUID) {
+      // Only query the database if we have a valid UUID
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('username')
+        .eq('id', details.actionBy)
+        .single();
+
+      if (profileError) {
+        console.error('Error fetching user profile:', profileError);
+        details.actionBy = 'Unknown user';
+      } else {
+        details.actionBy = profile.username;
+      }
     } else {
-      details.actionBy = profile.username;
+      // If not a valid UUID, use a default value
+      details.actionBy = details.actionBy || 'Unknown user';
     }
 
     const title = getBookingEventTitle(type, details);

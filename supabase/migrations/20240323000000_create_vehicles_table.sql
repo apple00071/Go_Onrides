@@ -24,21 +24,30 @@ CREATE INDEX idx_vehicles_registration ON vehicles(registration);
 CREATE OR REPLACE FUNCTION update_vehicle_stats()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- Update total bookings and revenue when a booking is completed
-    IF NEW.status = 'completed' AND OLD.status != 'completed' THEN
-        UPDATE vehicles
-        SET 
-            total_bookings = total_bookings + 1,
-            total_revenue = total_revenue + NEW.booking_amount
-        WHERE registration = NEW.vehicle_details->>'registration';
-    END IF;
+    -- Update vehicle statistics for both completed and in-use bookings
+    WITH booking_stats AS (
+        SELECT 
+            COUNT(*) as total_bookings,
+            COALESCE(SUM(paid_amount), 0) as total_revenue
+        FROM bookings
+        WHERE vehicle_details->>'registration' = NEW.vehicle_details->>'registration'
+        AND status IN ('completed', 'in_use')
+    )
+    UPDATE vehicles
+    SET 
+        total_bookings = booking_stats.total_bookings,
+        total_revenue = booking_stats.total_revenue
+    FROM booking_stats
+    WHERE registration = NEW.vehicle_details->>'registration';
+    
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Create trigger to update vehicle stats on booking completion
+-- Create trigger to update vehicle stats on booking changes
+DROP TRIGGER IF EXISTS update_vehicle_stats_on_booking ON bookings;
 CREATE TRIGGER update_vehicle_stats_on_booking
-    AFTER UPDATE ON bookings
+    AFTER INSERT OR UPDATE ON bookings
     FOR EACH ROW
     EXECUTE FUNCTION update_vehicle_stats();
 
@@ -59,6 +68,7 @@ BEGIN
         NEW.created_by,
         CASE 
             WHEN NEW.status = 'confirmed' OR NEW.status = 'in_use' THEN 'in_use'
+            WHEN NEW.status = 'completed' THEN 'available'
             ELSE 'available'
         END
     WHERE NOT EXISTS (
@@ -71,7 +81,8 @@ BEGIN
     SET 
         status = CASE 
             WHEN NEW.status = 'confirmed' OR NEW.status = 'in_use' THEN 'in_use'
-            ELSE 'available'
+            WHEN NEW.status = 'completed' THEN 'available'
+            ELSE status -- Keep current status for other cases
         END,
         updated_at = NOW(),
         updated_by = NEW.created_by
@@ -82,7 +93,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Create trigger to add vehicles from bookings
+DROP TRIGGER IF EXISTS add_vehicle_from_booking ON bookings;
 CREATE TRIGGER add_vehicle_from_booking
-    AFTER INSERT ON bookings
+    AFTER INSERT OR UPDATE ON bookings
     FOR EACH ROW
     EXECUTE FUNCTION add_vehicle_from_booking(); 

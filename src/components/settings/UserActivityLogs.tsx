@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getUserLogs } from '@/lib/userActivity';
-import { format } from 'date-fns';
+import { formatDate, formatTime } from '@/lib/utils';
 import type { UserLog } from '@/types/database';
 import { 
   Calendar,
@@ -245,10 +245,10 @@ export default function UserActivityLogs() {
                         <Clock className="h-4 w-4 text-gray-400 mr-2" />
                         <div>
                           <div className="text-sm text-gray-900">
-                            {format(new Date(log.created_at), 'MMM dd, yyyy')}
+                            {formatDate(log.created_at)}
                           </div>
                           <div className="text-xs text-gray-500">
-                            {format(new Date(log.created_at), 'hh:mm a')}
+                            {formatTime(log.created_at.split('T')[1].substring(0, 5))}
                           </div>
                         </div>
                       </div>

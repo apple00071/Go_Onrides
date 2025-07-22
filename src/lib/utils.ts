@@ -122,4 +122,14 @@ export function formatPercentage(number: number): string {
 export function formatDateForInput(date: string | Date): string {
   const d = new Date(date);
   return d.toISOString().split('T')[0];
+}
+
+// Add a new function to format time in 12-hour format
+export function formatTime(timeStr: string): string {
+  if (!timeStr) return '';
+  const [hourStr, minutes] = timeStr.split(':');
+  const hours = parseInt(hourStr, 10);
+  const period = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12;
+  return `${displayHours}:${minutes} ${period}`;
 } 

@@ -9,7 +9,7 @@ import { notifyBookingEvent } from '@/lib/notification';
 import DocumentUpload from '@/components/documents/DocumentUpload';
 import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
 import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRotation';
-import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
+import type { UploadedDocuments, SubmittedDocuments, BookingDetails as GlobalBookingDetails } from '@/types/bookings';
 import { formatCurrency, formatDateForInput } from '@/lib/utils';
 
 interface OutstationDetails {
@@ -19,39 +19,8 @@ interface OutstationDetails {
   end_odo: number;
 }
 
-interface BookingDetails {
-  id: string;
-  booking_id: string;
-  customer_id: string;
-  customer_name: string;
-  customer_contact: string;
-  customer_email: string;
-  alternative_phone: string;
-  emergency_contact_phone: string;
-  emergency_contact_phone1: string;
-  colleague_phone?: string;
-  aadhar_number: string;
-  date_of_birth: string;
-  dl_number: string;
-  dl_expiry_date: string;
-  temp_address: string;
-  perm_address: string;
-  vehicle_details: {
-    model: string;
-    registration: string;
-  };
-  start_date: string;
-  end_date: string;
-  pickup_time: string;
-  dropoff_time: string;
-  booking_amount: number;
-  security_deposit_amount: number;
-  payment_status: string;
-  paid_amount: number;
-  payment_mode: string;
-  status: string;
-  rental_purpose?: 'local' | 'outstation';
-  outstation_details?: OutstationDetails;
+// Extend the global BookingDetails type with additional fields specific to the edit modal
+interface BookingDetails extends Omit<GlobalBookingDetails, 'signatures'> {
   signature?: string;
   uploaded_documents?: UploadedDocuments;
   submitted_documents?: SubmittedDocuments;
@@ -97,7 +66,13 @@ interface FormData {
   outstation_details: OutstationDetails;
   signature: string;
   uploaded_documents: UploadedDocuments;
-  submitted_documents: SubmittedDocuments;
+  submitted_documents: {
+    passport: boolean;
+    voter_id: boolean;
+    original_dl: boolean;
+    original_aadhar: boolean;
+    other_document: boolean;
+  };
 }
 
 type PaymentStatus = 'pending' | 'partial' | 'full';
@@ -183,7 +158,7 @@ export default function EditBookingModal({
       original_dl: false,
       passport: false,
       voter_id: false,
-      other_document: ''
+      other_document: false
     }
   }), [booking]);
 
@@ -1109,7 +1084,7 @@ export default function EditBookingModal({
                     original_dl: false,
                     passport: false,
                     voter_id: false,
-                    other_document: ''
+                    other_document: false
                   }}
                   onDocumentsChange={handleSubmittedDocumentsChange}
                 />

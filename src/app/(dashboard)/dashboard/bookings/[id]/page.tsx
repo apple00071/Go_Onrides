@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download, ZoomIn, CheckCircle2, PlusCircle } from 'lucide-react';
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateTime, formatTime } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
 import VehicleDamageHistory from '@/components/bookings/VehicleDamageHistory';
@@ -22,13 +22,14 @@ type BookingStatus = 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancell
 type PaymentStatus = 'full' | 'partial' | 'pending';
 type PaymentMode = 'cash' | 'upi' | 'card' | 'bank_transfer';
 
-const STATUS_COLORS = {
+// Define the status colors type
+const STATUS_COLORS: Record<string, string> = {
   pending: 'bg-yellow-100 text-yellow-800',
   confirmed: 'bg-blue-100 text-blue-800',
   in_use: 'bg-green-100 text-green-800',
   completed: 'bg-gray-100 text-gray-800',
   cancelled: 'bg-red-100 text-red-800'
-} as const;
+};
 
 // Add a helper function to convert 24h to 12h format
 const formatTimeDisplay = (time: string): string => {
@@ -124,7 +125,7 @@ export default function BookingDetailsPage() {
         .from('bookings')
         .select(`
           *,
-          customer:customers!customer_id (
+          customer:customers (
             id,
             name,
             phone,
@@ -159,21 +160,58 @@ export default function BookingDetailsPage() {
         throw bookingError;
       }
 
-      // Fetch signatures
-      let signaturesData = null;
-      if (bookingData.id) {
-        const { data: signatures, error: signatureError } = await supabase
-          .from('booking_signatures')
-          .select('*')
-          .eq('booking_id', bookingData.id)
-          .order('created_at', { ascending: true });
-
-        if (signatureError) {
-          console.error('Error fetching signatures:', signatureError);
-        } else {
-          signaturesData = signatures;
-        }
+      if (!bookingData) {
+        throw new Error('Booking not found');
       }
+
+      // Fetch signatures separately
+      const { data: signaturesData, error: signaturesError } = await supabase
+        .from('booking_signatures')
+        .select('signature_data, signature_type, created_at')
+        .eq('booking_id', bookingData.id)
+        .order('created_at', { ascending: true });
+
+      if (signaturesError) {
+        console.error('Error fetching signatures:', signaturesError);
+      }
+
+      // Process signatures
+      const bookingSignature = signaturesData?.find(s => !s.signature_type || s.signature_type === 'booking')?.signature_data || null;
+      const completionSignature = signaturesData?.find(s => s.signature_type === 'completion')?.signature_data || null;
+
+      console.log('Raw signatures data:', signaturesData);
+      console.log('Processed signatures:', { bookingSignature, completionSignature });
+
+      // Get the public URLs for each document
+      const getPublicUrl = (fileName: string) => {
+        if (!fileName) return '';
+        const path = `${bookingData.customer?.id}/${fileName}`;
+        console.log('Getting public URL for:', path);
+        const { data } = supabase.storage
+          .from('customer-documents')
+          .getPublicUrl(path);
+        console.log('Public URL result:', data);
+        return data?.publicUrl || '';
+      };
+
+      // Process customer documents to get public URLs
+      const customerDocuments = bookingData.customer?.documents ? {
+        customer_photo: bookingData.customer.documents.customer_photo ? 
+          getPublicUrl(bookingData.customer.documents.customer_photo) : '',
+        aadhar_front: bookingData.customer.documents.aadhar_front ? 
+          getPublicUrl(bookingData.customer.documents.aadhar_front) : '',
+        aadhar_back: bookingData.customer.documents.aadhar_back ? 
+          getPublicUrl(bookingData.customer.documents.aadhar_back) : '',
+        dl_front: bookingData.customer.documents.dl_front ? 
+          getPublicUrl(bookingData.customer.documents.dl_front) : '',
+        dl_back: bookingData.customer.documents.dl_back ? 
+          getPublicUrl(bookingData.customer.documents.dl_back) : ''
+      } : {};
+
+      console.log('Raw customer documents:', bookingData.customer?.documents);
+      console.log('Customer ID:', bookingData.customer?.id);
+      console.log('Processed documents with URLs:', customerDocuments);
+      console.log('Signatures:', { bookingSignature, completionSignature });
 
       // Transform the booking data
       const transformedBooking: BookingDetailsData = {
@@ -181,29 +219,61 @@ export default function BookingDetailsPage() {
         customer_name: bookingData.customer?.name || '',
         customer_contact: bookingData.customer?.phone || '',
         customer_email: bookingData.customer?.email || '',
-        alternative_phone: bookingData.customer?.alternative_phone || '',
-        emergency_contact_phone: bookingData.customer?.emergency_contact_phone || '',
-        emergency_contact_phone1: bookingData.customer?.emergency_contact_phone1 || '',
+        alternative_phone: bookingData.customer?.alternative_phone || null,
+        emergency_contact_phone: bookingData.customer?.emergency_contact_phone || null,
+        emergency_contact_phone1: bookingData.customer?.emergency_contact_phone1 || null,
+        colleague_phone: bookingData.colleague_phone || null,
         aadhar_number: bookingData.customer?.aadhar_number || '',
-        date_of_birth: bookingData.customer?.dob || '',
-        dl_number: bookingData.customer?.dl_number || '',
-        dl_expiry_date: bookingData.customer?.dl_expiry_date || '',
-        temp_address: bookingData.temp_address || '',
-        perm_address: bookingData.perm_address || '',
-        uploaded_documents: bookingData.customer?.documents || {},
-        submitted_documents: bookingData.submitted_documents || {},
-        signatures: signaturesData?.length ? {
-          bookingSignature: signaturesData[0]?.signature_data || null,
-          completionSignature: signaturesData.length > 1 ? signaturesData[signaturesData.length - 1]?.signature_data : null
-        } : null
+        date_of_birth: bookingData.customer?.dob || null,
+        dl_number: bookingData.customer?.dl_number || null,
+        dl_expiry_date: bookingData.customer?.dl_expiry_date || null,
+        temp_address: bookingData.temp_address || null,
+        perm_address: bookingData.perm_address || null,
+        customer: {
+          id: bookingData.customer?.id || '',
+          name: bookingData.customer?.name || '',
+          phone: bookingData.customer?.phone || '',
+          email: bookingData.customer?.email || '',
+          documents: customerDocuments
+        },
+        submitted_documents: bookingData.submitted_documents || {
+          passport: false,
+          voter_id: false,
+          original_dl: false,
+          original_aadhar: false,
+          other_document: false
+        } as {
+          passport: boolean;
+          voter_id: boolean;
+          original_dl: boolean;
+          original_aadhar: boolean;
+          other_document: boolean;
+        },
+        signatures: {
+          bookingSignature,
+          completionSignature
+        },
+        damage_charges: bookingData.damage_charges || 0,
+        late_fee: bookingData.late_fee || 0,
+        extension_fee: bookingData.extension_fee || 0,
+        refund_amount: bookingData.refund_amount || 0,
+        vehicle_remarks: bookingData.vehicle_remarks || ''
       };
 
+      console.log('Customer documents:', bookingData.customer?.documents);
+      console.log('Submitted documents:', transformedBooking.submitted_documents);
+      console.log('Signatures:', { bookingSignature, completionSignature });
+      console.log('Transformed booking data:', transformedBooking);
+
       setBooking(transformedBooking);
-      setSignature(transformedBooking.signatures || null);
+      setSignature({
+        bookingSignature,
+        completionSignature
+      });
       setError(null);
     } catch (error) {
       console.error('Error fetching booking details:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred');
+      setError(error instanceof Error ? error.message : 'An error occurred while fetching booking details');
     } finally {
       setLoading(false);
     }
@@ -239,17 +309,65 @@ export default function BookingDetailsPage() {
 
     try {
       const supabase = getSupabaseClient();
+
+      // Get current user's session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError) throw sessionError;
+      if (!session) throw new Error('No active session');
+
+      // Ensure all submitted_documents values are explicitly boolean
+      type SubmittedDocuments = {
+        passport: boolean;
+        voter_id: boolean;
+        original_dl: boolean;
+        original_aadhar: boolean;
+        other_document: boolean;
+      };
+
+      const defaultSubmittedDocs: SubmittedDocuments = {
+        passport: false,
+        voter_id: false,
+        original_dl: false,
+        original_aadhar: false,
+        other_document: false
+      };
+
+      const currentSubmittedDocs = booking.submitted_documents || defaultSubmittedDocs;
+      
+      const submittedDocuments: SubmittedDocuments = {
+        passport: Boolean(currentSubmittedDocs.passport),
+        voter_id: Boolean(currentSubmittedDocs.voter_id),
+        original_dl: Boolean(currentSubmittedDocs.original_dl),
+        original_aadhar: Boolean(currentSubmittedDocs.original_aadhar),
+        other_document: Boolean(currentSubmittedDocs.other_document)
+      };
+
       const { error: updateError } = await supabase
         .from('bookings')
-        .update({ status: newStatus })
+        .update({
+          status: newStatus,
+          submitted_documents: submittedDocuments,
+          updated_by: session.user.id
+        })
         .eq('id', booking.id);
 
       if (updateError) {
-        throw updateError;
+        console.error('Update error:', updateError);
+        throw new Error(updateError.message);
       }
 
       setBooking(prev => prev ? { ...prev, status: newStatus } : null);
       toast.success('Booking status updated successfully');
+
+      // Notify about the status change
+      await notifyBookingEvent('BOOKING_UPDATED', booking.id, {
+        customerName: booking.customer_name,
+        bookingId: booking.booking_id,
+        oldStatus: booking.status,
+        newStatus: newStatus,
+        actionBy: session.user.id
+      });
+
     } catch (error) {
       console.error('Error updating status:', error);
       toast.error('Failed to update booking status');
@@ -321,7 +439,7 @@ export default function BookingDetailsPage() {
 
       const pdfBlob = await generateInvoice({
         ...booking,
-        signature: booking.signatures?.completionSignature || booking.signatures?.bookingSignature
+        signature: (booking.signatures?.completionSignature || booking.signatures?.bookingSignature || undefined)
       });
       
       // Create a download link
@@ -441,9 +559,7 @@ export default function BookingDetailsPage() {
                       className="text-sm border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 py-1 px-2"
                     >
                       <option value="pending">Pending</option>
-                      <option value="confirmed">Confirmed</option>
                       <option value="in_use">In Use</option>
-                      <option value="completed">Completed</option>
                       <option value="cancelled">Cancelled</option>
                     </select>
                   )}
@@ -465,7 +581,7 @@ export default function BookingDetailsPage() {
                     <span className="font-medium text-gray-700 min-w-[85px]">Created by</span>
                     <span className="text-gray-900">{booking.created_by_user.email}</span>
                     <span className="text-gray-500">
-                      on {formatDate(booking.created_at)}, {new Date(booking.created_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}
+                      on {formatDateTime(booking.created_at)}
                     </span>
                   </div>
                 )}
@@ -474,7 +590,7 @@ export default function BookingDetailsPage() {
                     <span className="font-medium text-gray-700 min-w-[85px]">Completed by</span>
                     <span className="text-gray-900">{booking.completed_by_user.email}</span>
                     <span className="text-gray-500">
-                      on {formatDate(booking.completed_at || '')}, {new Date(booking.completed_at || '').toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}
+                      on {formatDateTime(booking.completed_at || '')}
                     </span>
                   </div>
                 )}
@@ -483,7 +599,7 @@ export default function BookingDetailsPage() {
                     <span className="font-medium text-gray-700 min-w-[85px]">Updated by</span>
                     <span className="text-gray-900">{booking.updated_by_user.email}</span>
                     <span className="text-gray-500">
-                      on {formatDate(booking.updated_at)}, {new Date(booking.updated_at).toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true })}
+                      on {formatDateTime(booking.updated_at)}
                     </span>
                   </div>
                 )}
@@ -534,7 +650,7 @@ export default function BookingDetailsPage() {
                 </div>
                 <div className="flex items-center mt-1">
                   <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="text-sm">{formatTimeDisplay(booking?.pickup_time || '')}</p>
+                  <p className="text-sm">{formatTime(booking?.pickup_time || '')}</p>
                 </div>
                 <div className="flex items-center mt-2">
                   <Calendar className="h-4 w-4 mr-2 text-gray-400" />
@@ -542,7 +658,7 @@ export default function BookingDetailsPage() {
                 </div>
                 <div className="flex items-center mt-1">
                   <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="text-sm">{formatTimeDisplay(booking?.dropoff_time || '')}</p>
+                  <p className="text-sm">{formatTime(booking?.dropoff_time || '')}</p>
                 </div>
               </div>
             </div>
@@ -619,7 +735,7 @@ export default function BookingDetailsPage() {
             </div>
           </div>
 
-          {/* Payment Information - Moved up */}
+          {/* Payment Information */}
           <div className="bg-white rounded-lg shadow">
             <div className="p-6">
               <div className="flex items-center justify-between mb-4">
@@ -649,7 +765,7 @@ export default function BookingDetailsPage() {
             </div>
           </div>
 
-          {/* Documents & Signatures - Moved down */}
+          {/* Documents & Signatures */}
           <div className="bg-white rounded-lg shadow mb-6">
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="text-lg font-medium text-gray-900">Documents & Signatures</h2>
@@ -659,9 +775,9 @@ export default function BookingDetailsPage() {
                 {/* Booking Signature */}
                 <div>
                   <h3 className="text-md font-medium text-gray-900 mb-4">Booking Signature</h3>
-                  {booking.signatures?.bookingSignature ? (
+                  {booking?.signatures?.bookingSignature && (
                     <div className="border rounded-lg p-4 max-w-xs cursor-pointer hover:border-blue-500 transition-colors"
-                         onClick={() => handleImageClick(booking.signatures?.bookingSignature || '', 'Booking Signature')}>
+                         onClick={() => booking.signatures?.bookingSignature && handleImageClick(booking.signatures.bookingSignature, 'Booking Signature')}>
                       <img
                         src={booking.signatures.bookingSignature}
                         alt="Booking Signature"
@@ -669,7 +785,8 @@ export default function BookingDetailsPage() {
                       />
                       <p className="text-xs text-gray-500 mt-2 text-center">Click to view full size</p>
                     </div>
-                  ) : (
+                  )}
+                  {!booking?.signatures?.bookingSignature && (
                     <p className="text-sm text-gray-500">No booking signature available</p>
                   )}
                 </div>
@@ -677,44 +794,71 @@ export default function BookingDetailsPage() {
                 {/* Uploaded Documents */}
                 <div>
                   <h3 className="text-md font-medium text-gray-900 mb-4">Uploaded Documents</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {booking?.uploaded_documents && Object.entries(booking.uploaded_documents).map(([type, url]) => (
-                      url && (
-                        <div key={type} className="relative group">
-                          <div className="aspect-w-3 aspect-h-2 rounded-lg overflow-hidden border border-gray-200">
-                            <img
-                              src={url}
-                              alt={type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                              className="w-full h-32 object-cover cursor-pointer hover:opacity-75 transition-opacity"
-                              onClick={() => handleImageClick(url, type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()))}
-                            />
+                  {booking?.customer?.documents && Object.entries(booking.customer.documents).some(([_, url]) => url && url !== '') ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {Object.entries(booking.customer.documents).map(([type, url]) => {
+                        // Skip if URL is empty or null
+                        if (!url || url === '') return null;
+                        
+                        // Format the document type for display
+                        const displayType = type
+                          .replace(/_/g, ' ')
+                          .split(' ')
+                          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+                          .join(' ');
+
+                        return (
+                          <div key={type} className="relative group">
+                            <div className="aspect-w-3 aspect-h-2 rounded-lg overflow-hidden border border-gray-200">
+                              <img
+                                src={url}
+                                alt={displayType}
+                                className="w-full h-32 object-cover cursor-pointer hover:opacity-75 transition-opacity"
+                                onClick={() => handleImageClick(url, displayType)}
+                              />
+                            </div>
+                            <div className="mt-1 text-xs font-medium text-gray-700 text-center">
+                              {displayType}
+                            </div>
                           </div>
-                          <div className="mt-1 text-xs font-medium text-gray-700 text-center">
-                            {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                          </div>
-                        </div>
-                      )
-                    ))}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No documents uploaded</p>
+                  )}
                 </div>
 
                 {/* Physical Documents */}
                 <div>
                   <h3 className="text-md font-medium text-gray-900 mb-4">Physical Documents Submitted</h3>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {booking?.submitted_documents && Object.entries(booking.submitted_documents).map(([type, isSubmitted]) => (
-                      <div key={type} className="flex items-center space-x-2 bg-gray-50 p-2 rounded">
-                        {isSubmitted ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        ) : (
-                          <X className="h-4 w-4 text-red-500 flex-shrink-0" />
-                        )}
-                        <span className="text-xs text-gray-700">
-                          {type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
+                  {booking?.submitted_documents ? (
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      {Object.entries(booking.submitted_documents).map(([type, isSubmitted]) => {
+                        // Format the document type for display
+                        const displayType = type
+                          .replace(/_/g, ' ')
+                          .split(' ')
+                          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+                          .join(' ');
+
+                        return (
+                          <div key={type} className="flex items-center space-x-2 bg-gray-50 p-2 rounded">
+                            {isSubmitted ? (
+                              <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+                            ) : (
+                              <X className="h-4 w-4 text-red-500 flex-shrink-0" />
+                            )}
+                            <span className="text-sm text-gray-700">
+                              {displayType}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No physical documents information available</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -749,6 +893,33 @@ export default function BookingDetailsPage() {
                     Completed by {booking.completed_by_user?.username || 'Unknown'} on {formatDateTime(booking.completed_at || new Date())}
                   </p>
                 </div>
+
+                {/* Additional Fees Section */}
+                {(booking.damage_charges > 0 || booking.late_fee > 0 || booking.extension_fee > 0) && (
+                  <div>
+                    <h3 className="text-lg font-medium text-gray-900">Additional Fees</h3>
+                    <dl className="mt-2 space-y-2">
+                      {booking.damage_charges > 0 && (
+                        <div className="flex justify-between">
+                          <dt className="text-sm text-gray-500">Damage Charges:</dt>
+                          <dd className="text-sm font-medium text-red-600">{formatCurrency(booking.damage_charges)}</dd>
+                        </div>
+                      )}
+                      {booking.late_fee > 0 && (
+                        <div className="flex justify-between">
+                          <dt className="text-sm text-gray-500">Late Fee:</dt>
+                          <dd className="text-sm font-medium text-red-600">{formatCurrency(booking.late_fee)}</dd>
+                        </div>
+                      )}
+                      {booking.extension_fee > 0 && (
+                        <div className="flex justify-between">
+                          <dt className="text-sm text-gray-500">Extension Fee:</dt>
+                          <dd className="text-sm font-medium text-red-600">{formatCurrency(booking.extension_fee)}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  </div>
+                )}
 
                 {/* Vehicle Return Details */}
                 {booking.vehicle_remarks && (

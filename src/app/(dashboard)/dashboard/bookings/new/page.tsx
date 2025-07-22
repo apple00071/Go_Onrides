@@ -161,11 +161,11 @@ export default function NewBookingPage() {
     destination: '',
     uploaded_documents: {},
     submitted_documents: {
-      original_aadhar: false,
-      original_dl: false,
       passport: false,
       voter_id: false,
-      other_document: ''
+      original_dl: false,
+      original_aadhar: false,
+      other_document: false
     }
   };
 
@@ -218,54 +218,9 @@ export default function NewBookingPage() {
     return slots;
   };
 
-  const handleInputChange = async (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-
-    // Special handling for vehicle registration input
-    if (name === 'vehicle_details.registration') {
-      const registration = value.toUpperCase();
-      
-      // Check vehicle status in vehicles table
-      const supabase = getSupabaseClient();
-      const { data: vehicleData, error: vehicleError } = await supabase
-        .from('vehicles')
-        .select('status, model')
-        .eq('registration', registration)
-        .single();
-
-      if (vehicleError && vehicleError.code !== 'PGRST116') { // PGRST116 is "not found" error
-        console.error('Error checking vehicle status:', vehicleError);
-        toast.error('Failed to check vehicle status');
-        return;
-      }
-
-      if (vehicleData?.status === 'maintenance') {
-        toast.error('This vehicle is currently under maintenance and cannot be booked');
-        setFormData(prev => ({
-          ...prev,
-          vehicle_details: {
-            ...prev.vehicle_details,
-            registration: registration,
-            model: ''
-          }
-        }));
-        return;
-      }
-
-      // If vehicle exists, auto-fill the model
-      if (vehicleData) {
-        setFormData(prev => ({
-          ...prev,
-          vehicle_details: {
-            ...prev.vehicle_details,
-            registration: registration,
-            model: vehicleData.model
-          }
-        }));
-        return;
-      }
-    }
-
+    
     // Handle start date changes
     if (name === 'start_date') {
       const selectedDate = new Date(value);
@@ -631,17 +586,18 @@ export default function NewBookingPage() {
       // Prepare customer data
       const customerData = {
         name: formData.customer_name,
-        contact: formData.customer_contact,
+        phone: formData.customer_contact,
+        contact: formData.customer_contact, // Include both phone and contact fields
         email: formData.customer_email || null,
         aadhar_number: formData.aadhar_number,
         date_of_birth: formData.date_of_birth || null,
         dl_number: formData.dl_number || null,
         dl_expiry_date: formData.dl_expiry_date || null,
-        temp_address: formData.temp_address || null,
-        perm_address: formData.perm_address,
+        temp_address_street: formData.temp_address || null,
+        perm_address_street: formData.perm_address || null,
         emergency_contact_phone: formData.emergency_contact_phone || null,
         emergency_contact_phone1: formData.emergency_contact_phone1 || null,
-        colleague_phone: formData.colleague_phone || null,
+        alternative_phone: formData.alternative_phone || null,
         created_at: new Date().toISOString(),
         created_by: userData.id
       };
@@ -705,8 +661,14 @@ export default function NewBookingPage() {
           outstation_details: formData.outstation_details,
           created_at: new Date().toISOString(),
           created_by: userData.id,
-          status: 'confirmed',
-          submitted_documents: formData.submitted_documents
+          status: 'in_use',
+          submitted_documents: {
+            passport: formData.submitted_documents?.passport || false,
+            voter_id: formData.submitted_documents?.voter_id || false,
+            original_dl: formData.submitted_documents?.original_dl || false,
+            original_aadhar: formData.submitted_documents?.original_aadhar || false,
+            other_document: formData.submitted_documents?.other_document || false
+          }
         })
         .select()
         .single();
@@ -741,6 +703,9 @@ export default function NewBookingPage() {
           .insert({
             booking_id: newBooking.id,
             signature_data: formData.signature,
+            signature_type: 'booking', // Add signature type
+            created_at: new Date().toISOString(),
+            created_by: userData.id
           });
 
         if (signatureError) {

@@ -5,11 +5,32 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { format } from 'date-fns';
+import { formatDate } from '@/lib/utils';
+import BatteryMaintenanceForm from '@/components/maintenance/BatteryMaintenanceForm';
 
 const maintenanceTypes = [
-  { value: 'engine_oil', label: 'Engine Oil Change' },
-  { value: 'oil_filter', label: 'Oil Filter' },
-  { value: 'air_filter', label: 'Air Filter' },
+  { 
+    value: 'engine_oil', 
+    label: 'Engine Oil Change',
+    requiresNextDue: true 
+  },
+  { 
+    value: 'oil_filter', 
+    label: 'Oil Filter',
+    requiresNextDue: true 
+  },
+  { 
+    value: 'air_filter', 
+    label: 'Air Filter',
+    requiresNextDue: true 
+  },
+  { 
+    value: 'battery', 
+    label: 'Battery',
+    requiresNextDue: true,
+    requiresDetails: true 
+  },
   { value: 'tyre_change', label: 'Tyre Change' },
   { value: 'tyre_rotation', label: 'Tyre Rotation' },
   { value: 'brake_pads', label: 'Brake Pads' },
@@ -40,7 +61,7 @@ export default function AddMaintenancePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState({
     vehicle_registration: vehicleRegistration || '',
-    maintenance_date: new Date().toISOString().split('T')[0],
+    maintenance_date: format(new Date(), 'dd-MM-yyyy'),
     maintenance_types: [] as MaintenanceType[],
     description: '',
     cost: 0,
@@ -48,6 +69,7 @@ export default function AddMaintenancePage() {
     performed_by: '',
     notes: ''
   });
+  const [selectedBatteryId, setSelectedBatteryId] = useState<string | null>(null);
 
   useEffect(() => {
     if (vehicleRegistration) {
@@ -114,30 +136,43 @@ export default function AddMaintenancePage() {
     }));
   };
 
+  const handleBatteryDetailsChange = (batteryId: string | null) => {
+    setSelectedBatteryId(batteryId);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    // setError(null); // This state variable is not defined in the original file
 
     try {
       const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('No authenticated user found');
+      if (!user) throw new Error('User not authenticated');
+
+      const dbDate = format(new Date(formData.maintenance_date.split('-').reverse().join('-')), 'yyyy-MM-dd');
 
       // Create separate maintenance records for each type
       for (const maintenanceType of formData.maintenance_types) {
         const maintenanceData = {
           vehicle_registration: formData.vehicle_registration,
-          maintenance_date: formData.maintenance_date,
+          maintenance_date: dbDate,
           maintenance_type: maintenanceType.value,
           description: formData.description,
           cost: formData.cost / formData.maintenance_types.length, // Split cost evenly
-          next_due_date: maintenanceType.nextDueDate,
+          next_due_date: maintenanceType.nextDueDate ? 
+            format(new Date(maintenanceType.nextDueDate.split('-').reverse().join('-')), 'yyyy-MM-dd') : 
+            null,
           odometer_reading: formData.odometer_reading,
           performed_by: formData.performed_by,
           notes: formData.notes,
           created_by: user.id,
           updated_by: user.id,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
+          // Add battery details if this is a battery maintenance
+          ...(maintenanceType.value === 'battery' && selectedBatteryId 
+            ? { battery_details: selectedBatteryId } 
+            : {})
         };
 
         const { error: insertError } = await supabase
@@ -221,8 +256,14 @@ export default function AddMaintenancePage() {
               type="date"
               id="maintenance_date"
               required
-              value={formData.maintenance_date}
-              onChange={(e) => setFormData(prev => ({ ...prev, maintenance_date: e.target.value }))}
+              value={formData.maintenance_date} // Keep the YYYY-MM-DD format for the input
+              onChange={(e) => {
+                const date = new Date(e.target.value);
+                setFormData(prev => ({ 
+                  ...prev, 
+                  maintenance_date: format(date, 'dd-MM-yyyy')
+                }));
+              }}
               disabled={!isAdmin}
               className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 
                 ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : 'focus:outline-none focus:ring-blue-500 focus:border-blue-500'}
@@ -267,8 +308,12 @@ export default function AddMaintenancePage() {
                       <label className="block text-xs text-gray-500">Next Due Date</label>
                       <input
                         type="date"
-                        value={formData.maintenance_types.find(t => t.value === type.value)?.nextDueDate || ''}
-                        onChange={(e) => handleNextDueDateChange(type.value, e.target.value)}
+                        value={formData.maintenance_types.find(t => t.value === type.value)?.nextDueDate?.split('-').reverse().join('-') || ''} // Convert DD-MM-YYYY to YYYY-MM-DD for input
+                        onChange={(e) => {
+                          // Convert YYYY-MM-DD to DD-MM-YYYY for state
+                          const date = new Date(e.target.value);
+                          handleNextDueDateChange(type.value, format(date, 'dd-MM-yyyy'));
+                        }}
                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
                       />
                     </div>
@@ -278,6 +323,14 @@ export default function AddMaintenancePage() {
             })}
           </div>
         </div>
+
+        {/* Show battery form when battery maintenance is selected */}
+        {formData.maintenance_types.some(type => type.value === 'battery') && (
+          <BatteryMaintenanceForm
+            vehicleRegistration={formData.vehicle_registration}
+            onBatteryDetailsChange={handleBatteryDetailsChange}
+          />
+        )}
 
         <div>
           <label htmlFor="description" className="block text-sm font-medium text-gray-700">

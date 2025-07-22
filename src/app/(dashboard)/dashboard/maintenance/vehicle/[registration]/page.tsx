@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Plus } from 'lucide-react';
+import { formatDate } from '@/lib/utils';
 
 interface MaintenanceRecord {
   id: string;
@@ -61,10 +62,6 @@ export default function VehicleMaintenancePage({ params }: { params: { registrat
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString();
   };
 
   const getMaintenanceTypeLabel = (type: string) => {

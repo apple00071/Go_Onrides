@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { formatDate, formatDateTime, getISTDate } from '@/lib/utils';
+import { formatDate, formatTime, getISTDate } from '@/lib/utils';
 import { AlertTriangle, CheckCircle2, Clock } from 'lucide-react';
 
 interface VehicleReturn {
@@ -145,7 +145,7 @@ export default function VehicleReturns() {
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    #{booking.booking_id} • {booking.customer_name} • Due: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
+                    #{booking.booking_id} • {booking.customer_name} • Due: {formatDate(booking.end_date)} {formatTime(booking.dropoff_time)}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-red-600">
@@ -178,7 +178,7 @@ export default function VehicleReturns() {
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    #{booking.booking_id} • {booking.customer_name} • Return by: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
+                    #{booking.booking_id} • {booking.customer_name} • Return by: {formatDate(booking.end_date)} {formatTime(booking.dropoff_time)}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-blue-600">
@@ -207,7 +207,7 @@ export default function VehicleReturns() {
                     {booking.vehicle_details.model} ({booking.vehicle_details.registration})
                   </div>
                   <div className="text-xs text-gray-500">
-                    #{booking.booking_id} • {booking.customer_name} • Return by: {formatDateTime(combineDateAndTime(booking.end_date, booking.dropoff_time))}
+                    #{booking.booking_id} • {booking.customer_name} • Return by: {formatDate(booking.end_date)} {formatTime(booking.dropoff_time)}
                   </div>
                 </div>
                 <div className="text-xs font-medium text-green-600">

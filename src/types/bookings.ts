@@ -21,8 +21,8 @@ export interface SubmittedDocuments {
   original_dl: boolean;
   passport: boolean;
   voter_id: boolean;
-  other_document: string;
-  [key: string]: boolean | string;
+  other_document: boolean;
+  [key: string]: boolean;
 }
 
 export interface BookingDetails {
@@ -32,16 +32,16 @@ export interface BookingDetails {
   customer_name: string;
   customer_contact: string;
   customer_email: string;
-  alternative_phone: string;
-  emergency_contact_phone: string;
-  emergency_contact_phone1: string;
-  colleague_phone?: string;
+  alternative_phone?: string | null;
+  emergency_contact_phone?: string | null;
+  emergency_contact_phone1?: string | null;
+  colleague_phone?: string | null;
   aadhar_number: string;
-  date_of_birth: string;
-  dl_number: string;
-  dl_expiry_date: string;
-  temp_address: string;
-  perm_address: string;
+  date_of_birth?: string | null;
+  dl_number?: string | null;
+  dl_expiry_date?: string | null;
+  temp_address?: string | null;
+  perm_address?: string | null;
   vehicle_details: {
     model: string;
     registration: string;
@@ -59,30 +59,12 @@ export interface BookingDetails {
   status: string;
   rental_purpose?: 'local' | 'outstation';
   outstation_details?: OutstationDetails;
-  uploaded_documents?: UploadedDocuments;
-  submitted_documents?: SubmittedDocuments;
-  signature?: string;
-  terms_accepted: boolean;
-  created_at: string;
-  created_by: string;
-  updated_at?: string;
-  updated_by?: string;
-}
-
-export interface BookingDetailsData extends Omit<BookingDetails, 'payment_status' | 'payment_mode' | 'status'> {
-  payment_status: 'full' | 'partial' | 'pending';
-  payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
-  status: BookingStatus;
-  completed_at?: string;
-  completed_by?: string;
-  completed_by_user?: {
-    email: string;
-    username: string;
-  };
   created_at: string;
   updated_at: string;
   created_by: string;
   updated_by: string;
+  completed_at?: string;
+  completed_by?: string;
   created_by_user?: {
     email: string;
     username: string;
@@ -91,13 +73,33 @@ export interface BookingDetailsData extends Omit<BookingDetails, 'payment_status
     email: string;
     username: string;
   };
-  vehicle_remarks?: string;
+  completed_by_user?: {
+    email: string;
+    username: string;
+  };
+  customer?: {
+    id: string;
+    name: string;
+    phone: string;
+    email: string;
+    documents: Record<string, string>;
+  };
+  submitted_documents?: {
+    passport: boolean;
+    voter_id: boolean;
+    original_dl: boolean;
+    original_aadhar: boolean;
+    other_document: boolean;
+  };
+  signatures?: {
+    bookingSignature: string | null;
+    completionSignature: string | null;
+  };
   damage_charges: number;
-  refund_amount: number;
   late_fee: number;
   extension_fee: number;
-  signatures?: {
-    bookingSignature?: string;
-    completionSignature?: string;
-  };
-} 
+  refund_amount: number;
+  vehicle_remarks: string;
+}
+
+export type BookingDetailsData = BookingDetails; 

@@ -2,8 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { format } from 'date-fns';
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
+import { formatDate, formatDateTime, formatTime } from '@/lib/utils';
 
 interface BookingExtension {
   id: string;
@@ -110,20 +109,6 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
     );
   }
   
-  // Format the time string to display in the desired format (12-hour format)
-  const formatTimeString = (timeStr: string) => {
-    // Extract hours and minutes from the time string (assuming format like "HH:MM" or "HH:MM:SS")
-    const match = timeStr.match(/(\d{1,2}):(\d{2})/);
-    if (match) {
-      const [_, hoursStr, minutes] = match;
-      const hours = parseInt(hoursStr, 10);
-      const period = hours >= 12 ? 'PM' : 'AM';
-      const displayHours = hours % 12 || 12;
-      return `(${displayHours}:${minutes} ${period})`;
-    }
-    return timeStr;
-  };
-  
   return (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">Extension History</h2>
@@ -141,10 +126,10 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
                 
                 <div className="mt-3 text-sm">
                   <div className="mb-1">
-                    <span className="text-gray-500">From:</span> {formatDate(extension.previous_end_date)} {formatTimeString(extension.previous_dropoff_time)}
+                    <span className="text-gray-500">From:</span> {formatDate(extension.previous_end_date)} {formatTime(extension.previous_dropoff_time)}
                   </div>
                   <div>
-                    <span className="text-gray-500">To:</span> {formatDate(extension.new_end_date)} {formatTimeString(extension.new_dropoff_time)}
+                    <span className="text-gray-500">To:</span> {formatDate(extension.new_end_date)} {formatTime(extension.new_dropoff_time)}
                   </div>
                 </div>
               </div>

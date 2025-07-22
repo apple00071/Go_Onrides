@@ -100,6 +100,13 @@ interface CustomerDetails {
     status: string;
     booking_amount: number;
     vehicle_details: any;
+    submitted_documents?: {
+      passport?: boolean;
+      voter_id?: boolean;
+      original_dl?: boolean;
+      original_aadhar?: boolean;
+      other_document?: boolean;
+    };
   }>;
 }
 
@@ -150,8 +157,7 @@ export default function CustomerDetailsPage() {
             aadhar_number,
             dl_number,
             dl_expiry_date,
-            dob,
-            submitted_documents
+            dob
           `)
           .eq('id', params.id)
           .single();
@@ -165,7 +171,34 @@ export default function CustomerDetailsPage() {
           throw new Error('Customer not found');
         }
 
-        // Get customer's bookings
+        // Get the public URLs for each document
+        const getPublicUrl = (fileName: string) => {
+          if (!fileName) return '';
+          const { data } = supabase.storage
+            .from('customer-documents')
+            .getPublicUrl(`${customerData.id}/${fileName}`);
+          return data?.publicUrl || '';
+        };
+
+        // Process documents to get public URLs
+        const documents = {
+          customer_photo: customerData.documents?.customer_photo ? 
+            getPublicUrl(customerData.documents.customer_photo) : '',
+          aadhar_front: customerData.documents?.aadhar_front ? 
+            getPublicUrl(customerData.documents.aadhar_front) : '',
+          aadhar_back: customerData.documents?.aadhar_back ? 
+            getPublicUrl(customerData.documents.aadhar_back) : '',
+          dl_front: customerData.documents?.dl_front ? 
+            getPublicUrl(customerData.documents.dl_front) : '',
+          dl_back: customerData.documents?.dl_back ? 
+            getPublicUrl(customerData.documents.dl_back) : ''
+        };
+
+        console.log('Raw documents:', customerData.documents);
+        console.log('Customer ID:', customerData.id);
+        console.log('Processed documents with URLs:', documents);
+
+        // Get customer's bookings and their submitted documents
         const { data: bookingsData, error: bookingsError } = await supabase
           .from('bookings')
           .select(`
@@ -175,7 +208,8 @@ export default function CustomerDetailsPage() {
             end_date,
             status,
             booking_amount,
-            vehicle_details
+            vehicle_details,
+            submitted_documents
           `)
           .eq('customer_id', customerData.id)
           .order('created_at', { ascending: false });
@@ -183,29 +217,49 @@ export default function CustomerDetailsPage() {
         if (bookingsError) {
           console.error('Bookings fetch error:', bookingsError);
         }
-        
-        // Fetch customer's latest signature from booking_signatures
-        const { data: signaturesData, error: signatureError } = await supabase
-          .from('booking_signatures')
-          .select('signature_data, created_at')
-          .eq('customer_id', customerData.id)
-          .order('created_at', { ascending: false })
-          .limit(1);
-          
-        if (signatureError) {
-          console.error('Error fetching signature:', signatureError);
-        } else if (signaturesData && signaturesData.length > 0) {
-          setSignature(signaturesData[0].signature_data);
+
+        // Get the latest submitted documents from the most recent booking
+        const defaultSubmittedDocs = {
+          passport: false,
+          voter_id: false,
+          original_dl: false,
+          original_aadhar: false,
+          other_document: false
+        };
+
+        const latestSubmittedDocuments = bookingsData && bookingsData.length > 0 && bookingsData[0].submitted_documents
+          ? bookingsData[0].submitted_documents
+          : defaultSubmittedDocs;
+
+        // Fetch customer's latest signature from the most recent booking's signatures
+        let signatureData = null;
+        if (bookingsData && bookingsData.length > 0) {
+          const latestBooking = bookingsData[0];
+          const { data: signaturesData, error: signatureError } = await supabase
+            .from('booking_signatures')
+            .select('signature_data, created_at')
+            .eq('booking_id', latestBooking.id)
+            .order('created_at', { ascending: false })
+            .limit(1);
+            
+          if (signatureError) {
+            console.error('Error fetching signature:', signatureError);
+          } else if (signaturesData && signaturesData.length > 0) {
+            signatureData = signaturesData[0].signature_data;
+          }
         }
 
         const customerWithDetails = {
           ...customerData,
+          documents: documents,
           bookings: bookingsData || [],
-          signature: signature
+          submitted_documents: latestSubmittedDocuments,
+          signature: signatureData
         } as CustomerDetails;
 
         console.log('Customer details:', customerWithDetails);
         setCustomer(customerWithDetails);
+        setSignature(signatureData);
         setError(null);
       } catch (error) {
         console.error('Error fetching customer:', error);
@@ -410,7 +464,7 @@ export default function CustomerDetailsPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               {customer.documents && typeof customer.documents === 'object' && (
                 <>
-                  {customer.documents.customer_photo && (
+                  {customer.documents.customer_photo && customer.documents.customer_photo !== '' && (
                     <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
                       <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
@@ -423,7 +477,7 @@ export default function CustomerDetailsPage() {
                       </div>
                     </div>
                   )}
-                  {customer.documents.aadhar_front && (
+                  {customer.documents.aadhar_front && customer.documents.aadhar_front !== '' && (
                     <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
                       <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
@@ -436,7 +490,7 @@ export default function CustomerDetailsPage() {
                       </div>
                     </div>
                   )}
-                  {customer.documents.aadhar_back && (
+                  {customer.documents.aadhar_back && customer.documents.aadhar_back !== '' && (
                     <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
                       <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
@@ -449,7 +503,7 @@ export default function CustomerDetailsPage() {
                       </div>
                     </div>
                   )}
-                  {customer.documents.dl_front && (
+                  {customer.documents.dl_front && customer.documents.dl_front !== '' && (
                     <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
                       <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
@@ -462,7 +516,7 @@ export default function CustomerDetailsPage() {
                       </div>
                     </div>
                   )}
-                  {customer.documents.dl_back && (
+                  {customer.documents.dl_back && customer.documents.dl_back !== '' && (
                     <div className="cursor-pointer hover:opacity-75 transition-opacity">
                       <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>
                       <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
@@ -477,7 +531,8 @@ export default function CustomerDetailsPage() {
                   )}
                 </>
               )}
-              {(!customer.documents || Object.values(customer.documents).every(doc => !doc)) && (
+              {(!customer.documents || 
+                !Object.values(customer.documents).some(doc => doc && doc !== '')) && (
                 <div className="col-span-5 text-center py-8 text-gray-500">
                   No documents uploaded
                 </div>
