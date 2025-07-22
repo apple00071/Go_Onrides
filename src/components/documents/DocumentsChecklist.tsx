@@ -20,11 +20,11 @@ export default function DocumentsChecklist({ documents, onDocumentsChange, readO
   };
 
   const standardDocuments = [
-    { key: 'original_aadhar', label: 'Original Aadhar Card' },
-    { key: 'original_dl', label: 'Original Driving License' },
-    { key: 'passport', label: 'Passport' },
-    { key: 'voter_id', label: 'Voter ID' },
-  ] as const;
+    { key: 'original_aadhar' as const, label: 'Original Aadhar Card' },
+    { key: 'original_dl' as const, label: 'Original Driving License' },
+    { key: 'passport' as const, label: 'Passport' },
+    { key: 'voter_id' as const, label: 'Voter ID' },
+  ];
 
   return (
     <div className="space-y-4">
@@ -37,7 +37,7 @@ export default function DocumentsChecklist({ documents, onDocumentsChange, readO
               <input
                 type="checkbox"
                 id={key}
-                checked={documents[key] as boolean}
+                checked={Boolean(documents[key])}
                 onChange={(e) => handleChange(key, e.target.checked)}
                 disabled={readOnly}
                 className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
@@ -57,7 +57,7 @@ export default function DocumentsChecklist({ documents, onDocumentsChange, readO
           <input
             type="text"
             id="other_document"
-            value={documents.other_document}
+            value={typeof documents.other_document === 'string' ? documents.other_document : ''}
             onChange={(e) => handleChange('other_document', e.target.value)}
             placeholder="Enter document name"
             disabled={readOnly}
