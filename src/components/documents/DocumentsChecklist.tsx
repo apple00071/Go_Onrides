@@ -10,7 +10,7 @@ interface DocumentsChecklistProps {
 }
 
 export default function DocumentsChecklist({ documents, onDocumentsChange, readOnly = false }: DocumentsChecklistProps) {
-  const handleChange = (key: keyof SubmittedDocuments, value: boolean | string) => {
+  const handleChange = (key: keyof SubmittedDocuments, value: boolean) => {
     if (readOnly || !onDocumentsChange) return;
 
     onDocumentsChange({
@@ -24,13 +24,14 @@ export default function DocumentsChecklist({ documents, onDocumentsChange, readO
     { key: 'original_dl' as const, label: 'Original Driving License' },
     { key: 'passport' as const, label: 'Passport' },
     { key: 'voter_id' as const, label: 'Voter ID' },
+    { key: 'other_document' as const, label: 'Other Document' }
   ];
 
   return (
     <div className="space-y-4">
       <h4 className="font-medium text-gray-900">Physical Documents Submitted</h4>
       <div className="space-y-4">
-        {/* Standard Documents */}
+        {/* All Documents as Checkboxes */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {standardDocuments.map(({ key, label }) => (
             <div key={key} className="flex items-center space-x-3">
@@ -47,22 +48,6 @@ export default function DocumentsChecklist({ documents, onDocumentsChange, readO
               </label>
             </div>
           ))}
-        </div>
-
-        {/* Other Document */}
-        <div className="space-y-2">
-          <label htmlFor="other_document" className="block text-sm font-medium text-gray-700">
-            Other Document (if any)
-          </label>
-          <input
-            type="text"
-            id="other_document"
-            value={typeof documents.other_document === 'string' ? documents.other_document : ''}
-            onChange={(e) => handleChange('other_document', e.target.value)}
-            placeholder="Enter document name"
-            disabled={readOnly}
-            className="block w-full text-sm border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"
-          />
         </div>
       </div>
     </div>

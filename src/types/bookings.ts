@@ -21,8 +21,8 @@ export interface SubmittedDocuments {
   original_dl: boolean;
   passport: boolean;
   voter_id: boolean;
-  other_document: string | boolean;
-  [key: string]: string | boolean;
+  other_document: boolean;
+  [key: string]: boolean;
 }
 
 export interface BookingDetails {
@@ -84,13 +84,7 @@ export interface BookingDetails {
     email: string;
     documents: Record<string, string>;
   };
-  submitted_documents?: {
-    passport: boolean;
-    voter_id: boolean;
-    original_dl: boolean;
-    original_aadhar: boolean;
-    other_document: boolean;
-  };
+  submitted_documents?: SubmittedDocuments;
   signatures?: {
     bookingSignature: string | null;
     completionSignature: string | null;
