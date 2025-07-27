@@ -34,7 +34,7 @@ interface InvoiceData {
   signature?: string; // Optional signature field
 }
 
-export const generateInvoice = async (data: InvoiceData) => {
+export const generateInvoice = async (data: InvoiceData): Promise<Blob> => {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   
@@ -154,5 +154,7 @@ export const generateInvoice = async (data: InvoiceData) => {
     doc.text('Customer Signature', 15, signatureY + 25);
   }
 
-  return doc.output('blob');
+  // Convert to blob
+  const pdfBlob = doc.output('blob');
+  return pdfBlob;
 }; 

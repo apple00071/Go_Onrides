@@ -10,6 +10,7 @@ import { generateInvoice } from '@/lib/generateInvoice';
 import { toast } from 'react-hot-toast';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { FormEvent } from 'react';
 
 interface InvoiceFormData {
   customerName: string;
@@ -76,7 +77,7 @@ export default function NewInvoicePage() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
@@ -115,8 +116,18 @@ export default function NewInvoicePage() {
       }
 
       // Generate and download PDF
-      const doc = await generateInvoice({
-        ...formData,
+      const pdfBlob = await generateInvoice({
+        customerName: formData.customerName,
+        gstNumber: formData.gstNumber || '',
+        invoiceNumber: formData.invoiceNumber,
+        invoiceDate: formData.invoiceDate,
+        paymentMethod: formData.paymentMethod,
+        vehicleDetails: {
+          model: formData.vehicleDetails.model,
+          registration: formData.vehicleDetails.registration
+        },
+        pickupDate: formData.pickupDate,
+        dropoffDate: formData.dropoffDate,
         items: formData.items.map(item => ({
           ...item,
           pricePerUnit: Number(item.pricePerUnit),
@@ -125,9 +136,18 @@ export default function NewInvoicePage() {
         }))
       });
       
-      // Save with a meaningful name
+      // Create a download link
       const fileName = `${formData.invoiceNumber}_${formData.customerName.replace(/\s+/g, '_')}.pdf`;
-      doc.save(fileName);
+      const url = window.URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      
+      // Trigger download
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode?.removeChild(link);
+      window.URL.revokeObjectURL(url);
 
       toast.success('Invoice generated successfully');
       router.push('/dashboard/invoices');
