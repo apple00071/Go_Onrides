@@ -5,9 +5,34 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { format } from 'date-fns';
+import { format, parse } from 'date-fns';
 import { formatDate } from '@/lib/utils';
 import BatteryMaintenanceForm from '@/components/maintenance/BatteryMaintenanceForm';
+
+// Date format helpers
+const formatDateForDisplay = (date: Date) => format(date, 'dd-MM-yyyy');
+const formatDateForInput = (dateStr: string) => {
+  if (!dateStr) return '';
+  try {
+    const parsedDate = parse(dateStr, 'dd-MM-yyyy', new Date());
+    return format(parsedDate, 'yyyy-MM-dd');
+  } catch {
+    return '';
+  }
+};
+const formatDateForState = (dateStr: string) => {
+  if (!dateStr) return '';
+  try {
+    const parsedDate = parse(dateStr, 'yyyy-MM-dd', new Date());
+    return format(parsedDate, 'dd-MM-yyyy');
+  } catch {
+    return '';
+  }
+};
+
+// Get today's date in DD-MM-YYYY format
+const today = formatDateForDisplay(new Date());
+const todayForInput = format(new Date(), 'yyyy-MM-dd');
 
 const maintenanceTypes = [
   { 
@@ -61,7 +86,7 @@ export default function AddMaintenancePage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [formData, setFormData] = useState({
     vehicle_registration: vehicleRegistration || '',
-    maintenance_date: format(new Date(), 'dd-MM-yyyy'),
+    maintenance_date: today, // Initialize with today's date in DD-MM-YYYY
     maintenance_types: [] as MaintenanceType[],
     description: '',
     cost: 0,
@@ -150,7 +175,8 @@ export default function AddMaintenancePage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('User not authenticated');
 
-      const dbDate = format(new Date(formData.maintenance_date.split('-').reverse().join('-')), 'yyyy-MM-dd');
+      // Parse the DD-MM-YYYY date to YYYY-MM-DD for database
+      const dbDate = format(parse(formData.maintenance_date, 'dd-MM-yyyy', new Date()), 'yyyy-MM-dd');
 
       // Create separate maintenance records for each type
       for (const maintenanceType of formData.maintenance_types) {
@@ -161,7 +187,7 @@ export default function AddMaintenancePage() {
           description: formData.description,
           cost: formData.cost / formData.maintenance_types.length, // Split cost evenly
           next_due_date: maintenanceType.nextDueDate ? 
-            format(new Date(maintenanceType.nextDueDate.split('-').reverse().join('-')), 'yyyy-MM-dd') : 
+            format(parse(maintenanceType.nextDueDate, 'dd-MM-yyyy', new Date()), 'yyyy-MM-dd') : 
             null,
           odometer_reading: formData.odometer_reading,
           performed_by: formData.performed_by,
@@ -206,16 +232,6 @@ export default function AddMaintenancePage() {
     }
   };
 
-  if (!vehicle) {
-    return (
-      <div className="p-6">
-        <div className="text-center">
-          <p className="text-gray-500">Loading vehicle details...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center justify-between mb-6">
@@ -229,7 +245,7 @@ export default function AddMaintenancePage() {
           <div>
             <h1 className="text-2xl font-semibold text-gray-900">Add Maintenance Record</h1>
             <p className="mt-1 text-sm text-gray-600">
-              Create a new maintenance record for {vehicle.model} ({vehicle.registration})
+              Create a new maintenance record for {vehicle?.model} ({vehicle?.registration})
             </p>
           </div>
         </div>
@@ -241,9 +257,9 @@ export default function AddMaintenancePage() {
             Vehicle
           </label>
           <div className="mt-1 p-3 bg-gray-50 rounded-md">
-            <p className="text-sm text-gray-900">{vehicle.model}</p>
-            <p className="text-sm text-gray-500">{vehicle.registration}</p>
-            <p className="text-sm text-gray-500 mt-1">Status: <span className="capitalize">{vehicle.status}</span></p>
+            <p className="text-sm text-gray-900">{vehicle?.model}</p>
+            <p className="text-sm text-gray-500">{vehicle?.registration}</p>
+            <p className="text-sm text-gray-500 mt-1">Status: <span className="capitalize">{vehicle?.status}</span></p>
           </div>
         </div>
 
@@ -256,14 +272,16 @@ export default function AddMaintenancePage() {
               type="date"
               id="maintenance_date"
               required
-              value={formData.maintenance_date} // Keep the YYYY-MM-DD format for the input
+              value={formatDateForInput(formData.maintenance_date)}
               onChange={(e) => {
-                const date = new Date(e.target.value);
-                setFormData(prev => ({ 
-                  ...prev, 
-                  maintenance_date: format(date, 'dd-MM-yyyy')
-                }));
+                if (isAdmin) {
+                  setFormData(prev => ({
+                    ...prev,
+                    maintenance_date: formatDateForState(e.target.value)
+                  }));
+                }
               }}
+              max={todayForInput}
               disabled={!isAdmin}
               className={`mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 
                 ${!isAdmin ? 'bg-gray-50 cursor-not-allowed' : 'focus:outline-none focus:ring-blue-500 focus:border-blue-500'}
@@ -271,7 +289,7 @@ export default function AddMaintenancePage() {
             />
             {!isAdmin && (
               <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <span className="text-xs text-gray-500">Today's date</span>
+                <span className="text-xs text-gray-500">{formData.maintenance_date}</span>
               </div>
             )}
           </div>
@@ -303,19 +321,26 @@ export default function AddMaintenancePage() {
                       {type.label}
                     </label>
                   </div>
-                  {isSelected && (
+                  {isSelected && type.requiresNextDue && (
                     <div className="ml-6">
-                      <label className="block text-xs text-gray-500">Next Due Date</label>
-                      <input
-                        type="date"
-                        value={formData.maintenance_types.find(t => t.value === type.value)?.nextDueDate?.split('-').reverse().join('-') || ''} // Convert DD-MM-YYYY to YYYY-MM-DD for input
-                        onChange={(e) => {
-                          // Convert YYYY-MM-DD to DD-MM-YYYY for state
-                          const date = new Date(e.target.value);
-                          handleNextDueDateChange(type.value, format(date, 'dd-MM-yyyy'));
-                        }}
-                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      />
+                      <label className="block text-xs text-gray-500">Next Due Date *</label>
+                      <div className="relative">
+                        <input
+                          type="date"
+                          required
+                          value={formatDateForInput(formData.maintenance_types.find(t => t.value === type.value)?.nextDueDate || '')}
+                          onChange={(e) => {
+                            handleNextDueDateChange(type.value, formatDateForState(e.target.value));
+                          }}
+                          min={todayForInput}
+                          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-1 px-2 text-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                          <span className="text-xs text-gray-500">
+                            {formData.maintenance_types.find(t => t.value === type.value)?.nextDueDate || ''}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   )}
                 </div>
