@@ -1,8 +1,6 @@
 import { NextResponse } from 'next/server';
 
 const MSG91_API_KEY = process.env.MSG91_API_KEY;
-const MSG91_TEMPLATE_ID = "otp"; // Your template ID
-const MSG91_SENDER_ID = "GOONRD"; // Your sender ID
 
 export async function POST(request: Request) {
   try {
@@ -44,10 +42,9 @@ export async function POST(request: Request) {
 
     // Prepare MSG91 request
     const msg91Request = {
-      mobile: `91${formattedPhone}`, // Add country code
-      template_id: MSG91_TEMPLATE_ID,
-      authkey: MSG91_API_KEY,
-      otp: otp
+      template_id: "otp",
+      mobile: `91${formattedPhone}`,
+      otp
     };
     console.log('MSG91 Request:', msg91Request);
 
@@ -56,7 +53,8 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'authkey': MSG91_API_KEY
       },
       body: JSON.stringify(msg91Request)
     });
