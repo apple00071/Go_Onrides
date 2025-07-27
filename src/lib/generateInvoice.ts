@@ -31,6 +31,7 @@ interface InvoiceData {
   pickupDate: string;
   dropoffDate: string;
   items: InvoiceItem[];
+  signature?: string; // Optional signature field
 }
 
 export const generateInvoice = async (data: InvoiceData) => {
@@ -146,5 +147,12 @@ export const generateInvoice = async (data: InvoiceData) => {
   doc.setFontSize(10);
   doc.text('Thanks visit again', 15, doc.previousAutoTable.finalY + 20);
 
-  return doc;
+  // Add signature if provided
+  if (data.signature) {
+    const signatureY = doc.previousAutoTable.finalY + 40;
+    doc.addImage(data.signature, 'PNG', 15, signatureY, 50, 20);
+    doc.text('Customer Signature', 15, signatureY + 25);
+  }
+
+  return doc.output('blob');
 }; 

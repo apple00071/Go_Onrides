@@ -437,9 +437,36 @@ export default function BookingDetailsPage() {
         return;
       }
 
+      // Get signature if available
+      const signature = booking.signatures?.completionSignature || booking.signatures?.bookingSignature;
+
       const pdfBlob = await generateInvoice({
-        ...booking,
-        signature: (booking.signatures?.completionSignature || booking.signatures?.bookingSignature || undefined)
+        customerName: booking.customer_name,
+        gstNumber: '', // Add if you have GST number
+        invoiceNumber: booking.booking_id,
+        invoiceDate: new Date().toISOString().split('T')[0],
+        paymentMethod: booking.payment_mode,
+        vehicleDetails: {
+          model: booking.vehicle_details.model,
+          registration: booking.vehicle_details.registration
+        },
+        pickupDate: booking.start_date,
+        dropoffDate: booking.end_date,
+        items: [
+          {
+            description: 'Vehicle Rental',
+            quantity: 1,
+            pricePerUnit: booking.booking_amount,
+            tax: 0 // Add tax rate if applicable
+          },
+          {
+            description: 'Security Deposit',
+            quantity: 1,
+            pricePerUnit: booking.security_deposit_amount,
+            tax: 0
+          }
+        ],
+        ...(signature ? { signature } : {}) // Only include signature if it exists
       });
       
       // Create a download link
