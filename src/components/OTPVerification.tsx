@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { CheckCircleIcon } from '@heroicons/react/24/solid';
 
 interface OTPVerificationProps {
   phoneNumber: string;
@@ -20,6 +21,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
   const [otpSent, setOtpSent] = useState(false);
   const [otpValue, setOtpValue] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isVerified, setIsVerified] = useState(false);
 
   // Cleanup reCAPTCHA on unmount
   useEffect(() => {
@@ -113,6 +115,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
 
       const result = await window.confirmationResult.confirm(otpValue);
       await auth.signOut();
+      setIsVerified(true);
       onSuccess({ verified: true, user: result.user });
       setErrorMessage(null);
     } catch (error) {
@@ -131,6 +134,23 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
       <p className="text-sm text-yellow-600">
         Please enter a valid 10-digit phone number to proceed with verification.
       </p>
+    );
+  }
+
+  if (isVerified) {
+    return (
+      <div className="rounded-md bg-green-50 p-4">
+        <div className="flex">
+          <div className="flex-shrink-0">
+            <CheckCircleIcon className="h-5 w-5 text-green-400" aria-hidden="true" />
+          </div>
+          <div className="ml-3">
+            <p className="text-sm font-medium text-green-800">
+              Phone number verified successfully
+            </p>
+          </div>
+        </div>
+      </div>
     );
   }
 
