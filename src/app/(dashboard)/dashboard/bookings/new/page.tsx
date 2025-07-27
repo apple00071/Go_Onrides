@@ -17,6 +17,8 @@ import { type FormEvent } from 'react';
 import { RefreshCw, Upload, Camera, X } from 'lucide-react';
 import { notifyBookingEvent } from '@/lib/notification';
 import { generateInvoice } from '@/lib/generateInvoice';
+import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
+import OTPVerification from '@/components/OTPVerification';
 
 interface BookingFormData {
   customer_name: string;
@@ -119,6 +121,15 @@ export default function NewBookingPage() {
   const [bookingCreated, setBookingCreated] = useState(false);
   const [createdBookingData, setCreatedBookingData] = useState<{ id: string; bookingId: string; invoicePdfBlob?: Blob } | null>(null);
   const [userData, setUserData] = useState<{ id: string } | null>(null);
+  
+  // Add OTP related state
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpVerified, setOtpVerified] = useState(false);
+  const [otpRequestId, setOtpRequestId] = useState<string>('');
+  const [otpCode, setOtpCode] = useState('');
+  const [verifyingOtp, setVerifyingOtp] = useState(false);
+  const [otpError, setOtpError] = useState<string | null>(null);
+
   const supabase = getSupabaseClient();
 
   const initialFormData: BookingFormData = {
@@ -566,6 +577,100 @@ export default function NewBookingPage() {
     }
   };
 
+  const handleDocumentsUploaded = (documents: UploadedDocuments) => {
+    setFormData(prev => ({
+      ...prev,
+      uploaded_documents: {
+        ...prev.uploaded_documents,
+        ...documents
+      }
+    }));
+  };
+
+  const handleSubmittedDocumentsChange = (documents: SubmittedDocuments) => {
+    setFormData(prev => ({
+      ...prev,
+      submitted_documents: documents
+    }));
+  };
+
+  // Add OTP handling functions
+  const handleSendOTP = async () => {
+    try {
+      setLoading(true);
+      setOtpError(null);
+
+      if (!formData.customer_contact) {
+        setOtpError('Please enter a valid phone number');
+        return;
+      }
+
+      const response = await fetch('/api/otp/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          phone_number: formData.customer_contact 
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to send OTP');
+      }
+
+      setOtpRequestId(data.request_id);
+      setOtpSent(true);
+      setOtpError(null);
+    } catch (error) {
+      console.error('Error sending OTP:', error);
+      setOtpError(error instanceof Error ? error.message : 'Failed to send OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOTP = async () => {
+    try {
+      setVerifyingOtp(true);
+      setOtpError(null);
+
+      if (!otpCode) {
+        setOtpError('Please enter the OTP');
+        return;
+      }
+
+      const response = await fetch('/api/otp/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          phone_number: formData.customer_contact,
+          otp: otpCode,
+          request_id: otpRequestId
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to verify OTP');
+      }
+
+      setOtpVerified(true);
+      setOtpError(null);
+    } catch (error) {
+      console.error('Error verifying OTP:', error);
+      setOtpError(error instanceof Error ? error.message : 'Failed to verify OTP');
+    } finally {
+      setVerifyingOtp(false);
+    }
+  };
+
+  // Modify handleSubmit to require OTP verification
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSubmitting(true);
@@ -581,6 +686,11 @@ export default function NewBookingPage() {
       // Validate required fields
       if (!formData.customer_name || !formData.customer_contact || !formData.aadhar_number) {
         throw new Error('Please fill in all required fields');
+      }
+
+      // Check if OTP is verified
+      if (!otpVerified) {
+        throw new Error('Please verify your phone number before submitting');
       }
 
       // Prepare customer data
@@ -758,23 +868,6 @@ export default function NewBookingPage() {
     const period = hour >= 12 ? 'PM' : 'AM';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minute} ${period}`;
-  };
-
-  const handleDocumentsUploaded = (documents: UploadedDocuments) => {
-    setFormData(prev => ({
-      ...prev,
-      uploaded_documents: {
-        ...prev.uploaded_documents,
-        ...documents
-      }
-    }));
-  };
-
-  const handleSubmittedDocumentsChange = (documents: SubmittedDocuments) => {
-    setFormData(prev => ({
-      ...prev,
-      submitted_documents: documents
-    }));
   };
 
   useEffect(() => {
@@ -1403,6 +1496,65 @@ export default function NewBookingPage() {
                 />
               </div>
 
+              {/* Phone Verification */}
+              <div className="space-y-6">
+                <h3 className="text-lg font-medium text-gray-900">Phone Verification</h3>
+                {formData.customer_contact && formData.customer_contact.length === 10 && (
+                  <div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Please verify the phone number: {formData.customer_contact}
+                    </p>
+                    <OTPVerification
+                      phoneNumber={formData.customer_contact}
+                      onSuccess={(data) => {
+                        console.log('Verification successful:', data);
+                        setOtpVerified(true);
+                        setOtpError(null);
+                      }}
+                      onFailure={(error) => {
+                        console.error('Verification failed:', error);
+                        setOtpError(error.message || 'Verification failed');
+                        setOtpVerified(false);
+                      }}
+                    />
+                  </div>
+                )}
+                
+                {formData.customer_contact && formData.customer_contact.length !== 10 && (
+                  <p className="text-sm text-yellow-600">
+                    Please enter a valid 10-digit phone number to proceed with verification.
+                  </p>
+                )}
+                
+                {otpError && (
+                  <div className="rounded-md bg-red-50 p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <XCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-red-800">{otpError}</p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {otpVerified && (
+                  <div className="rounded-md bg-green-50 p-4">
+                    <div className="flex">
+                      <div className="flex-shrink-0">
+                        <CheckCircleIcon className="h-5 w-5 text-green-400" aria-hidden="true" />
+                      </div>
+                      <div className="ml-3">
+                        <p className="text-sm font-medium text-green-800">
+                          Phone number verified successfully
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Terms and Conditions */}
               <div className="space-y-6">
                 <h3 className="text-lg font-medium text-gray-900">Terms and Conditions</h3>
@@ -1449,15 +1601,6 @@ export default function NewBookingPage() {
                     </p>
                   </div>
                 </div>
-              </div>
-
-              {/* Signature Section */}
-              <div className="space-y-6 border-t pt-6">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Signature</h3>
-                <SignaturePadWithRotation
-                  initialSignature={formData.signature}
-                  onSignatureChange={(signature) => setFormData(prev => ({ ...prev, signature }))}
-                />
               </div>
             </div>
 
