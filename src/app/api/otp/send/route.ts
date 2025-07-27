@@ -44,20 +44,19 @@ export async function POST(request: Request) {
 
     // Prepare MSG91 request
     const msg91Request = {
+      mobile: `91${formattedPhone}`, // Add country code
       template_id: MSG91_TEMPLATE_ID,
-      sender: MSG91_SENDER_ID,
-      mobiles: `91${formattedPhone}`, // Add country code
-      VAR1: otp // Template variable for OTP
+      authkey: MSG91_API_KEY,
+      otp: otp
     };
     console.log('MSG91 Request:', msg91Request);
 
     // Call MSG91 API
-    const response = await fetch('https://api.msg91.com/api/v5/otp', {
+    const response = await fetch('https://control.msg91.com/api/v5/otp/send', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'authkey': MSG91_API_KEY
+        'Accept': 'application/json'
       },
       body: JSON.stringify(msg91Request)
     });

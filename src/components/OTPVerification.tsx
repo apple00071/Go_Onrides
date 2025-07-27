@@ -131,14 +131,19 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
       )}
 
       {!otpSent ? (
-        <button
-          type="button"
-          onClick={handleSendOTP}
-          disabled={loading}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400"
-        >
-          {loading ? 'Sending...' : 'Send OTP via WhatsApp'}
-        </button>
+        <div>
+          <p className="text-sm text-gray-600 mb-4">
+            We'll send a verification code to: +91 {formattedPhone}
+          </p>
+          <button
+            type="button"
+            onClick={handleSendOTP}
+            disabled={loading}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400"
+          >
+            {loading ? 'Sending...' : 'Send OTP via WhatsApp'}
+          </button>
+        </div>
       ) : (
         <div className="space-y-4">
           <div className="mt-1">
