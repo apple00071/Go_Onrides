@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { RecaptchaVerifier, PhoneAuthProvider, signInWithPhoneNumber } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 interface OTPVerificationProps {
   phoneNumber: string;
@@ -10,8 +12,20 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
   const [loading, setLoading] = useState(false);
   const [otpSent, setOtpSent] = useState(false);
   const [otpValue, setOtpValue] = useState('');
-  const [requestId, setRequestId] = useState('');
+  const [verificationId, setVerificationId] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Initialize reCAPTCHA when component mounts
+    if (!window.recaptchaVerifier) {
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+        callback: () => {
+          // reCAPTCHA solved, allow signInWithPhoneNumber.
+        }
+      });
+    }
+  }, []);
 
   // Format phone number to ensure it's valid for India
   const formatPhoneNumber = (phone: string) => {
@@ -23,47 +37,28 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
     if (withoutCode.length !== 10) {
       return null;
     }
-    return withoutCode;
+    return `+91${withoutCode}`;
   };
 
   const handleSendOTP = async () => {
     try {
       setLoading(true);
-      setOtpSent(false); // Reset in case of resend
-      setOtpValue(''); // Clear any previous OTP
-      setRequestId(''); // Clear any previous request ID
-      setErrorMessage(null); // Clear any previous errors
+      setOtpSent(false);
+      setOtpValue('');
+      setVerificationId('');
+      setErrorMessage(null);
 
       const formattedPhone = formatPhoneNumber(phoneNumber);
       if (!formattedPhone) {
         throw new Error('Please enter a valid 10-digit phone number');
       }
 
-      console.log('Sending OTP request for phone:', formattedPhone);
+      console.log('Sending OTP to:', formattedPhone);
 
-      // Call our backend API to send OTP
-      const response = await fetch('/api/otp/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone_number: formattedPhone
-        })
-      });
-
-      const data = await response.json();
-      console.log('API Response:', data);
+      const appVerifier = window.recaptchaVerifier;
+      const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send OTP');
-      }
-
-      if (!data.success || !data.request_id) {
-        throw new Error('Invalid response from OTP service');
-      }
-
-      setRequestId(data.request_id);
+      setVerificationId(confirmationResult.verificationId);
       setOtpSent(true);
       setErrorMessage(null);
     } catch (error) {
@@ -72,6 +67,12 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
       setErrorMessage(message);
       onFailure(error);
       setOtpSent(false);
+
+      // Reset reCAPTCHA on error
+      if (window.recaptchaVerifier) {
+        window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
+      }
     } finally {
       setLoading(false);
     }
@@ -86,17 +87,18 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
         throw new Error('Please enter a valid 6-digit OTP');
       }
 
-      if (!requestId) {
+      if (!verificationId) {
         throw new Error('Invalid session. Please request a new OTP');
       }
 
-      // Compare OTP with the one we generated
-      if (otpValue === requestId) {
-        onSuccess({ verified: true });
-        setErrorMessage(null);
-      } else {
-        throw new Error('Invalid OTP. Please try again');
-      }
+      const credential = PhoneAuthProvider.credential(verificationId, otpValue);
+      await auth.signInWithCredential(credential);
+
+      // Immediately sign out since we don't need the auth state
+      await auth.signOut();
+
+      onSuccess({ verified: true });
+      setErrorMessage(null);
     } catch (error) {
       console.error('Error verifying OTP:', error);
       const message = error instanceof Error ? error.message : 'Failed to verify OTP';
@@ -108,7 +110,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
   };
 
   // Only render if we have a valid phone number
-  const formattedPhone = formatPhoneNumber(phoneNumber);
+  const formattedPhone = formatPhoneNumber(phoneNumber)?.substring(3); // Remove +91 for display
   if (!formattedPhone) {
     return (
       <p className="text-sm text-yellow-600">
@@ -128,6 +130,8 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
           </div>
         </div>
       )}
+
+      <div id="recaptcha-container"></div>
 
       {!otpSent ? (
         <div>
