@@ -141,14 +141,14 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
             disabled={loading}
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-400"
           >
-            {loading ? 'Sending...' : 'Send OTP via WhatsApp'}
+            {loading ? 'Sending...' : 'Send OTP via SMS'}
           </button>
         </div>
       ) : (
         <div className="space-y-4">
           <div className="mt-1">
             <label htmlFor="otp" className="block text-sm font-medium text-gray-700">
-              Enter the 6-digit OTP sent to your WhatsApp
+              Enter the 6-digit OTP sent to your mobile number
             </label>
             <input
               type="text"

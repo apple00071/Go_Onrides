@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 
-const MSG91_API_KEY = process.env.MSG91_API_KEY;
+const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY;
 
 export async function POST(request: Request) {
   try {
-    console.log('MSG91_API_KEY present:', !!MSG91_API_KEY);
+    console.log('FAST2SMS_API_KEY present:', !!FAST2SMS_API_KEY);
 
-    if (!MSG91_API_KEY) {
-      console.error('MSG91_API_KEY is not configured');
+    if (!FAST2SMS_API_KEY) {
+      console.error('FAST2SMS_API_KEY is not configured');
       return NextResponse.json(
         { error: 'OTP service is not configured' },
         { status: 500 }
@@ -40,46 +40,37 @@ export async function POST(request: Request) {
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     console.log('Generated OTP:', otp);
 
-    // Prepare MSG91 request
-    const msg91Request = {
-      template_id: "otp",
-      mobile: `91${formattedPhone}`,
-      otp
-    };
-    console.log('MSG91 Request:', msg91Request);
+    // Prepare Fast2SMS request
+    const message = `Your OTP for Go-On Rides verification is ${otp}. Valid for 10 minutes.`;
 
-    // Call MSG91 API
-    const response = await fetch('https://control.msg91.com/api/v5/otp/send', {
+    // Call Fast2SMS API
+    const response = await fetch('https://www.fast2sms.com/dev/bulkV2', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json',
-        'authkey': MSG91_API_KEY
+        'authorization': FAST2SMS_API_KEY
       },
-      body: JSON.stringify(msg91Request)
+      body: JSON.stringify({
+        route: 'otp',
+        variables_values: otp,
+        numbers: formattedPhone,
+        flash: 0
+      })
     });
 
     const data = await response.json();
-    console.log('MSG91 API Response:', {
+    console.log('Fast2SMS API Response:', {
       status: response.status,
       statusText: response.statusText,
       data: data
     });
 
-    // Check for specific MSG91 error responses
-    if (data.type === 'error' || data.status === 'error') {
-      console.error('MSG91 API Error:', data);
+    // Check for Fast2SMS error responses
+    if (!data.return) {
+      console.error('Fast2SMS API Error:', data);
       return NextResponse.json(
         { error: data.message || 'Failed to send OTP' },
         { status: 400 }
-      );
-    }
-
-    if (!response.ok) {
-      console.error('HTTP Error:', response.status, data);
-      return NextResponse.json(
-        { error: data.message || 'Failed to send OTP' },
-        { status: response.status }
       );
     }
 
@@ -87,7 +78,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       message: 'OTP sent successfully',
-      request_id: data.request_id || otp // Use MSG91's request_id if available
+      request_id: otp // Store OTP as request_id for verification
     });
 
   } catch (error) {
