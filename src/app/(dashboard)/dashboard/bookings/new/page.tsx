@@ -1501,9 +1501,6 @@ export default function NewBookingPage() {
                 <h3 className="text-lg font-medium text-gray-900">Phone Verification</h3>
                 {formData.customer_contact && formData.customer_contact.length === 10 && (
                   <div>
-                    <p className="text-sm text-gray-600 mb-4">
-                      Please verify the phone number: {formData.customer_contact}
-                    </p>
                     <OTPVerification
                       phoneNumber={formData.customer_contact}
                       onSuccess={(data) => {
@@ -1513,44 +1510,9 @@ export default function NewBookingPage() {
                       }}
                       onFailure={(error) => {
                         console.error('Verification failed:', error);
-                        setOtpError(error.message || 'Verification failed');
                         setOtpVerified(false);
                       }}
                     />
-                  </div>
-                )}
-                
-                {formData.customer_contact && formData.customer_contact.length !== 10 && (
-                  <p className="text-sm text-yellow-600">
-                    Please enter a valid 10-digit phone number to proceed with verification.
-                  </p>
-                )}
-                
-                {otpError && (
-                  <div className="rounded-md bg-red-50 p-4">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <XCircleIcon className="h-5 w-5 text-red-400" aria-hidden="true" />
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm font-medium text-red-800">{otpError}</p>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {otpVerified && (
-                  <div className="rounded-md bg-green-50 p-4">
-                    <div className="flex">
-                      <div className="flex-shrink-0">
-                        <CheckCircleIcon className="h-5 w-5 text-green-400" aria-hidden="true" />
-                      </div>
-                      <div className="ml-3">
-                        <p className="text-sm font-medium text-green-800">
-                          Phone number verified successfully
-                        </p>
-                      </div>
-                    </div>
                   </div>
                 )}
               </div>

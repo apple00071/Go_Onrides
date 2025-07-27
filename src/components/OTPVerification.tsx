@@ -120,8 +120,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
       setErrorMessage(null);
     } catch (error) {
       console.error('Error verifying OTP:', error);
-      const message = error instanceof Error ? error.message : 'Failed to verify OTP';
-      setErrorMessage(message);
+      setErrorMessage('Wrong OTP');
       onFailure(error);
     } finally {
       setLoading(false);
@@ -130,11 +129,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
 
   const formattedPhone = formatPhoneNumber(phoneNumber)?.substring(3);
   if (!formattedPhone) {
-    return (
-      <p className="text-sm text-yellow-600">
-        Please enter a valid 10-digit phone number to proceed with verification.
-      </p>
-    );
+    return null;
   }
 
   if (isVerified) {
@@ -170,9 +165,6 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
 
       {!otpSent ? (
         <div>
-          <p className="text-sm text-gray-600 mb-4">
-            We'll send a verification code to: +91 {formattedPhone}
-          </p>
           <button
             type="button"
             onClick={handleSendOTP}
