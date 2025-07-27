@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 
 const MSG91_API_KEY = process.env.MSG91_API_KEY;
+const MSG91_TEMPLATE_ID = "otp"; // Your template ID
+const MSG91_SENDER_ID = "GOONRD"; // Your sender ID
 
 export async function POST(request: Request) {
   try {
@@ -42,20 +44,20 @@ export async function POST(request: Request) {
 
     // Prepare MSG91 request
     const msg91Request = {
-      flow_id: "otp", // Use flow_id instead of template_id
-      sender: "919177197474",
-      mobiles: `91${formattedPhone}`,
-      otp: otp
+      template_id: MSG91_TEMPLATE_ID,
+      sender: MSG91_SENDER_ID,
+      mobiles: `91${formattedPhone}`, // Add country code
+      VAR1: otp // Template variable for OTP
     };
     console.log('MSG91 Request:', msg91Request);
 
-    // Call MSG91 API with updated headers
-    const response = await fetch('https://control.msg91.com/api/v5/otp', {
+    // Call MSG91 API
+    const response = await fetch('https://api.msg91.com/api/v5/otp', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'authkey': MSG91_API_KEY.trim()
+        'authkey': MSG91_API_KEY
       },
       body: JSON.stringify(msg91Request)
     });
@@ -64,7 +66,6 @@ export async function POST(request: Request) {
     console.log('MSG91 API Response:', {
       status: response.status,
       statusText: response.statusText,
-      headers: Object.fromEntries(response.headers.entries()),
       data: data
     });
 
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
     if (!response.ok) {
       console.error('HTTP Error:', response.status, data);
       return NextResponse.json(
-        { error: 'Failed to send OTP' },
+        { error: data.message || 'Failed to send OTP' },
         { status: response.status }
       );
     }
