@@ -1,16 +1,19 @@
 import './globals.css';
 import { Inter } from 'next/font/google';
 import { cn } from '@/lib/utils';
+import { Metadata } from 'next';
 
 const inter = Inter({ 
   subsets: ['latin'],
   variable: '--font-inter',
 });
 
-export const metadata = {
-  title: 'Goon Riders',
-  description: 'Vehicle rental management system',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no',
+export const metadata: Metadata = {
+  title: 'Go-On Rides',
+  description: 'Vehicle rental service',
+  other: {
+    'fast2sms': 'oENCCqLZoTtQA9F64d0qxNVpBVsPSesI'
+  }
 };
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +25,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className="h-full">
+    <html lang="en">
+      <head>
+        <meta name="fast2sms" content="oENCCqLZoTtQA9F64d0qxNVpBVsPSesI" />
+      </head>
       <body className={cn('h-full antialiased', inter.className)}>
         <div className="min-h-screen w-full">
         {children}

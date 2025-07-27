@@ -90,8 +90,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
         throw new Error('Invalid session. Please request a new OTP');
       }
 
-      // For now, we'll do a simple comparison since we're using the OTP as the request_id
-      // In production, you'd want to verify this properly with MSG91's API
+      // Compare OTP with the one we generated
       if (otpValue === requestId) {
         onSuccess({ verified: true });
         setErrorMessage(null);
