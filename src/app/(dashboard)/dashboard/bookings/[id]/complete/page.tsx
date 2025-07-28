@@ -5,9 +5,9 @@ import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSupabaseClient } from '@/lib/supabase';
-import SignatureCanvas from '@/components/ui/SignatureCanvas';
 import { calculateReturnFees } from '@/lib/fee-calculator';
 import { CurrencyInput } from '@/components/ui/currency-input';
+import OTPVerification from '@/components/OTPVerification';
 
 interface BookingDetails {
   id: string;
@@ -23,10 +23,10 @@ interface BookingDetails {
   total_amount: number;
   payment_status: string;
   security_deposit_amount: number;
+  customer_contact: string;
 }
 
 interface FormData {
-  signature: string;
   damageCharges: string;
   damageDescription: string;
   vehicleRemarks: string;
@@ -46,8 +46,8 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isVerified, setIsVerified] = useState(false);
   const [formData, setFormData] = useState<FormData>({
-    signature: '',
     damageCharges: '0',
     damageDescription: '',
     vehicleRemarks: '',
@@ -88,14 +88,29 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
 
         const { data: bookingData, error: bookingError } = await supabase
           .from('bookings')
-          .select('*')
+          .select(`
+            *,
+            customer:customer_id (
+              contact,
+              phone
+            )
+          `)
           .eq('booking_id', params.id)
           .single();
 
         if (bookingError) throw bookingError;
         if (!bookingData) throw new Error('Booking not found');
 
-        setBooking(bookingData);
+        // Use customer contact from the customer record
+        const customerContact = bookingData.customer?.contact || bookingData.customer?.phone;
+        if (!customerContact) {
+          throw new Error('Customer contact information not found');
+        }
+
+        setBooking({
+          ...bookingData,
+          customer_contact: customerContact
+        });
 
         // Calculate fees based on actual return time vs expected return time
         const actualReturnTime = new Date();
@@ -142,20 +157,13 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
     });
   };
 
-  const handleSignatureChange = (signatureData: string) => {
-    setFormData(prev => ({
-      ...prev,
-      signature: signatureData
-    }));
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
-    if (!formData.signature) {
-      setError('Please provide your signature to complete the booking');
+    if (!isVerified) {
+      setError('Please verify your phone number to complete the booking');
       setLoading(false);
       return;
     }
@@ -237,20 +245,6 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
 
       if (bookingUpdateError) {
         throw new Error(`Failed to update booking: ${bookingUpdateError.message}`);
-      }
-
-      // Store the signature
-      const { error: signatureError } = await supabase
-        .from('booking_signatures')
-        .insert({
-          booking_id: booking?.id,
-          signature_data: formData.signature,
-          created_at: new Date().toISOString()
-        });
-
-      if (signatureError) {
-        console.error('Signature error details:', signatureError);
-        throw new Error(`Failed to save signature: ${signatureError.message}`);
       }
 
       // Record damage details if any
@@ -541,26 +535,35 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
               </div>
             </div>
 
-            {/* Signature */}
+            {/* Phone Verification */}
             <div className="space-y-4 rounded-lg bg-gray-50 p-4">
-              <h3 className="font-medium">Signature</h3>
-              <div className="mb-6">
-                <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
-                  <p className="text-sm text-yellow-800">
-                    {termsAndConditions}
-                  </p>
-                </div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Customer Signature
-                </label>
-                <SignatureCanvas onSave={handleSignatureChange} />
+              <h3 className="font-medium">Phone Verification</h3>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+                <p className="text-sm text-yellow-800">
+                  {termsAndConditions}
+                </p>
               </div>
+              {booking?.customer_contact ? (
+                <OTPVerification
+                  phoneNumber={booking.customer_contact}
+                  onSuccess={() => setIsVerified(true)}
+                  onFailure={(error) => {
+                    console.error('Verification failed:', error);
+                    setIsVerified(false);
+                    setError('Failed to verify phone number. Please try again.');
+                  }}
+                />
+              ) : (
+                <div className="text-sm text-red-600">
+                  Customer contact information not found. Please update the booking with valid contact information.
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || !isVerified}
                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
               >
                 {loading ? 'Processing...' : 'Complete Booking'}

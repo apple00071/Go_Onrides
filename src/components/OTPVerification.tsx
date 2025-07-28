@@ -22,25 +22,88 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
   const [otpValue, setOtpValue] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isVerified, setIsVerified] = useState(false);
+  const [currentPhoneNumber, setCurrentPhoneNumber] = useState(phoneNumber);
+  const [showPhoneInput, setShowPhoneInput] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
 
-  // Cleanup reCAPTCHA on unmount
+  // Cleanup reCAPTCHA on unmount and when retry count changes
   useEffect(() => {
     return () => {
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
+      try {
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
+        }
+      } catch (error) {
+        console.error('Error cleaning up reCAPTCHA:', error);
       }
     };
-  }, []);
+  }, [retryCount]);
 
   // Format phone number to ensure it's valid for India
   const formatPhoneNumber = (phone: string) => {
     const cleaned = phone.replace(/\D/g, '');
-    const withoutCode = cleaned.replace(/^91/, '');
+    // Remove any leading zeros
+    const withoutLeadingZeros = cleaned.replace(/^0+/, '');
+    // Remove country code if present
+    const withoutCode = withoutLeadingZeros.replace(/^91/, '');
     if (withoutCode.length !== 10) {
       return null;
     }
+    // Always add +91 prefix for India
     return `+91${withoutCode}`;
+  };
+
+  const setupRecaptcha = async () => {
+    try {
+      // Clear existing reCAPTCHA if any
+      try {
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+          window.recaptchaVerifier = null;
+        }
+      } catch (error) {
+        console.error('Error clearing existing reCAPTCHA:', error);
+      }
+
+      // Create new reCAPTCHA verifier with a unique container ID
+      const containerId = `recaptcha-container-${retryCount}`;
+      
+      // Make sure the container exists in the DOM
+      const container = document.getElementById(containerId);
+      if (!container) {
+        throw new Error('reCAPTCHA container not found');
+      }
+
+      // Initialize reCAPTCHA with invisible configuration
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+        size: 'invisible',
+        callback: (response: any) => {
+          console.log('reCAPTCHA verified with response:', response);
+        },
+        'expired-callback': () => {
+          console.log('reCAPTCHA expired');
+          setErrorMessage('Verification expired. Please try again.');
+          try {
+            if (window.recaptchaVerifier) {
+              window.recaptchaVerifier.clear();
+              window.recaptchaVerifier = null;
+            }
+          } catch (error) {
+            console.error('Error clearing expired reCAPTCHA:', error);
+          }
+          setRetryCount(prev => prev + 1);
+        }
+      });
+
+      // Render the reCAPTCHA
+      await window.recaptchaVerifier.render();
+      return window.recaptchaVerifier;
+    } catch (error) {
+      console.error('Error setting up reCAPTCHA:', error);
+      setErrorMessage('Error setting up verification. Please refresh and try again.');
+      throw error;
+    }
   };
 
   const handleSendOTP = async () => {
@@ -50,51 +113,63 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
       setOtpValue('');
       setErrorMessage(null);
 
-      const formattedPhone = formatPhoneNumber(phoneNumber);
+      const formattedPhone = formatPhoneNumber(currentPhoneNumber);
       if (!formattedPhone) {
         throw new Error('Please enter a valid 10-digit phone number');
       }
 
-      console.log('Sending OTP to:', formattedPhone);
+      console.log('Attempting to send OTP to:', formattedPhone);
 
-      // Clear existing reCAPTCHA if any
-      if (window.recaptchaVerifier) {
-        await window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
+      // Setup reCAPTCHA first
+      const verifier = await setupRecaptcha();
+      if (!verifier) {
+        throw new Error('Failed to initialize verification system');
       }
 
-      // Create new reCAPTCHA verifier
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-        callback: () => {
-          console.log('reCAPTCHA verified');
-        },
-        'expired-callback': () => {
-          setErrorMessage('Verification expired. Please try again.');
-          if (window.recaptchaVerifier) {
-            window.recaptchaVerifier.clear();
-            window.recaptchaVerifier = null;
-          }
+      try {
+        // Add a small delay to ensure reCAPTCHA is ready
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, verifier);
+        if (!confirmationResult) {
+          throw new Error('Failed to send verification code');
         }
-      });
-
-      const confirmationResult = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
-      window.confirmationResult = confirmationResult;
-      
-      setOtpSent(true);
-      setErrorMessage(null);
-    } catch (error) {
-      console.error('Error sending OTP:', error);
-      const message = error instanceof Error ? error.message : 'Failed to send OTP';
-      setErrorMessage(message);
-      onFailure(error);
-      setOtpSent(false);
-
-      // Cleanup on error
-      if (window.recaptchaVerifier) {
-        window.recaptchaVerifier.clear();
-        window.recaptchaVerifier = null;
+        window.confirmationResult = confirmationResult;
+        setOtpSent(true);
+        setErrorMessage(null);
+        setShowPhoneInput(false);
+      } catch (otpError: any) {
+        console.error('OTP Send Error:', otpError);
+        
+        // Handle specific Firebase errors
+        if (otpError?.code === 'auth/invalid-phone-number') {
+          setErrorMessage('Please enter a valid phone number');
+        } else if (otpError?.code === 'auth/captcha-check-failed') {
+          setErrorMessage('Verification check failed. Please try again.');
+          // Clear and retry reCAPTCHA
+          try {
+            if (window.recaptchaVerifier) {
+              window.recaptchaVerifier.clear();
+              window.recaptchaVerifier = null;
+            }
+          } catch (clearError) {
+            console.error('Error clearing reCAPTCHA:', clearError);
+          }
+          setRetryCount(prev => prev + 1);
+        } else if (otpError?.code === 'auth/too-many-requests') {
+          setErrorMessage('Too many attempts. Please try again later or use a different number.');
+          setShowPhoneInput(true);
+        } else {
+          setErrorMessage('Failed to send verification code. Please try again.');
+        }
+        throw otpError;
       }
+    } catch (error: any) {
+      console.error('Error in handleSendOTP:', error);
+      if (!error.message.includes('Please try again')) {
+        setErrorMessage('Failed to send verification code. Please try again.');
+      }
+      onFailure(error);
     } finally {
       setLoading(false);
     }
@@ -118,19 +193,28 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
       setIsVerified(true);
       onSuccess({ verified: true, user: result.user });
       setErrorMessage(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error verifying OTP:', error);
-      setErrorMessage('Wrong OTP');
+      
+      // Handle specific Firebase errors
+      if (error?.code === 'auth/invalid-verification-code') {
+        setErrorMessage('Wrong OTP. Please try again.');
+      } else if (error?.code === 'auth/code-expired') {
+        setErrorMessage('OTP has expired. Please request a new one.');
+      } else {
+        const message = error instanceof Error ? error.message : 'Failed to verify OTP';
+        setErrorMessage(message);
+      }
+      
       onFailure(error);
     } finally {
       setLoading(false);
     }
   };
 
-  const formattedPhone = formatPhoneNumber(phoneNumber)?.substring(3);
-  if (!formattedPhone) {
-    return null;
-  }
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setCurrentPhoneNumber(e.target.value);
+  };
 
   if (isVerified) {
     return (
@@ -161,7 +245,33 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
         </div>
       )}
 
-      <div id="recaptcha-container" className="hidden"></div>
+      {/* Dynamic reCAPTCHA containers */}
+      <div className="recaptcha-containers">
+        {[...Array(retryCount + 1)].map((_, index) => (
+          <div 
+            key={index} 
+            id={`recaptcha-container-${index}`} 
+            className="recaptcha-container"
+            style={{ display: 'inline-block', minWidth: '100px' }}
+          ></div>
+        ))}
+      </div>
+
+      {showPhoneInput && (
+        <div className="mt-1">
+          <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+            Enter alternative phone number
+          </label>
+          <input
+            type="tel"
+            id="phone"
+            value={currentPhoneNumber}
+            onChange={handlePhoneChange}
+            placeholder="Enter 10-digit mobile number"
+            className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
+          />
+        </div>
+      )}
 
       {!otpSent ? (
         <div>
