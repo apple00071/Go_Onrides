@@ -28,16 +28,29 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
 
   // Cleanup reCAPTCHA on unmount and when retry count changes
   useEffect(() => {
-    return () => {
+    const cleanup = () => {
       try {
         if (window.recaptchaVerifier) {
           window.recaptchaVerifier.clear();
           window.recaptchaVerifier = null;
         }
+        // Remove all existing reCAPTCHA iframes
+        const iframes = document.querySelectorAll('iframe[src*="recaptcha"]');
+        iframes.forEach(iframe => iframe.remove());
+        // Clear reCAPTCHA containers
+        const containers = document.querySelectorAll('.recaptcha-container');
+        containers.forEach(container => {
+          if (container instanceof HTMLElement) {
+            container.innerHTML = '';
+          }
+        });
       } catch (error) {
         console.error('Error cleaning up reCAPTCHA:', error);
       }
     };
+
+    cleanup();
+    return cleanup;
   }, [retryCount]);
 
   // Format phone number to ensure it's valid for India
@@ -56,24 +69,25 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
 
   const setupRecaptcha = async () => {
     try {
-      // Clear existing reCAPTCHA if any
-      try {
-        if (window.recaptchaVerifier) {
-          window.recaptchaVerifier.clear();
-          window.recaptchaVerifier = null;
-        }
-      } catch (error) {
-        console.error('Error clearing existing reCAPTCHA:', error);
+      // Clean up any existing reCAPTCHA
+      if (window.recaptchaVerifier) {
+        await window.recaptchaVerifier.clear();
+        window.recaptchaVerifier = null;
       }
+
+      // Remove any existing reCAPTCHA iframes
+      const iframes = document.querySelectorAll('iframe[src*="recaptcha"]');
+      iframes.forEach(iframe => iframe.remove());
 
       // Create new reCAPTCHA verifier with a unique container ID
       const containerId = `recaptcha-container-${retryCount}`;
       
-      // Make sure the container exists in the DOM
+      // Make sure the container exists and is empty
       const container = document.getElementById(containerId);
       if (!container) {
         throw new Error('reCAPTCHA container not found');
       }
+      container.innerHTML = '';
 
       // Initialize reCAPTCHA with invisible configuration
       window.recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
@@ -84,24 +98,24 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
         'expired-callback': () => {
           console.log('reCAPTCHA expired');
           setErrorMessage('Verification expired. Please try again.');
-          try {
-            if (window.recaptchaVerifier) {
-              window.recaptchaVerifier.clear();
-              window.recaptchaVerifier = null;
-            }
-          } catch (error) {
-            console.error('Error clearing expired reCAPTCHA:', error);
+          if (window.recaptchaVerifier) {
+            window.recaptchaVerifier.clear();
+            window.recaptchaVerifier = null;
           }
           setRetryCount(prev => prev + 1);
         }
       });
 
-      // Render the reCAPTCHA
+      // Wait for reCAPTCHA to be ready
       await window.recaptchaVerifier.render();
       return window.recaptchaVerifier;
     } catch (error) {
       console.error('Error setting up reCAPTCHA:', error);
-      setErrorMessage('Error setting up verification. Please refresh and try again.');
+      // If error is about already rendered, increment retry count to get a new container
+      if (error instanceof Error && error.message.includes('already been rendered')) {
+        setRetryCount(prev => prev + 1);
+      }
+      setErrorMessage('Error setting up verification. Please try again.');
       throw error;
     }
   };
@@ -245,17 +259,12 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
         </div>
       )}
 
-      {/* Dynamic reCAPTCHA containers */}
-      <div className="recaptcha-containers">
-        {[...Array(retryCount + 1)].map((_, index) => (
-          <div 
-            key={index} 
-            id={`recaptcha-container-${index}`} 
-            className="recaptcha-container"
-            style={{ display: 'inline-block', minWidth: '100px' }}
-          ></div>
-        ))}
-      </div>
+      {/* Single reCAPTCHA container */}
+      <div 
+        id={`recaptcha-container-${retryCount}`} 
+        className="recaptcha-container"
+        style={{ display: 'inline-block', minWidth: '100px', minHeight: '50px' }}
+      />
 
       {showPhoneInput && (
         <div className="mt-1">
