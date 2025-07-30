@@ -15,7 +15,6 @@ import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRot
 import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
 import { type FormEvent } from 'react';
 import { RefreshCw, Upload, Camera, X } from 'lucide-react';
-import { notifyBookingEvent } from '@/lib/notification';
 import { generateInvoice } from '@/lib/generateInvoice';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 import OTPVerification from '@/components/OTPVerification';
@@ -463,6 +462,7 @@ export default function NewBookingPage() {
     }
   }, [formData.payment_status, formData.total_amount]);
 
+  // Update the checkExistingCustomer function
   const checkExistingCustomer = async (aadharNumber: string) => {
     if (!aadharNumber || aadharNumber.length !== 12) return;
 
@@ -473,7 +473,7 @@ export default function NewBookingPage() {
       const { data: customers, error } = await supabase
         .from('customers')
         .select('*, documents')
-        .eq('aadhar_number', aadharNumber)
+        .eq('aadhar_number', aadharNumber.replace(/\s/g, ''))
         .limit(1);
 
       if (error) {
@@ -487,15 +487,15 @@ export default function NewBookingPage() {
           ...prev,
           customer_name: customer.name || '',
           customer_email: customer.email || '',
-          customer_contact: customer.phone || '',
+          customer_contact: customer.contact || '', // Use contact field
           alternative_phone: customer.alternative_phone || '',
           emergency_contact_phone: customer.emergency_contact_phone || '',
           emergency_contact_phone1: customer.emergency_contact_phone1 || '',
           date_of_birth: customer.dob || '',
           dl_number: customer.dl_number || '',
           dl_expiry_date: customer.dl_expiry_date || '',
-          temp_address: customer.temp_address_street || '',
-          perm_address: customer.perm_address_street || '',
+          temp_address: customer.temp_address || '',
+          perm_address: customer.perm_address || '',
           uploaded_documents: customer.documents || {}
         }));
         toast.success('Found existing customer - form pre-filled with details and documents');
@@ -670,9 +670,11 @@ export default function NewBookingPage() {
     }
   };
 
-  // Modify handleSubmit to require OTP verification
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  // Update the handleSubmit function
+  const handleSubmit = async (e?: FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) => {
+    if (e) {
+      e.preventDefault();
+    }
     setSubmitting(true);
     setError(null);
 
@@ -684,8 +686,17 @@ export default function NewBookingPage() {
 
     try {
       // Validate required fields
-      if (!formData.customer_name || !formData.customer_contact || !formData.aadhar_number) {
-        throw new Error('Please fill in all required fields');
+      if (!formData.customer_name?.trim()) {
+        throw new Error('Customer name is required');
+      }
+      if (!formData.customer_contact || formData.customer_contact.length !== 10) {
+        throw new Error('Valid 10-digit phone number is required');
+      }
+      if (!formData.aadhar_number || formData.aadhar_number.length !== 12) {
+        throw new Error('Valid 12-digit Aadhar number is required');
+      }
+      if (!formData.emergency_contact_phone || formData.emergency_contact_phone.length !== 10) {
+        throw new Error('Valid 10-digit emergency contact (Father) phone number is required');
       }
 
       // Check if OTP is verified
@@ -693,98 +704,125 @@ export default function NewBookingPage() {
         throw new Error('Please verify your phone number before submitting');
       }
 
+      const supabase = getSupabaseClient();
+
+      // First, check if customer exists by Aadhar number
+      const { data: existingCustomer, error: customerCheckError } = await supabase
+        .from('customers')
+        .select('id')
+        .eq('aadhar_number', formData.aadhar_number.replace(/\s/g, ''))
+        .single();
+
+      if (customerCheckError && customerCheckError.code !== 'PGRST116') { // PGRST116 means no rows returned
+        throw customerCheckError;
+      }
+
       // Prepare customer data
       const customerData = {
-        name: formData.customer_name,
-        phone: formData.customer_contact,
-        contact: formData.customer_contact, // Include both phone and contact fields
-        email: formData.customer_email || null,
-        aadhar_number: formData.aadhar_number,
-        date_of_birth: formData.date_of_birth || null,
-        dl_number: formData.dl_number || null,
+        name: formData.customer_name.trim(),
+        phone: formData.customer_contact.trim(),
+        contact: formData.customer_contact.trim(), // Add this required field
+        email: formData.customer_email?.trim() || null,
+        aadhar_number: formData.aadhar_number.replace(/\s/g, ''),
+        dl_number: formData.dl_number?.trim() || null,
         dl_expiry_date: formData.dl_expiry_date || null,
-        temp_address_street: formData.temp_address || null,
-        perm_address_street: formData.perm_address || null,
-        emergency_contact_phone: formData.emergency_contact_phone || null,
-        emergency_contact_phone1: formData.emergency_contact_phone1 || null,
-        alternative_phone: formData.alternative_phone || null,
+        dob: formData.date_of_birth || null,
+        emergency_contact_phone: formData.emergency_contact_phone.trim(),
+        emergency_contact_phone1: formData.emergency_contact_phone1?.trim() || null,
+        alternative_phone: formData.alternative_phone?.trim() || null,
+        temp_address: formData.temp_address?.trim() || null,
+        perm_address: formData.perm_address?.trim() || null,
+        created_by: userData.id,
         created_at: new Date().toISOString(),
-        created_by: userData.id
+        documents: {
+          customer_photo: formData.uploaded_documents?.customer_photo || null,
+          aadhar_front: formData.uploaded_documents?.aadhar_front || null,
+          aadhar_back: formData.uploaded_documents?.aadhar_back || null,
+          dl_front: formData.uploaded_documents?.dl_front || null,
+          dl_back: formData.uploaded_documents?.dl_back || null
+        }
       };
 
-      // Check if customer exists
+      // Get or create customer
       let customerId: string;
-      if (isExistingCustomer) {
-        const { data: existingCustomer, error: fetchError } = await supabase
-          .from('customers')
-          .select('id')
-          .eq('aadhar_number', formData.aadhar_number)
-          .single();
-
-        if (fetchError) {
-          throw new Error(`Failed to fetch customer: ${fetchError.message}`);
-        }
+      if (existingCustomer) {
+        // Update existing customer
         customerId = existingCustomer.id;
-      } else {
-        // Insert new customer
-        const { data: newCustomer, error: insertError } = await supabase
+        const { error: updateError } = await supabase
           .from('customers')
-          .insert([customerData])
+          .update({
+            ...customerData,
+            updated_at: new Date().toISOString(),
+            updated_by: userData.id
+          })
+          .eq('id', customerId);
+
+        if (updateError) {
+          throw updateError;
+        }
+      } else {
+        // Create new customer
+        const { data: newCustomer, error: createError } = await supabase
+          .from('customers')
+          .insert(customerData)
           .select()
           .single();
 
-        if (insertError) {
-          throw new Error(`Failed to create customer: ${insertError.message}`);
+        if (createError) {
+          throw createError;
         }
+
         customerId = newCustomer.id;
       }
 
-      // Create booking with the customer ID
+      // Create the booking with the correct customer ID
+      const bookingData = {
+        booking_id: tempBookingId,
+        customer_id: customerId,
+        customer_name: formData.customer_name.trim(),
+        customer_contact: formData.customer_contact.trim(),
+        customer_email: formData.customer_email?.trim() || null,
+        emergency_contact_phone: formData.emergency_contact_phone.trim(),
+        emergency_contact_phone1: formData.emergency_contact_phone1?.trim() || null,
+        aadhar_number: formData.aadhar_number.trim(),
+        date_of_birth: formData.date_of_birth || null,
+        dl_number: formData.dl_number?.trim() || null,
+        dl_expiry_date: formData.dl_expiry_date || null,
+        temp_address: formData.temp_address?.trim() || null,
+        perm_address: formData.perm_address?.trim(),
+        vehicle_details: formData.vehicle_details,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        pickup_time: formData.pickup_time,
+        dropoff_time: formData.dropoff_time,
+        booking_amount: formData.booking_amount,
+        security_deposit_amount: formData.security_deposit_amount,
+        total_amount: formData.total_amount,
+        payment_status: formData.payment_status,
+        paid_amount: formData.paid_amount,
+        payment_mode: formData.payment_mode,
+        rental_purpose: formData.rental_purpose,
+        outstation_details: formData.outstation_details,
+        created_at: new Date().toISOString(),
+        created_by: userData.id,
+        status: 'in_use',
+        submitted_documents: {
+          passport: formData.submitted_documents?.passport || false,
+          voter_id: formData.submitted_documents?.voter_id || false,
+          original_dl: formData.submitted_documents?.original_dl || false,
+          original_aadhar: formData.submitted_documents?.original_aadhar || false,
+          other_document: formData.submitted_documents?.other_document || false
+        }
+      };
+
       const { data: newBooking, error: bookingError } = await supabase
         .from('bookings')
-        .insert({
-          booking_id: tempBookingId,
-          customer_id: customerId,
-          customer_name: formData.customer_name,
-          customer_contact: formData.customer_contact,
-          customer_email: formData.customer_email || null,
-          emergency_contact_phone: formData.emergency_contact_phone || null,
-          emergency_contact_phone1: formData.emergency_contact_phone1 || null,
-          aadhar_number: formData.aadhar_number,
-          date_of_birth: formData.date_of_birth || null,
-          dl_number: formData.dl_number || null,
-          dl_expiry_date: formData.dl_expiry_date || null,
-          temp_address: formData.temp_address || null,
-          perm_address: formData.perm_address,
-          vehicle_details: formData.vehicle_details,
-          start_date: formData.start_date,
-          end_date: formData.end_date,
-          pickup_time: formData.pickup_time,
-          dropoff_time: formData.dropoff_time,
-          booking_amount: formData.booking_amount,
-          security_deposit_amount: formData.security_deposit_amount,
-          total_amount: formData.total_amount,
-          payment_status: formData.payment_status,
-          paid_amount: formData.paid_amount,
-          payment_mode: formData.payment_mode,
-          rental_purpose: formData.rental_purpose,
-          outstation_details: formData.outstation_details,
-          created_at: new Date().toISOString(),
-          created_by: userData.id,
-          status: 'in_use',
-          submitted_documents: {
-            passport: formData.submitted_documents?.passport || false,
-            voter_id: formData.submitted_documents?.voter_id || false,
-            original_dl: formData.submitted_documents?.original_dl || false,
-            original_aadhar: formData.submitted_documents?.original_aadhar || false,
-            other_document: formData.submitted_documents?.other_document || false
-          }
-        })
+        .insert(bookingData)
         .select()
         .single();
 
       if (bookingError) {
-        throw new Error(`Failed to create booking: ${bookingError.message}`);
+        throw bookingError;
       }
 
       // Create payment record if paid amount is greater than zero
@@ -806,32 +844,7 @@ export default function NewBookingPage() {
         }
       }
 
-      // Store signature if exists
-      if (formData.signature && newBooking?.id) {
-        const { error: signatureError } = await supabase
-          .from('booking_signatures')
-          .insert({
-            booking_id: newBooking.id,
-            signature_data: formData.signature,
-            signature_type: 'booking', // Add signature type
-            created_at: new Date().toISOString(),
-            created_by: userData.id
-          });
-
-        if (signatureError) {
-          console.error('Failed to save signature:', signatureError);
-        }
-      }
-
-      // Create notification
-      await notifyBookingEvent('BOOKING_CREATED', newBooking.id, {
-        customerName: formData.customer_name,
-        bookingId: tempBookingId,
-        actionBy: userData.id || 'Unknown',
-        vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
-      });
-
-      // Show success toast and redirect immediately
+      // Show success toast and redirect
       toast.success('Booking created successfully!');
       router.push('/dashboard/bookings');
 
@@ -921,6 +934,54 @@ export default function NewBookingPage() {
     });
   };
 
+  // Update the termsAndConditions string to be an array
+  const termsAndConditions = [
+    'Day implies 24 hours. A maximum of a 1-hour grace period is accepted on 1 day prior intimation.',
+    'The vehicle should be given back with the same amount of fuel available while taking the vehicle, and if in case fuel is not topped up fuel charges + 10% fuel charges are levied.',
+    'The vehicle shall be collected and dropped off at our garage. Vehicle pickup/drop-off charges shall be Rs.300 each way in case pickup/drop-off of the vehicle at your location is required. (Subject to the availability of drivers.)',
+    'Any accident/damages shall be the client cost and shall be charged at actuals. The decision of GO-ON RIDERS.',
+    'Any maintenance charges accrued due to misuse of the vehicle shall be to the client\'s account.',
+    'Routine maintenance is to GO-ON RIDERS account.',
+    'The vehicle shall not be used for motor sports or any such activity that may impair the long term performance and condition of the vehicle.',
+    'The minimum age of the renter shall be 21 years, and he/she shall possess a minimum driving experience of 1 years.',
+    'The vehicle shall not be used for any other purpose other than the given purpose in the agreement form.',
+    'Any extension of the Vehicle should be informed in advance and is possible with the acceptance of GO-ON RIDERS.',
+    'Any violation of the terms will lead to termination of the deposit.',
+    'Without prior intimation of extension of vehicle lead to penalty of Rs. 1000 per day.'
+  ];
+
+  // Add this function to check if all required fields are filled
+  const checkRequiredFields = (data: BookingFormData) => {
+    return (
+      data.customer_name?.trim() &&
+      data.customer_contact?.length === 10 &&
+      data.aadhar_number?.length === 12 &&
+      data.emergency_contact_phone?.length === 10 &&
+      data.dl_number?.trim() &&
+      data.perm_address?.trim() &&
+      data.vehicle_details.model?.trim() &&
+      data.vehicle_details.registration?.trim() &&
+      data.start_date &&
+      data.end_date &&
+      data.pickup_time &&
+      data.dropoff_time &&
+      data.booking_amount > 0 &&
+      data.security_deposit_amount > 0 &&
+      data.terms_accepted
+    );
+  };
+
+  // Update the isFormValid check
+  const isFormValid = useMemo(() => {
+    return checkRequiredFields(formData);
+  }, [formData]);
+
+  // Add a new handler for button clicks
+  const handleButtonClick: React.MouseEventHandler<HTMLButtonElement> = (e) => {
+    e.preventDefault();
+    handleSubmit();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -991,24 +1052,38 @@ export default function NewBookingPage() {
                     />
                   </div>
 
+                  {/* Phone Number Input */}
                   <div>
                     <label htmlFor="customer_contact" className="block text-sm font-medium text-gray-700 mb-1">
                       Phone Number *
                     </label>
-                    <input
-                      id="customer_contact"
-                      type="tel"
-                      name="customer_contact"
-                      required
-                      value={formData.customer_contact}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                      maxLength={10}
-                      pattern="\d{10}"
-                      title="Please enter a valid 10-digit phone number"
-                      inputMode="numeric"
-                    />
+                    <div className="relative">
+                      <input
+                        id="customer_contact"
+                        type="tel"
+                        name="customer_contact"
+                        required
+                        value={formData.customer_contact}
+                        onChange={handleInputChange}
+                        disabled={otpVerified}
+                        className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm ${
+                          otpVerified ? 'bg-gray-100' : ''
+                        }`}
+                        aria-required="true"
+                        maxLength={10}
+                        pattern="\d{10}"
+                        title="Please enter a valid 10-digit phone number"
+                        inputMode="numeric"
+                      />
+                      {otpVerified && (
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                          <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                        </div>
+                      )}
+                    </div>
+                    {otpVerified && (
+                      <p className="mt-1 text-sm text-green-600">Phone number verified</p>
+                    )}
                   </div>
 
                   <div>
@@ -1496,44 +1571,14 @@ export default function NewBookingPage() {
                 />
               </div>
 
-              {/* Phone Verification */}
-              <div className="space-y-6">
-                <h3 className="text-lg font-medium text-gray-900">Phone Verification</h3>
-                {formData.customer_contact && formData.customer_contact.length === 10 && (
-                  <div>
-                    <OTPVerification
-                      phoneNumber={formData.customer_contact}
-                      onSuccess={(data) => {
-                        console.log('Verification successful:', data);
-                        setOtpVerified(true);
-                        setOtpError(null);
-                      }}
-                      onFailure={(error) => {
-                        console.error('Verification failed:', error);
-                        setOtpVerified(false);
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-
               {/* Terms and Conditions */}
               <div className="space-y-6">
                 <h3 className="text-lg font-medium text-gray-900">Terms and Conditions</h3>
-                <div className="bg-gray-50 p-4 rounded-md text-sm text-gray-700 mb-4">
-                  <ul className="list-disc pl-5 space-y-2">
-                    <li>Day implies 24 hours. A maximum of a 1-hour grace period is accepted on 1 day prior intimation.</li>
-                    <li>The vehicle should be given back with the same amount of fuel available while taking the vehicle, and if in case fuel is not topped up fuel charges + 10% fuel charges are levied.</li>
-                    <li>The vehicle shall be collected and dropped off at our garage. Vehicle pickup/drop-off charges shall be Rs.300 each way in case pickup/drop-off of the vehicle at your location is required. (Subject to the availability of drivers.)</li>
-                    <li>Any accident/damages shall be the client cost and shall be charged at actuals. The decision of GO-ON RIDERS.</li>
-                    <li>Any maintenance charges accrued due to misuse of the vehicle shall be to the client's account.</li>
-                    <li>Routine maintenance is to GO-ON RIDERS account.</li>
-                    <li>The vehicle shall not be used for motor sports or any such activity that may impair the long term performance and condition of the vehicle.</li>
-                    <li>The minimum age of the renter shall be 21 years, and he/she shall possess a minimum driving experience of 1 years.</li>
-                    <li>The vehicle shall not be used for any other purpose other than the given purpose in the agreement form.</li>
-                    <li>Any extension of the Vehicle should be informed in advance and is possible with the acceptance of GO-ON RIDERS.</li>
-                    <li>Any violation of the terms will lead to termination of the deposit.</li>
-                    <li>Without prior intimation of extension of vehicle lead to penalty of Rs. 1000 per day.</li>
+                <div className="bg-gray-50 p-4 rounded-md">
+                  <ul className="list-disc pl-5 space-y-2 text-sm text-gray-700">
+                    {termsAndConditions.map((term, index) => (
+                      <li key={index}>{term}</li>
+                    ))}
                   </ul>
                 </div>
                 <div className="flex items-start">
@@ -1547,40 +1592,52 @@ export default function NewBookingPage() {
                       className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                     />
                   </div>
-                  <div className="ml-3 text-sm">
-                    <label htmlFor="terms" className="font-medium text-gray-700">
+                  <div className="ml-3">
+                    <label htmlFor="terms" className="text-sm text-gray-700">
                       I accept the terms and conditions
                     </label>
-                    <p className="text-gray-500">
-                      By checking this box, you agree to our{' '}
-                      <Link href="/terms" className="text-blue-600 hover:text-blue-500">
-                        Terms of Service
-                      </Link>{' '}
-                      and{' '}
-                      <Link href="/privacy" className="text-blue-600 hover:text-blue-500">
-                        Privacy Policy
-                      </Link>
-                    </p>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end space-x-4">
-              <button
-                type="button"
-                onClick={() => router.back()}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 disabled:opacity-50"
-              >
-                {submitting ? 'Creating...' : 'Create Booking'}
-              </button>
+              {/* Phone Verification Section */}
+              {isFormValid && !otpVerified && (
+                <div className="space-y-6">
+                  <h3 className="text-lg font-medium text-gray-900">Phone Verification</h3>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+                    <p className="text-sm text-yellow-800">
+                      Please verify your phone number to complete the booking process. After verification, the phone number cannot be changed.
+                    </p>
+                  </div>
+                  <div>
+                    <OTPVerification
+                      phoneNumber={formData.customer_contact}
+                      onSuccess={(data) => {
+                        console.log('Verification successful:', data);
+                        setOtpVerified(true);
+                        setOtpError(null);
+                      }}
+                      onFailure={(error) => {
+                        console.error('Verification failed:', error);
+                        setOtpVerified(false);
+                        setOtpError('Failed to verify phone number. Please try again.');
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleButtonClick}
+                  disabled={!isFormValid || !otpVerified}
+                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                >
+                  {submitting ? 'Processing...' : 'Create Booking'}
+                </button>
+              </div>
             </div>
           </form>
         </div>

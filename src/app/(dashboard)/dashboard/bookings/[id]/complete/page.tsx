@@ -8,6 +8,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { calculateReturnFees } from '@/lib/fee-calculator';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import OTPVerification from '@/components/OTPVerification';
+import { sendBookingUpdateMessage } from '@/lib/notifications';
 
 interface BookingDetails {
   id: string;
@@ -179,7 +180,13 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
       // Start a transaction by getting the current booking
       const { data: currentBooking, error: fetchError } = await supabase
         .from('bookings')
-        .select('paid_amount, total_amount, status, booking_amount, security_deposit_amount')
+        .select(`
+          *,
+          customer:customer_id (
+            contact,
+            phone
+          )
+        `)
         .eq('id', booking?.id)
         .single();
 
@@ -189,6 +196,8 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
 
       // Calculate the final amounts
       const damageCharges = parseFloat(formData.damageCharges) || 0;
+      const lateFee = parseFloat(formData.lateFee) || 0;
+      const extensionFee = parseFloat(formData.extensionFee) || 0;
       const remainingAmount = currentBooking.total_amount - currentBooking.paid_amount;
       
       // Calculate the new total paid amount including this payment
@@ -213,8 +222,8 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
       }
 
       // The final total amount should be:
-      // Original booking amount + damage charges (not including security deposit)
-      const finalTotalAmount = currentBooking.booking_amount + damageCharges;
+      // Original booking amount + damage charges + late fee + extension fee
+      const finalTotalAmount = currentBooking.booking_amount + damageCharges + lateFee + extensionFee;
 
       // Prepare update data
       const updateData: any = {
@@ -224,8 +233,8 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
         completed_at: new Date().toISOString(),
         completed_by: session.user.id,
         damage_charges: damageCharges,
-        late_fee: parseFloat(formData.lateFee) || 0,
-        extension_fee: parseFloat(formData.extensionFee) || 0,
+        late_fee: lateFee,
+        extension_fee: extensionFee,
         total_amount: finalTotalAmount,
         paid_amount: newPaidAmount,
         payment_status: newPaidAmount >= finalTotalAmount ? 'full' : 'partial'
@@ -262,6 +271,37 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
         if (damageError) {
           throw new Error(`Failed to record damage details: ${damageError.message}`);
         }
+      }
+
+      // Prepare additional info for WhatsApp message
+      let additionalInfo = '';
+      if (damageCharges > 0) {
+        additionalInfo += `Damage charges: ₹${damageCharges}. `;
+      }
+      if (lateFee > 0) {
+        additionalInfo += `Late fee: ₹${lateFee}. `;
+      }
+      if (extensionFee > 0) {
+        additionalInfo += `Extension fee: ₹${extensionFee}. `;
+      }
+      if (remainingAmount > 0) {
+        additionalInfo += `Remaining amount: ₹${remainingAmount}. `;
+      }
+
+      // Send WhatsApp notification
+      try {
+        const customerPhone = currentBooking.customer?.contact || currentBooking.customer?.phone;
+        if (customerPhone) {
+          await sendBookingUpdateMessage(
+            customerPhone,
+            booking?.booking_id || '',
+            'completed',
+            additionalInfo
+          );
+        }
+      } catch (notificationError) {
+        console.error('Failed to send WhatsApp notification:', notificationError);
+        // Don't throw error here, as the booking is already completed
       }
 
       toast.success('Booking completed successfully');

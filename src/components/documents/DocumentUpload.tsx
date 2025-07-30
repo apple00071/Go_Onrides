@@ -25,6 +25,15 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
     setLoadingDocuments(false);
   }, [existingDocuments]);
 
+  const getPublicUrl = (fileName: string | undefined) => {
+    if (!fileName || !bookingId) return '';
+    const supabase = getSupabaseClient();
+    const { data } = supabase.storage
+      .from('customer-documents')
+      .getPublicUrl(`${bookingId}/${fileName}`);
+    return data?.publicUrl || '';
+  };
+
   const handleFileUpload = async (file: File, type: keyof UploadedDocuments) => {
     try {
       // Show immediate preview
@@ -36,20 +45,18 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
 
       // If there's an existing document, delete it first
       if (documents[type]) {
-        const existingFileName = documents[type]?.split('/').pop();
-        if (existingFileName) {
-          await supabase.storage
-            .from('customer-documents')
-            .remove([`${bookingId}/${existingFileName}`]);
-        }
+        await supabase.storage
+          .from('customer-documents')
+          .remove([`${bookingId}/${documents[type]}`]);
       }
 
       const fileExt = file.name.split('.').pop();
-      const fileName = `${bookingId}/${type}-${Date.now()}.${fileExt}`;
+      const fileName = `${type}-${Date.now()}.${fileExt}`;
+      const filePath = `${bookingId}/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
         .from('customer-documents')
-        .upload(fileName, file, {
+        .upload(filePath, file, {
           cacheControl: '3600',
           upsert: true
         });
@@ -58,13 +65,10 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         throw uploadError;
       }
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('customer-documents')
-        .getPublicUrl(fileName);
-
+      // Store just the filename
       const updatedDocuments = {
         ...documents,
-        [type]: publicUrl
+        [type]: fileName
       };
 
       setDocuments(updatedDocuments);
@@ -80,7 +84,6 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
       toast.success(`${formatDocumentType(type)} uploaded successfully`);
     } catch (error) {
       console.error('Error uploading file:', error);
-      // Clean up preview URL on error
       setTempPreviews(prev => {
         const { [type]: removed, ...rest } = prev;
         return rest;
@@ -168,7 +171,7 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
               <>
                 <div className="relative w-full h-full">
                   <img
-                    src={hasTempPreview ? tempPreviews[type] : documents[type]}
+                    src={hasTempPreview ? tempPreviews[type] : (hasFile ? getPublicUrl(documents[type]) : '')}
                     alt={label}
                     className="w-full h-full object-contain rounded"
                   />
@@ -217,30 +220,23 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                   onChange={handleCameraCapture}
                   className="hidden"
                 />
-                <div className="flex flex-col items-center">
-                  <div className="flex space-x-4 mb-4">
+                <div className="flex flex-col items-center space-y-2">
+                  <Upload className="h-8 w-8 text-gray-400" />
+                  <p className="text-sm text-gray-500">Click to upload or drag and drop</p>
+                  <div className="flex space-x-2">
                     <button
-                      type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="flex items-center justify-center p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                      disabled={uploading}
+                      className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
                     >
-                      <Upload className="h-6 w-6 text-gray-600" />
-                      <span className="ml-2 text-sm text-gray-600">Upload</span>
+                      Browse Files
                     </button>
                     <button
-                      type="button"
                       onClick={() => cameraInputRef.current?.click()}
-                      className="flex items-center justify-center p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-                      disabled={uploading}
+                      className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
                     >
-                      <Camera className="h-6 w-6 text-gray-600" />
-                      <span className="ml-2 text-sm text-gray-600">Camera</span>
+                      Take Photo
                     </button>
                   </div>
-                  <p className="text-sm text-gray-500 text-center">
-                    {hasFile ? 'Replace existing document' : 'Upload or capture ' + label}
-                  </p>
                 </div>
               </>
             )}

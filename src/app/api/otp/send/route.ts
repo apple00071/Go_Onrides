@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'authorization': FAST2SMS_API_KEY
+        'Authorization': FAST2SMS_API_KEY
       },
       body: JSON.stringify({
         route: 'otp',

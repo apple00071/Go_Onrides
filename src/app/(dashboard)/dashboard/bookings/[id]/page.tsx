@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
-import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download, ZoomIn, CheckCircle2, PlusCircle } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, Phone, User, X, PenSquare, CalendarPlus, Mail, Download, ZoomIn, CheckCircle2, PlusCircle, CheckCircleIcon, XCircleIcon } from 'lucide-react';
 import { formatCurrency, formatDate, formatDateTime, formatTime } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
@@ -13,7 +13,6 @@ import ExtendBookingModal from '@/components/bookings/ExtendBookingModal';
 import BookingExtensionHistory from '@/components/bookings/BookingExtensionHistory';
 import PaymentHistory from '@/components/payments/PaymentHistory';
 import { usePermissions } from '@/lib/usePermissions';
-import { notifyBookingEvent } from '@/lib/notification';
 import PaymentInformation from '@/components/bookings/PaymentInformation';
 import { generateInvoice } from '@/lib/generateInvoice';
 import type { BookingDetails, BookingDetailsData, OutstationDetails } from '@/types/bookings';
@@ -41,47 +40,65 @@ const formatTimeDisplay = (time: string): string => {
   return `${displayHour}:${minute} ${period}`;
 };
 
-// Update the fetchBookingDetails function to handle the new outstation details structure
-async function fetchBookingDetails(bookingId: string): Promise<BookingDetailsData> {
+// Add this type check helper function at the top level
+const isValidUrl = (url: string | null | undefined): url is string => {
+  return typeof url === 'string' && url.trim().length > 0;
+};
+
+// Update the getPublicUrl function
+const getPublicUrl = (customerId: string, fileName: string) => {
+  if (!fileName || !customerId) return '';
   const supabase = getSupabaseClient();
+  const { data } = supabase.storage
+    .from('customer-documents')
+    .getPublicUrl(`${customerId}/${fileName}`);
+  return data?.publicUrl || '';
+};
 
-  const { data: booking, error } = await supabase
-    .from('bookings')
-    .select(`
-      *,
-      created_by_user:created_by(
-        email,
-        username
-      ),
-      updated_by_user:updated_by(
-        email,
-        username
-      ),
-      completed_by_user:completed_by(
-        email,
-        username
-      )
-    `)
-    .eq('id', bookingId)
-    .single();
+// Update the fetchBookingDetails function
+const fetchBookingDetails = async () => {
+  try {
+    setLoading(true);
+    setError(null);
 
-  if (error) {
-    console.error('Error fetching booking details:', error);
-    throw new Error('Failed to fetch booking details');
-  }
+    const supabase = getSupabaseClient();
+    const { data: bookingData, error: bookingError } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        customer:customers (
+          id,
+          name,
+          phone,
+          email,
+          documents
+        )
+      `)
+      .eq('id', params.id)
+      .single();
 
-  // Transform the outstation_details to match the new structure
-  if (booking.rental_purpose === 'outstation' && booking.outstation_details) {
-    booking.outstation_details = {
-      destination: booking.outstation_details.destination || '',
-      estimated_kms: booking.outstation_details.estimated_kms || 0,
-      start_odo: booking.outstation_details.start_odo || 0,
-      end_odo: booking.outstation_details.end_odo || 0
+    if (bookingError) {
+      throw bookingError;
+    }
+
+    // Process the booking data
+    const processedBooking = {
+      ...bookingData,
+      customer: bookingData.customer ? {
+        ...bookingData.customer,
+        documents: bookingData.customer.documents || {}
+      } : null
     };
-  }
 
-  return booking;
-}
+    setBooking(processedBooking);
+    setError(null);
+  } catch (error) {
+    console.error('Error fetching booking details:', error);
+    setError('Failed to fetch booking details');
+  } finally {
+    setLoading(false);
+  }
+};
 
 export default function BookingDetailsPage() {
   const params = useParams();
@@ -358,15 +375,6 @@ export default function BookingDetailsPage() {
 
       setBooking(prev => prev ? { ...prev, status: newStatus } : null);
       toast.success('Booking status updated successfully');
-
-      // Notify about the status change
-      await notifyBookingEvent('BOOKING_UPDATED', booking.id, {
-        customerName: booking.customer_name,
-        bookingId: booking.booking_id,
-        oldStatus: booking.status,
-        newStatus: newStatus,
-        actionBy: session.user.id
-      });
 
     } catch (error) {
       console.error('Error updating status:', error);
@@ -792,100 +800,127 @@ export default function BookingDetailsPage() {
             </div>
           </div>
 
-          {/* Documents & Signatures */}
+          {/* Documents Section */}
           <div className="bg-white rounded-lg shadow mb-6">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Documents & Signatures</h2>
+              <h2 className="text-lg font-medium text-gray-900">Documents</h2>
             </div>
             <div className="p-6">
-              <div className="space-y-6">
-                {/* Booking Signature */}
-                <div>
-                  <h3 className="text-md font-medium text-gray-900 mb-4">Booking Signature</h3>
-                  {booking?.signatures?.bookingSignature && (
-                    <div className="border rounded-lg p-4 max-w-xs cursor-pointer hover:border-blue-500 transition-colors"
-                         onClick={() => booking.signatures?.bookingSignature && handleImageClick(booking.signatures.bookingSignature, 'Booking Signature')}>
-                      <img
-                        src={booking.signatures.bookingSignature}
-                        alt="Booking Signature"
-                        className="w-full h-24 object-contain"
-                      />
-                      <p className="text-xs text-gray-500 mt-2 text-center">Click to view full size</p>
-                    </div>
-                  )}
-                  {!booking?.signatures?.bookingSignature && (
-                    <p className="text-sm text-gray-500">No booking signature available</p>
-                  )}
-                </div>
-
+              <div className="space-y-8">
                 {/* Uploaded Documents */}
                 <div>
                   <h3 className="text-md font-medium text-gray-900 mb-4">Uploaded Documents</h3>
-                  {booking?.customer?.documents && Object.entries(booking.customer.documents).some(([_, url]) => url && url !== '') ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {Object.entries(booking.customer.documents).map(([type, url]) => {
-                        // Skip if URL is empty or null
-                        if (!url || url === '') return null;
-                        
-                        // Format the document type for display
-                        const displayType = type
-                          .replace(/_/g, ' ')
-                          .split(' ')
-                          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-                          .join(' ');
-
-                        return (
-                          <div key={type} className="relative group">
-                            <div className="aspect-w-3 aspect-h-2 rounded-lg overflow-hidden border border-gray-200">
-                              <img
-                                src={url}
-                                alt={displayType}
-                                className="w-full h-32 object-cover cursor-pointer hover:opacity-75 transition-opacity"
-                                onClick={() => handleImageClick(url, displayType)}
-                              />
-                            </div>
-                            <div className="mt-1 text-xs font-medium text-gray-700 text-center">
-                              {displayType}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {booking?.customer?.documents ? (
+                      <>
+                        {booking.customer.documents.customer_photo && (
+                          <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.customer_photo), 'Customer Photo')}>
+                            <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
+                            <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                              {booking.customer && (
+                                <Image
+                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.customer_photo)}
+                                  alt="Customer Photo"
+                                  fill
+                                  className="object-cover"
+                                />
+                              )}
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No documents uploaded</p>
-                  )}
+                        )}
+                        {booking.customer.documents.aadhar_front && (
+                          <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.aadhar_front), 'Aadhar Front')}>
+                            <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
+                            <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                              {booking.customer && (
+                                <Image
+                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.aadhar_front)}
+                                  alt="Aadhar Front"
+                                  fill
+                                  className="object-cover"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {booking.customer.documents.aadhar_back && (
+                          <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.aadhar_back), 'Aadhar Back')}>
+                            <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
+                            <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                              {booking.customer && (
+                                <Image
+                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.aadhar_back)}
+                                  alt="Aadhar Back"
+                                  fill
+                                  className="object-cover"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {booking.customer.documents.dl_front && (
+                          <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.dl_front), 'DL Front')}>
+                            <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
+                            <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                              {booking.customer && (
+                                <Image
+                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.dl_front)}
+                                  alt="DL Front"
+                                  fill
+                                  className="object-cover"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {booking.customer.documents.dl_back && (
+                          <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.dl_back), 'DL Back')}>
+                            <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>
+                            <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                              {booking.customer && (
+                                <Image
+                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.dl_back)}
+                                  alt="DL Back"
+                                  fill
+                                  className="object-cover"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-sm text-gray-500 col-span-full">No documents uploaded</p>
+                    )}
+                  </div>
                 </div>
 
-                {/* Physical Documents */}
+                {/* Physical Documents Checklist */}
                 <div>
-                  <h3 className="text-md font-medium text-gray-900 mb-4">Physical Documents Submitted</h3>
-                  {booking?.submitted_documents ? (
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                      {Object.entries(booking.submitted_documents).map(([type, isSubmitted]) => {
-                        // Format the document type for display
-                        const displayType = type
-                          .replace(/_/g, ' ')
-                          .split(' ')
-                          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-                          .join(' ');
-
-                        return (
-                          <div key={type} className="flex items-center space-x-2 bg-gray-50 p-2 rounded">
-                            {isSubmitted ? (
-                              <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
-                            ) : (
-                              <X className="h-4 w-4 text-red-500 flex-shrink-0" />
-                            )}
-                            <span className="text-sm text-gray-700">
-                              {displayType}
-                            </span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-500">No physical documents information available</p>
-                  )}
+                  <h3 className="text-md font-medium text-gray-900 mb-4">Physical Documents Verification</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {booking?.submitted_documents ? (
+                      Object.entries(booking.submitted_documents).map(([key, value]) => (
+                        <div key={key} className="flex items-center space-x-2">
+                          {value ? (
+                            <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <XCircleIcon className="h-5 w-5 text-red-500" />
+                          )}
+                          <span className="text-sm text-gray-700">
+                            {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-sm text-gray-500">No physical documents verified</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

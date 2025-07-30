@@ -7,6 +7,7 @@ import { ArrowLeft, User, Phone, MapPin, Calendar, Mail, X, CheckCircle, XCircle
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
 import Image from 'next/image';
+import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
 
 interface CustomerDocument {
   id: string;
@@ -110,6 +111,11 @@ interface CustomerDetails {
   }>;
 }
 
+// Add this type check helper function at the top level
+const isValidUrl = (url: string | null | undefined): url is string => {
+  return typeof url === 'string' && url.trim().length > 0;
+};
+
 export default function CustomerDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -118,7 +124,6 @@ export default function CustomerDetailsPage() {
   const [customer, setCustomer] = useState<CustomerDetails | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [selectedImageLabel, setSelectedImageLabel] = useState<string>('');
-  const [signature, setSignature] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchCustomerDetails = async () => {
@@ -231,35 +236,15 @@ export default function CustomerDetailsPage() {
           ? bookingsData[0].submitted_documents
           : defaultSubmittedDocs;
 
-        // Fetch customer's latest signature from the most recent booking's signatures
-        let signatureData = null;
-        if (bookingsData && bookingsData.length > 0) {
-          const latestBooking = bookingsData[0];
-          const { data: signaturesData, error: signatureError } = await supabase
-            .from('booking_signatures')
-            .select('signature_data, created_at')
-            .eq('booking_id', latestBooking.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-            
-          if (signatureError) {
-            console.error('Error fetching signature:', signatureError);
-          } else if (signaturesData && signaturesData.length > 0) {
-            signatureData = signaturesData[0].signature_data;
-          }
-        }
-
         const customerWithDetails = {
           ...customerData,
           documents: documents,
           bookings: bookingsData || [],
           submitted_documents: latestSubmittedDocuments,
-          signature: signatureData
         } as CustomerDetails;
 
         console.log('Customer details:', customerWithDetails);
         setCustomer(customerWithDetails);
-        setSignature(signatureData);
         setError(null);
       } catch (error) {
         console.error('Error fetching customer:', error);
@@ -272,7 +257,7 @@ export default function CustomerDetailsPage() {
     };
 
     fetchCustomerDetails();
-  }, [params?.id, signature]);
+  }, [params?.id]);
 
   if (loading) {
     return (
@@ -307,6 +292,11 @@ export default function CustomerDetailsPage() {
     in_use: 'bg-green-100 text-green-800',
     completed: 'bg-gray-100 text-gray-800',
     cancelled: 'bg-red-100 text-red-800'
+  };
+
+  const handleImageClick = (url: string, label: string) => {
+    setSelectedImage(url);
+    setSelectedImageLabel(label);
   };
 
   return (
@@ -459,142 +449,115 @@ export default function CustomerDetailsPage() {
 
         {/* Documents & Signatures Section */}
         <div className="bg-white rounded-lg shadow mb-6">
-          <div className="p-4 sm:p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Documents & Signatures</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-              {customer.documents && typeof customer.documents === 'object' && (
-                <>
-                  {customer.documents.customer_photo && customer.documents.customer_photo !== '' && (
-                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
-                      <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                        <Image
-                          src={customer.documents.customer_photo}
-                          alt="Customer Photo"
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {customer.documents.aadhar_front && customer.documents.aadhar_front !== '' && (
-                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
-                      <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                        <Image
-                          src={customer.documents.aadhar_front}
-                          alt="Aadhar Front"
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {customer.documents.aadhar_back && customer.documents.aadhar_back !== '' && (
-                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
-                      <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                        <Image
-                          src={customer.documents.aadhar_back}
-                          alt="Aadhar Back"
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {customer.documents.dl_front && customer.documents.dl_front !== '' && (
-                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
-                      <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                        <Image
-                          src={customer.documents.dl_front}
-                          alt="DL Front"
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {customer.documents.dl_back && customer.documents.dl_back !== '' && (
-                    <div className="cursor-pointer hover:opacity-75 transition-opacity">
-                      <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>
-                      <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                        <Image
-                          src={customer.documents.dl_back}
-                          alt="DL Back"
-                          fill
-                          className="object-cover"
-                        />
-                      </div>
-                    </div>
-                  )}
-                </>
-              )}
-              {(!customer.documents || 
-                !Object.values(customer.documents).some(doc => doc && doc !== '')) && (
-                <div className="col-span-5 text-center py-8 text-gray-500">
-                  No documents uploaded
-                </div>
-              )}
-            </div>
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-medium text-gray-900">Documents</h2>
           </div>
-        </div>
+          <div className="p-6">
+            <div className="space-y-8">
+              {/* Uploaded Documents */}
+              <div>
+                <h3 className="text-md font-medium text-gray-900 mb-4">Uploaded Documents</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {customer.documents ? (
+                    <>
+                      {customer.documents.customer_photo && (
+                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                             onClick={() => handleImageClick(customer.documents.customer_photo, 'Customer Photo')}>
+                          <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
+                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                            <Image
+                              src={customer.documents.customer_photo}
+                              alt="Customer Photo"
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {customer.documents.aadhar_front && (
+                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                             onClick={() => handleImageClick(customer.documents.aadhar_front, 'Aadhar Front')}>
+                          <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
+                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                            <Image
+                              src={customer.documents.aadhar_front}
+                              alt="Aadhar Front"
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {customer.documents.aadhar_back && (
+                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                             onClick={() => handleImageClick(customer.documents.aadhar_back, 'Aadhar Back')}>
+                          <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
+                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                            <Image
+                              src={customer.documents.aadhar_back}
+                              alt="Aadhar Back"
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {customer.documents.dl_front && (
+                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                             onClick={() => handleImageClick(customer.documents.dl_front, 'DL Front')}>
+                          <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
+                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                            <Image
+                              src={customer.documents.dl_front}
+                              alt="DL Front"
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        </div>
+                      )}
+                      {customer.documents.dl_back && (
+                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
+                             onClick={() => handleImageClick(customer.documents.dl_back, 'DL Back')}>
+                          <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>
+                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                            <Image
+                              src={customer.documents.dl_back}
+                              alt="DL Back"
+                              fill
+                              className="object-cover"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-500 col-span-full">No documents uploaded</p>
+                  )}
+                </div>
+              </div>
 
-        {/* Physical Documents Section */}
-        <div className="bg-white rounded-lg shadow mb-6">
-          <div className="p-4 sm:p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-4">Physical Documents Submitted</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-              <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 flex items-center justify-center">
-                  {customer.submitted_documents?.passport ? (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
+              {/* Latest Physical Documents Verification */}
+              <div>
+                <h3 className="text-md font-medium text-gray-900 mb-4">Latest Physical Documents Verification</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {customer.submitted_documents ? (
+                    Object.entries(customer.submitted_documents).map(([key, value]) => (
+                      <div key={key} className="flex items-center space-x-2">
+                        {value ? (
+                          <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircleIcon className="h-5 w-5 text-red-500" />
+                        )}
+                        <span className="text-sm text-gray-700">
+                          {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                        </span>
+                      </div>
+                    ))
                   ) : (
-                    <XCircle className="w-5 h-5 text-red-500" />
+                    <p className="text-sm text-gray-500">No physical documents verification history</p>
                   )}
                 </div>
-                <span className="text-sm text-gray-700">Passport</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 flex items-center justify-center">
-                  {customer.submitted_documents?.voter_id ? (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-500" />
-                  )}
-                </div>
-                <span className="text-sm text-gray-700">Voter ID</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 flex items-center justify-center">
-                  {customer.submitted_documents?.original_dl ? (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-500" />
-                  )}
-                </div>
-                <span className="text-sm text-gray-700">Original DL</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 flex items-center justify-center">
-                  {customer.submitted_documents?.original_aadhar ? (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-500" />
-                  )}
-                </div>
-                <span className="text-sm text-gray-700">Original Aadhar</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-5 h-5 flex items-center justify-center">
-                  {customer.submitted_documents?.other_document ? (
-                    <CheckCircle className="w-5 h-5 text-green-500" />
-                  ) : (
-                    <XCircle className="w-5 h-5 text-red-500" />
-                  )}
-                </div>
-                <span className="text-sm text-gray-700">Other Document</span>
               </div>
             </div>
           </div>

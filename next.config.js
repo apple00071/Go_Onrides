@@ -1,15 +1,14 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  reactStrictMode: true,
-  swcMinify: true,
-  webpack: (config, { isServer }) => {
-    // Suppress the warning about critical dependency
-    config.module.exprContextCritical = false;
-    return config;
-  },
   images: {
-    domains: ['dohiiawnnantusgsddzw.supabase.co']
-  }
-};
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'dohiiawnnantusgsddzw.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+  },
+}
 
-module.exports = nextConfig; 
+module.exports = nextConfig 
