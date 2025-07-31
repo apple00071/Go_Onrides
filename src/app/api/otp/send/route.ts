@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server';
 
 const FAST2SMS_API_KEY = process.env.FAST2SMS_API_KEY;
 
+export const dynamic = 'force-dynamic';
+
 export async function POST(request: Request) {
   try {
     console.log('FAST2SMS_API_KEY present:', !!FAST2SMS_API_KEY);
