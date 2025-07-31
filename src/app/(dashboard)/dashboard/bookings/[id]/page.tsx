@@ -55,51 +55,6 @@ const getPublicUrl = (customerId: string, fileName: string) => {
   return data?.publicUrl || '';
 };
 
-// Update the fetchBookingDetails function
-const fetchBookingDetails = async () => {
-  try {
-    setLoading(true);
-    setError(null);
-
-    const supabase = getSupabaseClient();
-    const { data: bookingData, error: bookingError } = await supabase
-      .from('bookings')
-      .select(`
-        *,
-        customer:customers (
-          id,
-          name,
-          phone,
-          email,
-          documents
-        )
-      `)
-      .eq('id', params.id)
-      .single();
-
-    if (bookingError) {
-      throw bookingError;
-    }
-
-    // Process the booking data
-    const processedBooking = {
-      ...bookingData,
-      customer: bookingData.customer ? {
-        ...bookingData.customer,
-        documents: bookingData.customer.documents || {}
-      } : null
-    };
-
-    setBooking(processedBooking);
-    setError(null);
-  } catch (error) {
-    console.error('Error fetching booking details:', error);
-    setError('Failed to fetch booking details');
-  } finally {
-    setLoading(false);
-  }
-};
-
 export default function BookingDetailsPage() {
   const params = useParams();
   const router = useRouter();

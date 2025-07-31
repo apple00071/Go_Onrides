@@ -35,11 +35,11 @@ interface Customer {
   emergency_contact_relationship: string | null;
   created_at: string;
   documents: {
-    customer_photo: string;
-    aadhar_front: string;
-    aadhar_back: string;
-    dl_front: string;
-    dl_back: string;
+    customer_photo?: string;
+    aadhar_front?: string;
+    aadhar_back?: string;
+    dl_front?: string;
+    dl_back?: string;
   };
   aadhar_number: string | null;
   dl_number: string | null;
@@ -294,7 +294,8 @@ export default function CustomerDetailsPage() {
     cancelled: 'bg-red-100 text-red-800'
   };
 
-  const handleImageClick = (url: string, label: string) => {
+  const handleImageClick = (url: string | undefined, label: string) => {
+    if (!url) return;
     setSelectedImage(url);
     setSelectedImageLabel(label);
   };
@@ -460,7 +461,7 @@ export default function CustomerDetailsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {customer.documents ? (
                     <>
-                      {customer.documents.customer_photo && (
+                      {customer.documents.customer_photo && isValidUrl(customer.documents.customer_photo) && (
                         <div className="cursor-pointer hover:opacity-75 transition-opacity"
                              onClick={() => handleImageClick(customer.documents.customer_photo, 'Customer Photo')}>
                           <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
@@ -474,7 +475,7 @@ export default function CustomerDetailsPage() {
                           </div>
                         </div>
                       )}
-                      {customer.documents.aadhar_front && (
+                      {customer.documents.aadhar_front && isValidUrl(customer.documents.aadhar_front) && (
                         <div className="cursor-pointer hover:opacity-75 transition-opacity"
                              onClick={() => handleImageClick(customer.documents.aadhar_front, 'Aadhar Front')}>
                           <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
@@ -488,7 +489,7 @@ export default function CustomerDetailsPage() {
                           </div>
                         </div>
                       )}
-                      {customer.documents.aadhar_back && (
+                      {customer.documents.aadhar_back && isValidUrl(customer.documents.aadhar_back) && (
                         <div className="cursor-pointer hover:opacity-75 transition-opacity"
                              onClick={() => handleImageClick(customer.documents.aadhar_back, 'Aadhar Back')}>
                           <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
@@ -502,7 +503,7 @@ export default function CustomerDetailsPage() {
                           </div>
                         </div>
                       )}
-                      {customer.documents.dl_front && (
+                      {customer.documents.dl_front && isValidUrl(customer.documents.dl_front) && (
                         <div className="cursor-pointer hover:opacity-75 transition-opacity"
                              onClick={() => handleImageClick(customer.documents.dl_front, 'DL Front')}>
                           <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
@@ -516,7 +517,7 @@ export default function CustomerDetailsPage() {
                           </div>
                         </div>
                       )}
-                      {customer.documents.dl_back && (
+                      {customer.documents.dl_back && isValidUrl(customer.documents.dl_back) && (
                         <div className="cursor-pointer hover:opacity-75 transition-opacity"
                              onClick={() => handleImageClick(customer.documents.dl_back, 'DL Back')}>
                           <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>

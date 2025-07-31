@@ -8,7 +8,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { calculateReturnFees } from '@/lib/fee-calculator';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import OTPVerification from '@/components/OTPVerification';
-import { sendBookingUpdateMessage } from '@/lib/notifications';
+import { sendBookingUpdateMessage } from '@/lib/whatsapp';
 
 interface BookingDetails {
   id: string;
