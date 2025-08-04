@@ -1,7 +1,7 @@
 'use client';
 
+import { ChevronDown, ChevronUp, X } from 'lucide-react';
 import { useState } from 'react';
-import { X } from 'lucide-react';
 import { getSupabaseClient } from '@/lib/supabase';
 import type { Permission } from '@/types/database';
 import { toast } from 'react-hot-toast';
@@ -27,17 +27,52 @@ export default function CreateUserModal({
 }: CreateUserModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormData>({
     email: '',
     username: '',
     password: '',
     role: 'worker',
     permissions: {
+      // Booking permissions
       createBooking: false,
       viewBookings: true,
+      manageBookings: false,
+
+      // Customer permissions
+      createCustomer: false,
+      viewCustomers: true,
+      manageCustomers: false,
+
+      // Vehicle permissions
+      createVehicle: false,
+      viewVehicles: true,
+      manageVehicles: false,
+
+      // Maintenance permissions
+      createMaintenance: false,
+      viewMaintenance: true,
+      manageMaintenance: false,
+
+      // Invoice and payment permissions
+      createInvoice: false,
+      viewInvoices: true,
       managePayments: false,
+
+      // Report permissions
       accessReports: false,
-      viewCustomers: false
+      exportReports: false,
+
+      // Return permissions
+      manageReturns: false,
+      viewReturns: true,
+
+      // Notification permissions
+      manageNotifications: false,
+      viewNotifications: true,
+
+      // Settings permissions
+      manageSettings: false
     }
   });
 
@@ -66,6 +101,45 @@ export default function CreateUserModal({
         [permission]: !prev.permissions[permission]
       }
     }));
+  };
+
+  const toggleSection = (section: string) => {
+    setExpandedSection(expandedSection === section ? null : section);
+  };
+
+  const renderPermissionSection = (
+    title: string,
+    permissions: Array<{key: keyof Permission, label: string}>
+  ) => {
+    const isExpanded = expandedSection === title;
+    
+    return (
+      <div className="border rounded-md">
+        <button
+          type="button"
+          onClick={() => toggleSection(title)}
+          className="w-full px-4 py-2 flex justify-between items-center bg-gray-50 hover:bg-gray-100 rounded-t-md"
+        >
+          <h3 className="font-medium text-sm">{title}</h3>
+          {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+        {isExpanded && (
+          <div className="p-4 space-y-2 border-t">
+            {permissions.map(({ key, label }) => (
+              <label key={key} className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions[key]}
+                  onChange={() => handlePermissionChange(key)}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">{label}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -118,7 +192,7 @@ export default function CreateUserModal({
 
   return (
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-semibold">Create New User</h2>
           <button
@@ -129,7 +203,7 @@ export default function CreateUserModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+        <form onSubmit={handleSubmit} className="p-4 space-y-4 overflow-y-auto">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
               {error}
@@ -197,55 +271,58 @@ export default function CreateUserModal({
               Permissions
             </label>
             <div className="space-y-2">
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.permissions.createBooking}
-                  onChange={() => handlePermissionChange('createBooking')}
-                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                />
-                <span className="ml-2 text-sm text-gray-700">Create Booking</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.permissions.viewBookings}
-                  onChange={() => handlePermissionChange('viewBookings')}
-                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                />
-                <span className="ml-2 text-sm text-gray-700">View Bookings</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.permissions.managePayments}
-                  onChange={() => handlePermissionChange('managePayments')}
-                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                />
-                <span className="ml-2 text-sm text-gray-700">Manage Payments</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.permissions.accessReports}
-                  onChange={() => handlePermissionChange('accessReports')}
-                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                />
-                <span className="ml-2 text-sm text-gray-700">Access Reports</span>
-              </label>
-              <label className="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={formData.permissions.viewCustomers}
-                  onChange={() => handlePermissionChange('viewCustomers')}
-                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-                />
-                <span className="ml-2 text-sm text-gray-700">View Customers</span>
-              </label>
+              {renderPermissionSection("Booking Permissions", [
+                { key: "createBooking", label: "Create Booking" },
+                { key: "viewBookings", label: "View Bookings" },
+                { key: "manageBookings", label: "Manage Bookings" }
+              ])}
+              
+              {renderPermissionSection("Customer Permissions", [
+                { key: "createCustomer", label: "Create Customer" },
+                { key: "viewCustomers", label: "View Customers" },
+                { key: "manageCustomers", label: "Manage Customers" }
+              ])}
+              
+              {renderPermissionSection("Vehicle Permissions", [
+                { key: "createVehicle", label: "Create Vehicle" },
+                { key: "viewVehicles", label: "View Vehicles" },
+                { key: "manageVehicles", label: "Manage Vehicles" }
+              ])}
+              
+              {renderPermissionSection("Maintenance Permissions", [
+                { key: "createMaintenance", label: "Create Maintenance Record" },
+                { key: "viewMaintenance", label: "View Maintenance Records" },
+                { key: "manageMaintenance", label: "Manage Maintenance Records" }
+              ])}
+              
+              {renderPermissionSection("Invoice & Payment Permissions", [
+                { key: "createInvoice", label: "Create Invoice" },
+                { key: "viewInvoices", label: "View Invoices" },
+                { key: "managePayments", label: "Manage Payments" }
+              ])}
+              
+              {renderPermissionSection("Report Permissions", [
+                { key: "accessReports", label: "Access Reports" },
+                { key: "exportReports", label: "Export Reports" }
+              ])}
+              
+              {renderPermissionSection("Return Permissions", [
+                { key: "manageReturns", label: "Manage Returns" },
+                { key: "viewReturns", label: "View Returns" }
+              ])}
+              
+              {renderPermissionSection("Notification Permissions", [
+                { key: "manageNotifications", label: "Manage Notifications" },
+                { key: "viewNotifications", label: "View Notifications" }
+              ])}
+              
+              {renderPermissionSection("Settings Permissions", [
+                { key: "manageSettings", label: "Manage Settings" }
+              ])}
             </div>
           </div>
 
-          <div className="mt-5 sm:mt-6">
+          <div className="mt-5">
             <button
               type="submit"
               disabled={loading}

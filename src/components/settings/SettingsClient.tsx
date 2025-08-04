@@ -10,6 +10,7 @@ import EditUserModal from '@/components/settings/EditUserModal';
 import UserActivityLogs from '@/components/settings/UserActivityLogs';
 import FeeSettings from '@/components/admin/FeeSettings';
 import { toast } from 'react-hot-toast';
+import LogoUploader from '@/components/settings/LogoUploader';
 
 export default function SettingsClient() {
   const router = useRouter();
@@ -183,6 +184,14 @@ export default function SettingsClient() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="w-full max-w-[100vw] overflow-x-hidden space-y-8">
+        {/* Company Logo Section */}
+        <div>
+          <h2 className="text-2xl font-semibold text-gray-900 mb-6">Company Logo</h2>
+          <div className="bg-white shadow rounded-lg p-6">
+            <LogoUploader />
+          </div>
+        </div>
+
         {/* Fee Settings Section */}
         <div>
           <h2 className="text-2xl font-semibold text-gray-900 mb-6">Fee Settings</h2>

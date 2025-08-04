@@ -20,11 +20,45 @@ export default function CreateUserForm() {
     password: '',
     role: 'worker',
     permissions: {
+      // Booking permissions
       createBooking: false,
       viewBookings: true,
+      manageBookings: false,
+
+      // Customer permissions
+      createCustomer: false,
+      viewCustomers: true,
+      manageCustomers: false,
+
+      // Vehicle permissions
+      createVehicle: false,
+      viewVehicles: true,
+      manageVehicles: false,
+
+      // Maintenance permissions
+      createMaintenance: false,
+      viewMaintenance: true,
+      manageMaintenance: false,
+
+      // Invoice and payment permissions
+      createInvoice: false,
+      viewInvoices: true,
       managePayments: false,
+
+      // Report permissions
       accessReports: false,
-      viewCustomers: false
+      exportReports: false,
+
+      // Return permissions
+      manageReturns: false,
+      viewReturns: true,
+
+      // Notification permissions
+      manageNotifications: false,
+      viewNotifications: true,
+
+      // Settings permissions
+      manageSettings: false
     }
   });
 
@@ -105,11 +139,45 @@ export default function CreateUserForm() {
         password: '',
         role: 'worker',
         permissions: {
+          // Booking permissions
           createBooking: false,
           viewBookings: true,
+          manageBookings: false,
+
+          // Customer permissions
+          createCustomer: false,
+          viewCustomers: true,
+          manageCustomers: false,
+
+          // Vehicle permissions
+          createVehicle: false,
+          viewVehicles: true,
+          manageVehicles: false,
+
+          // Maintenance permissions
+          createMaintenance: false,
+          viewMaintenance: true,
+          manageMaintenance: false,
+
+          // Invoice and payment permissions
+          createInvoice: false,
+          viewInvoices: true,
           managePayments: false,
+
+          // Report permissions
           accessReports: false,
-          viewCustomers: false
+          exportReports: false,
+
+          // Return permissions
+          manageReturns: false,
+          viewReturns: true,
+
+          // Notification permissions
+          manageNotifications: false,
+          viewNotifications: true,
+
+          // Settings permissions
+          manageSettings: false
         }
       });
     } catch (error) {
@@ -196,52 +264,267 @@ export default function CreateUserForm() {
         <label className="block text-sm font-medium text-gray-700 mb-2">
           Permissions
         </label>
-        <div className="space-y-2">
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={formData.permissions.createBooking}
-              onChange={() => handlePermissionChange('createBooking')}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-            />
-            <span className="ml-2 text-sm text-gray-700">Create Booking</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={formData.permissions.viewBookings}
-              onChange={() => handlePermissionChange('viewBookings')}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-            />
-            <span className="ml-2 text-sm text-gray-700">View Bookings</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={formData.permissions.managePayments}
-              onChange={() => handlePermissionChange('managePayments')}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-            />
-            <span className="ml-2 text-sm text-gray-700">Manage Payments</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={formData.permissions.accessReports}
-              onChange={() => handlePermissionChange('accessReports')}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-            />
-            <span className="ml-2 text-sm text-gray-700">Access Reports</span>
-          </label>
-          <label className="flex items-center">
-            <input
-              type="checkbox"
-              checked={formData.permissions.viewCustomers}
-              onChange={() => handlePermissionChange('viewCustomers')}
-              className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
-            />
-            <span className="ml-2 text-sm text-gray-700">View Customers</span>
-          </label>
+        <div className="space-y-4 border rounded-md p-4">
+          {/* Booking Permissions */}
+          <div className="border-b pb-4">
+            <h3 className="font-medium mb-2">Booking Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.createBooking}
+                  onChange={() => handlePermissionChange('createBooking')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Create Booking</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.viewBookings}
+                  onChange={() => handlePermissionChange('viewBookings')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">View Bookings</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.manageBookings}
+                  onChange={() => handlePermissionChange('manageBookings')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Manage Bookings</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Customer Permissions */}
+          <div className="border-b pb-4">
+            <h3 className="font-medium mb-2">Customer Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.createCustomer}
+                  onChange={() => handlePermissionChange('createCustomer')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Create Customer</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.viewCustomers}
+                  onChange={() => handlePermissionChange('viewCustomers')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">View Customers</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.manageCustomers}
+                  onChange={() => handlePermissionChange('manageCustomers')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Manage Customers</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Vehicle Permissions */}
+          <div className="border-b pb-4">
+            <h3 className="font-medium mb-2">Vehicle Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.createVehicle}
+                  onChange={() => handlePermissionChange('createVehicle')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Create Vehicle</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.viewVehicles}
+                  onChange={() => handlePermissionChange('viewVehicles')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">View Vehicles</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.manageVehicles}
+                  onChange={() => handlePermissionChange('manageVehicles')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Manage Vehicles</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Maintenance Permissions */}
+          <div className="border-b pb-4">
+            <h3 className="font-medium mb-2">Maintenance Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.createMaintenance}
+                  onChange={() => handlePermissionChange('createMaintenance')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Create Maintenance Record</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.viewMaintenance}
+                  onChange={() => handlePermissionChange('viewMaintenance')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">View Maintenance Records</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.manageMaintenance}
+                  onChange={() => handlePermissionChange('manageMaintenance')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Manage Maintenance Records</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Invoice and Payment Permissions */}
+          <div className="border-b pb-4">
+            <h3 className="font-medium mb-2">Invoice & Payment Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.createInvoice}
+                  onChange={() => handlePermissionChange('createInvoice')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Create Invoice</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.viewInvoices}
+                  onChange={() => handlePermissionChange('viewInvoices')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">View Invoices</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.managePayments}
+                  onChange={() => handlePermissionChange('managePayments')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Manage Payments</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Report Permissions */}
+          <div className="border-b pb-4">
+            <h3 className="font-medium mb-2">Report Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.accessReports}
+                  onChange={() => handlePermissionChange('accessReports')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Access Reports</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.exportReports}
+                  onChange={() => handlePermissionChange('exportReports')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Export Reports</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Return Permissions */}
+          <div className="border-b pb-4">
+            <h3 className="font-medium mb-2">Return Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.manageReturns}
+                  onChange={() => handlePermissionChange('manageReturns')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Manage Returns</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.viewReturns}
+                  onChange={() => handlePermissionChange('viewReturns')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">View Returns</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Notification Permissions */}
+          <div className="border-b pb-4">
+            <h3 className="font-medium mb-2">Notification Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.manageNotifications}
+                  onChange={() => handlePermissionChange('manageNotifications')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Manage Notifications</span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.viewNotifications}
+                  onChange={() => handlePermissionChange('viewNotifications')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">View Notifications</span>
+              </label>
+            </div>
+          </div>
+
+          {/* Settings Permissions */}
+          <div>
+            <h3 className="font-medium mb-2">Settings Permissions</h3>
+            <div className="space-y-2">
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={formData.permissions.manageSettings}
+                  onChange={() => handlePermissionChange('manageSettings')}
+                  className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                />
+                <span className="ml-2 text-sm text-gray-700">Manage Settings</span>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
 

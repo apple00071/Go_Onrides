@@ -82,39 +82,6 @@ export default function NewInvoicePage() {
     setLoading(true);
 
     try {
-      // First save to database
-      const supabase = getSupabaseClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Calculate total amount
-      const totalAmount = formData.items.reduce((sum, item) => 
-        sum + (item.quantity * item.pricePerUnit * (1 + item.tax / 100)), 0);
-
-      // Save to database first
-      const { error: dbError } = await supabase.from('invoices').insert({
-        invoice_number: formData.invoiceNumber,
-        customer_name: formData.customerName,
-        gst_number: formData.gstNumber,
-        invoice_date: formData.invoiceDate,
-        payment_method: formData.paymentMethod,
-        vehicle_model: formData.vehicleDetails.model,
-        vehicle_registration: formData.vehicleDetails.registration,
-        pickup_date: formData.pickupDate,
-        dropoff_date: formData.dropoffDate,
-        items: formData.items,
-        total_amount: totalAmount,
-        created_by: user.id,
-        created_at: new Date().toISOString()
-      });
-
-      if (dbError) {
-        throw new Error(`Database error: ${dbError.message}`);
-      }
-
       // Generate and download PDF
       const pdfBlob = await generateInvoice({
         customerName: formData.customerName,
@@ -153,7 +120,7 @@ export default function NewInvoicePage() {
       router.push('/dashboard/invoices');
     } catch (error) {
       console.error('Error generating invoice:', error);
-      toast.error(error instanceof Error ? error.message : 'Failed to generate invoice');
+      toast.error('Failed to generate invoice');
     } finally {
       setLoading(false);
     }

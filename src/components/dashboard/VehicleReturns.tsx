@@ -75,11 +75,16 @@ export default function VehicleReturns() {
         const endDateStart = new Date(endDateTime);
         endDateStart.setHours(0, 0, 0, 0);
 
-        if (endDateTime < getISTDate()) {
+        // Check for overdue returns (end date is before today)
+        if (endDateStart.getTime() < today.getTime()) {
           acc.overdue.push(booking);
-        } else if (endDateStart.getTime() === today.getTime()) {
+        } 
+        // Check for returns due today
+        else if (endDateStart.getTime() === today.getTime()) {
           acc.today.push(booking);
-        } else if (endDateStart.getTime() === tomorrow.getTime()) {
+        } 
+        // Check for returns due tomorrow
+        else if (endDateStart.getTime() === tomorrow.getTime()) {
           acc.upcoming.push(booking);
         }
         return acc;

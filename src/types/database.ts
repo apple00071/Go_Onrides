@@ -1,9 +1,43 @@
 export type Permission = {
+  // Booking related permissions
   createBooking: boolean;
   viewBookings: boolean;
-  managePayments: boolean;
-  accessReports: boolean;
+  manageBookings: boolean;  // Edit/cancel bookings
+  
+  // Customer related permissions
+  createCustomer: boolean;
   viewCustomers: boolean;
+  manageCustomers: boolean;  // Edit/delete customers
+  
+  // Vehicle related permissions
+  createVehicle: boolean;
+  viewVehicles: boolean;
+  manageVehicles: boolean;  // Edit/delete vehicles
+  
+  // Maintenance related permissions
+  createMaintenance: boolean;
+  viewMaintenance: boolean;
+  manageMaintenance: boolean;  // Edit/delete maintenance records
+  
+  // Invoice and payment related permissions
+  createInvoice: boolean;
+  viewInvoices: boolean;
+  managePayments: boolean;
+  
+  // Report related permissions
+  accessReports: boolean;
+  exportReports: boolean;
+  
+  // Return related permissions
+  manageReturns: boolean;
+  viewReturns: boolean;
+  
+  // Notification related permissions
+  manageNotifications: boolean;
+  viewNotifications: boolean;
+  
+  // Settings related permissions
+  manageSettings: boolean;
 };
 
 export type UserProfile = {

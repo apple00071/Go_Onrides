@@ -32,9 +32,8 @@ export default function PendingPayments() {
     try {
       const supabase = getSupabaseClient();
       
-      console.log('Fetching pending payments...');
-      
       // Get bookings that are not cancelled or completed and have pending payments
+      // RLS will automatically filter for the worker's assigned bookings
       const { data: bookingsData, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
@@ -52,25 +51,19 @@ export default function PendingPayments() {
         .in('status', ['confirmed', 'in_use', 'pending'])
         .order('created_at', { ascending: false });
 
-      console.log('Bookings data:', bookingsData);
-      console.log('Bookings error:', bookingsError);
-
       if (bookingsError) {
-        console.error('Bookings fetch error:', bookingsError);
         throw bookingsError;
       }
 
-      // Get all payments to ensure we have the most recent payment data
+      // Get all payments for these bookings
+      const bookingIds = bookingsData?.map(b => b.id) || [];
       const { data: paymentsData, error: paymentsError } = await supabase
         .from('payments')
         .select('booking_id, amount, created_at')
+        .in('booking_id', bookingIds)
         .order('created_at', { ascending: false });
-      
-      console.log('Payments data:', paymentsData);
-      console.log('Payments error:', paymentsError);
 
       if (paymentsError) {
-        console.error('Payments fetch error:', paymentsError);
         throw paymentsError;
       }
       
@@ -81,28 +74,15 @@ export default function PendingPayments() {
           const currentTotal = paymentTotals.get(payment.booking_id) || 0;
           const paymentAmount = Number(payment.amount) || 0;
           paymentTotals.set(payment.booking_id, currentTotal + paymentAmount);
-          console.log(`Adding payment for booking ${payment.booking_id}: ${paymentAmount} (Total: ${currentTotal + paymentAmount})`);
         });
       }
-
-      console.log('Payment totals:', Object.fromEntries(paymentTotals));
 
       const pendingPayments = (bookingsData || []).filter(booking => {
         try {
           const bookingAmount = Number(booking.booking_amount) || 0;
           const securityDeposit = Number(booking.security_deposit_amount) || 0;
           const totalRequired = bookingAmount + securityDeposit;
-          
-          // Get actual paid amount from payments table
           const actualPaidAmount = paymentTotals.get(booking.id) || Number(booking.paid_amount) || 0;
-          
-          console.log(`Processing booking ${booking.booking_id}:`, {
-            bookingAmount,
-            securityDeposit,
-            totalRequired,
-            actualPaidAmount,
-            isPending: actualPaidAmount < totalRequired
-          });
           
           // Update the booking paid_amount with the actual total
           booking.paid_amount = actualPaidAmount;
@@ -114,7 +94,6 @@ export default function PendingPayments() {
         }
       });
 
-      console.log('Final pending payments:', pendingPayments);
       setPayments(pendingPayments);
     } catch (error) {
       console.error('Error fetching pending payments:', error);
@@ -155,7 +134,7 @@ export default function PendingPayments() {
             
             return (
               <Link 
-                key={booking.id} 
+                key={booking.id}
                 href={`/dashboard/bookings/${booking.booking_id || booking.id}`}
                 className="block"
               >
