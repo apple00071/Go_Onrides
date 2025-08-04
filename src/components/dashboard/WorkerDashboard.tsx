@@ -4,7 +4,7 @@ import { toast } from 'react-hot-toast';
 import { Calendar, Car, RefreshCw, RotateCcw, Clock, IndianRupee } from 'lucide-react';
 import VehicleReturns from '@/components/dashboard/VehicleReturns';
 import PendingPayments from '@/components/dashboard/PendingPayments';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, getISTDate } from '@/lib/utils';
 
 interface WorkerStats {
   totalBookings: number;
@@ -44,7 +44,7 @@ export default function WorkerDashboard() {
         .eq('status', 'in_use');
 
       // Get returns due today
-      const today = new Date();
+      const today = getISTDate();
       today.setHours(0, 0, 0, 0);
       const { count: returnsToday } = await supabase
         .from('bookings')
@@ -52,14 +52,25 @@ export default function WorkerDashboard() {
         .eq('end_date', today.toISOString().split('T')[0])
         .in('status', ['confirmed', 'in_use']);
 
+      // Get pending/overdue returns
+      const { data: pendingData } = await supabase
+        .from('bookings')
+        .select('end_date')
+        .in('status', ['confirmed', 'in_use']);
+
+      // Calculate pending returns (overdue returns)
+      const pendingReturns = (pendingData || []).filter(booking => {
+        const endDate = new Date(booking.end_date);
+        endDate.setHours(0, 0, 0, 0);
+        return endDate.getTime() < today.getTime();
+      }).length;
+
       // Get pending payments
-      const { data: pendingPayments, error: pendingError } = await supabase
+      const { data: pendingPayments } = await supabase
         .from('bookings')
         .select('booking_amount, security_deposit_amount, paid_amount')
         .or('payment_status.eq.pending,payment_status.eq.partial')
         .in('status', ['confirmed', 'in_use', 'pending']);
-
-      if (pendingError) throw pendingError;
 
       // Calculate total pending amount
       const pendingAmount = pendingPayments?.reduce((total, booking) => {
@@ -72,7 +83,7 @@ export default function WorkerDashboard() {
         totalBookings: totalBookings || 0,
         activeRentals: activeRentals || 0,
         returnsToday: returnsToday || 0,
-        pendingReturns: pendingPayments?.length || 0,
+        pendingReturns,
         pendingAmount,
       });
     } catch (error) {

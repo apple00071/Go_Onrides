@@ -57,11 +57,8 @@ export default function VehicleReturns() {
       const supabase = getSupabaseClient();
       const today = getISTDate();
       today.setHours(0, 0, 0, 0);
-      
-      const tomorrow = getISTDate();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      
+
+      // Get all active bookings
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
@@ -71,24 +68,35 @@ export default function VehicleReturns() {
       if (error) throw error;
 
       const categorizedReturns = (data || []).reduce((acc: any, booking) => {
-        const endDateTime = getISTDate(combineDateAndTime(booking.end_date, booking.dropoff_time));
-        const endDateStart = new Date(endDateTime);
-        endDateStart.setHours(0, 0, 0, 0);
+        const endDate = new Date(booking.end_date);
+        endDate.setHours(0, 0, 0, 0);
+        const todayDate = today.getTime();
+        const endDateTime = endDate.getTime();
 
-        // Check for overdue returns (end date is before today)
-        if (endDateStart.getTime() < today.getTime()) {
+        // Overdue returns (end date is in the past)
+        if (endDateTime < todayDate) {
           acc.overdue.push(booking);
-        } 
-        // Check for returns due today
-        else if (endDateStart.getTime() === today.getTime()) {
+        }
+        // Returns due today
+        else if (endDateTime === todayDate) {
           acc.today.push(booking);
-        } 
-        // Check for returns due tomorrow
-        else if (endDateStart.getTime() === tomorrow.getTime()) {
-          acc.upcoming.push(booking);
+        }
+        // Returns due tomorrow
+        else {
+          const tomorrow = new Date(today);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          if (endDateTime === tomorrow.getTime()) {
+            acc.upcoming.push(booking);
+          }
         }
         return acc;
       }, { overdue: [], today: [], upcoming: [] });
+
+      console.log('Categorized returns:', {
+        overdue: categorizedReturns.overdue.length,
+        today: categorizedReturns.today.length,
+        upcoming: categorizedReturns.upcoming.length
+      });
 
       setReturns(categorizedReturns);
     } catch (error) {

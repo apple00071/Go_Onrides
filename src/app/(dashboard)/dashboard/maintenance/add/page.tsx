@@ -95,6 +95,7 @@ export default function AddMaintenancePage() {
     notes: ''
   });
   const [selectedBatteryId, setSelectedBatteryId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (vehicleRegistration) {
@@ -168,7 +169,7 @@ export default function AddMaintenancePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    // setError(null); // This state variable is not defined in the original file
+    setError(null);
 
     try {
       const supabase = getSupabaseClient();
@@ -208,25 +209,42 @@ export default function AddMaintenancePage() {
         if (insertError) throw insertError;
       }
 
-      // Update vehicle status
-      const { error: vehicleError } = await supabase
-        .from('vehicles')
-        .update({ 
-          status: 'maintenance',
-          updated_at: new Date().toISOString(),
-          updated_by: user.id
-        })
-        .eq('registration', formData.vehicle_registration);
+      // Check for active bookings before updating vehicle status
+      const { data: activeBookings, error: bookingError } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('vehicle_details->registration', formData.vehicle_registration)
+        .in('status', ['confirmed', 'in_use'])
+        .limit(1);
 
-      if (vehicleError) {
-        console.error('Error updating vehicle status:', vehicleError);
+      if (bookingError) throw bookingError;
+
+      // Only update vehicle status if there are no active bookings
+      if (!activeBookings?.length) {
+        const { error: vehicleError } = await supabase
+          .from('vehicles')
+          .update({ 
+            status: 'available',
+            updated_at: new Date().toISOString(),
+            updated_by: user.id
+          })
+          .eq('registration', formData.vehicle_registration);
+
+        if (vehicleError) {
+          if (vehicleError.message.includes('Cannot change vehicle status: Vehicle has active bookings')) {
+            setError('Cannot update vehicle status: Vehicle has active bookings');
+            setLoading(false);
+            return;
+          }
+          throw vehicleError;
+        }
       }
 
-      toast.success('Maintenance records created successfully');
+      toast.success('Maintenance record added successfully');
       router.push('/dashboard/maintenance');
-    } catch (error) {
-      console.error('Error saving maintenance records:', error);
-      toast.error('Failed to save maintenance records');
+    } catch (error: any) {
+      console.error('Error adding maintenance record:', error);
+      setError(error.message);
     } finally {
       setLoading(false);
     }

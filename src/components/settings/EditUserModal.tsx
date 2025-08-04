@@ -14,10 +14,26 @@ type EditUserModalProps = {
 
 const availableRoles: Role[] = ['admin', 'worker'];
 const availablePermissions: { [key: string]: string } = {
-  createBooking: 'Create Booking',
   viewBookings: 'View Bookings',
+  createBooking: 'Create Booking',
+  manageBookings: 'Manage Bookings',
+  viewVehicles: 'View Vehicles',
+  createVehicle: 'Create Vehicle',
+  manageVehicles: 'Manage Vehicles',
+  viewCustomers: 'View Customers',
+  createCustomer: 'Create Customer',
+  manageCustomers: 'Manage Customers',
+  viewInvoices: 'View Invoices',
+  createInvoice: 'Create Invoice',
   managePayments: 'Manage Payments',
-  accessReports: 'Access Reports',
+  viewMaintenance: 'View Maintenance',
+  createMaintenance: 'Create Maintenance',
+  manageMaintenance: 'Manage Maintenance',
+  manageReturns: 'Manage Returns',
+  viewNotifications: 'View Notifications',
+  manageNotifications: 'Manage Notifications',
+  exportReports: 'Export Reports',
+  manageSettings: 'Manage Settings'
 };
 
 const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalProps) => {

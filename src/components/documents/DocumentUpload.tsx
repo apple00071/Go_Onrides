@@ -25,13 +25,19 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
     setLoadingDocuments(false);
   }, [existingDocuments]);
 
-  const getPublicUrl = (fileName: string | undefined) => {
+  const getPublicUrl = async (fileName: string | undefined) => {
     if (!fileName || !bookingId) return '';
-    const supabase = getSupabaseClient();
-    const { data } = supabase.storage
-      .from('customer-documents')
-      .getPublicUrl(`${bookingId}/${fileName}`);
-    return data?.publicUrl || '';
+    try {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase.storage
+        .from('customer-documents')
+        .createSignedUrl(`${bookingId}/${fileName}`, 3600); // 1 hour expiry
+
+      return data?.signedUrl || '';
+    } catch (error) {
+      console.error('Error getting signed URL:', error);
+      return '';
+    }
   };
 
   const handleFileUpload = async (file: File, type: keyof UploadedDocuments) => {
@@ -140,6 +146,13 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
     const hasTempPreview = tempPreviews[type];
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const cameraInputRef = React.useRef<HTMLInputElement>(null);
+    const [imageUrl, setImageUrl] = useState<string>('');
+
+    useEffect(() => {
+      if (hasFile && !hasTempPreview) {
+        getPublicUrl(documents[type]).then(url => setImageUrl(url));
+      }
+    }, [hasFile, documents[type], hasTempPreview]);
 
     const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
@@ -171,7 +184,7 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
               <>
                 <div className="relative w-full h-full">
                   <img
-                    src={hasTempPreview ? tempPreviews[type] : (hasFile ? getPublicUrl(documents[type]) : '')}
+                    src={hasTempPreview ? tempPreviews[type] : imageUrl}
                     alt={label}
                     className="w-full h-full object-contain rounded"
                   />
