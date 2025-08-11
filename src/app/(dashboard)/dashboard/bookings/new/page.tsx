@@ -485,15 +485,16 @@ export default function NewBookingPage() {
         setIsExistingCustomer(true);
 
         // Process customer documents to ensure they're in the correct format
-        const processedDocuments = customer.documents ? Object.entries(customer.documents).reduce((acc, [key, value]) => {
-          // Only include documents that have a value and are valid document types
-          if (value && ['customer_photo', 'aadhar_front', 'aadhar_back', 'dl_front', 'dl_back'].includes(key)) {
-            // If the value doesn't include a path, assume it's just the filename
-            const documentPath = value.includes('/') ? value : `${tempBookingId}/${value}`;
-            acc[key as keyof UploadedDocuments] = documentPath;
-          }
-          return acc;
-        }, {} as UploadedDocuments) : {};
+        const processedDocuments = customer.documents ? 
+          Object.entries(customer.documents as Record<string, string>).reduce((acc, [key, value]) => {
+            // Only include documents that have a value and are valid document types
+            if (value && ['customer_photo', 'aadhar_front', 'aadhar_back', 'dl_front', 'dl_back'].includes(key)) {
+              // If the value doesn't include a path, assume it's just the filename
+              const documentPath = value.includes('/') ? value : `${tempBookingId}/${value}`;
+              acc[key as keyof UploadedDocuments] = documentPath;
+            }
+            return acc;
+          }, {} as UploadedDocuments) : {};
 
         console.log('Loading existing customer documents:', {
           original: customer.documents,

@@ -8,11 +8,11 @@ export interface OutstationDetails {
 }
 
 export interface UploadedDocuments {
-  customer_photo?: string;
-  aadhar_front?: string;
-  aadhar_back?: string;
-  dl_front?: string;
-  dl_back?: string;
+  customer_photo?: string | undefined;
+  aadhar_front?: string | undefined;
+  aadhar_back?: string | undefined;
+  dl_front?: string | undefined;
+  dl_back?: string | undefined;
   [key: string]: string | undefined;
 }
 
