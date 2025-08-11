@@ -29,7 +29,7 @@ interface BookingDetails extends Omit<GlobalBookingDetails, 'signatures'> {
 interface EditBookingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onBookingUpdated: () => void;
+  onBookingUpdated: (updatedBooking: BookingDetails) => void;
   booking: BookingDetails;
 }
 
@@ -542,69 +542,77 @@ export default function EditBookingModal({
 
     try {
       const supabase = getSupabaseClient();
-
-      // Get the current user's email to use in the notification
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Update booking
-      const { error: bookingError } = await supabase
-        .from('bookings')
-        .update({
-          customer_name: formData.customer_name,
-          customer_contact: formData.customer_contact,
-          customer_email: formData.customer_email,
-          emergency_contact_phone: formData.emergency_contact_phone,
-          emergency_contact_phone1: formData.emergency_contact_phone1,
-          aadhar_number: formData.aadhar_number,
-          date_of_birth: formData.date_of_birth,
-          dl_number: formData.dl_number,
-          dl_expiry_date: formData.dl_expiry_date,
-          temp_address: formData.temp_address,
-          perm_address: formData.perm_address,
-          vehicle_details: formData.vehicle_details,
-          start_date: formData.start_date,
-          end_date: formData.end_date,
-          pickup_time: formData.pickup_time,
-          dropoff_time: formData.dropoff_time,
-          booking_amount: parseFloat(formData.booking_amount),
-          security_deposit_amount: parseFloat(formData.security_deposit_amount),
-          total_amount: parseFloat(formData.total_amount),
-          payment_status: formData.payment_status,
-          paid_amount: parseFloat(formData.paid_amount),
-          payment_mode: formData.payment_mode,
-          status: formData.status,
-          rental_purpose: formData.rental_purpose,
-          outstation_details: formData.outstation_details,
-          signature: formData.signature,
-          uploaded_documents: formData.uploaded_documents,
-          submitted_documents: formData.submitted_documents,
-          updated_at: new Date().toISOString(),
-          updated_by: user?.id
-        })
-        .eq('id', booking.id);
+      // Prepare update data
+      const updateData = {
+        customer_name: formData.customer_name,
+        customer_contact: formData.customer_contact,
+        customer_email: formData.customer_email,
+        alternative_phone: formData.alternative_phone,
+        emergency_contact_phone: formData.emergency_contact_phone,
+        emergency_contact_phone1: formData.emergency_contact_phone1,
+        colleague_phone: formData.colleague_phone,
+        aadhar_number: formData.aadhar_number,
+        date_of_birth: formData.date_of_birth,
+        dl_number: formData.dl_number,
+        dl_expiry_date: formData.dl_expiry_date,
+        temp_address: formData.temp_address,
+        perm_address: formData.perm_address,
+        vehicle_details: formData.vehicle_details,
+        start_date: formData.start_date,
+        end_date: formData.end_date,
+        pickup_time: formData.pickup_time,
+        dropoff_time: formData.dropoff_time,
+        booking_amount: parseFloat(formData.booking_amount),
+        security_deposit_amount: parseFloat(formData.security_deposit_amount),
+        total_amount: parseFloat(formData.total_amount),
+        paid_amount: parseFloat(formData.paid_amount),
+        payment_status: formData.payment_status,
+        payment_mode: formData.payment_mode,
+        status: formData.status,
+        rental_purpose: formData.rental_purpose,
+        outstation_details: formData.outstation_details,
+        signature: formData.signature,
+        uploaded_documents: formData.uploaded_documents,
+        submitted_documents: formData.submitted_documents,
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id
+      };
 
-      if (bookingError) {
-        throw new Error(`Failed to update booking: ${bookingError.message}`);
-      }
+      // Update booking in database
+      const { data: updatedBooking, error: updateError } = await supabase
+        .from('bookings')
+        .update(updateData)
+        .eq('id', booking.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      if (!updatedBooking) throw new Error('Failed to update booking');
 
       // Send notification about the booking update
-      await notifyBookingEvent(
-        'BOOKING_UPDATED',
-        booking.id,
-        {
-          customerName: formData.customer_name,
-          bookingId: booking.booking_id,
-          actionBy: user?.id || 'Unknown',
-          vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
-        }
-      );
+      if (booking.status !== updatedBooking.status) {
+        await notifyBookingEvent(
+          'BOOKING_UPDATED',
+          booking.id,
+          {
+            customerName: formData.customer_name,
+            bookingId: booking.booking_id,
+            actionBy: user?.id || 'Unknown',
+            vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`,
+            oldStatus: booking.status,
+            newStatus: updatedBooking.status
+          }
+        );
+      }
 
       toast.success('Booking updated successfully!');
-      onBookingUpdated();
+      onBookingUpdated(updatedBooking);
       onClose();
     } catch (error) {
       console.error('Error updating booking:', error);
-      setError(error instanceof Error ? error.message : 'Failed to update booking');
+      setError('Failed to update booking');
       toast.error('Failed to update booking');
     } finally {
       setLoading(false);
