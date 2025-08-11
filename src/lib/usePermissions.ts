@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from './supabase';
 
-type Permission = 'manageBookings' | 'manageCustomers' | 'manageVehicles' | 'uploadDocuments' | 'managePayments';
+export type Permission = 'manageBookings' | 'manageCustomers' | 'manageVehicles' | 'uploadDocuments' | 'managePayments' | 'accessReports';
 
 interface UsePermissionsReturn {
   isAdmin: boolean;
@@ -69,8 +69,8 @@ export function usePermissions(): UsePermissionsReturn {
       return Boolean(permissions?.uploadDocuments);
     }
 
-    // Workers cannot edit customers, vehicles, or manage payments
-    if (['manageCustomers', 'manageVehicles', 'managePayments'].includes(permission)) {
+    // Workers cannot edit customers, vehicles, manage payments, or access reports
+    if (['manageCustomers', 'manageVehicles', 'managePayments', 'accessReports'].includes(permission)) {
       return false;
     }
 

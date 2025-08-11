@@ -2,12 +2,12 @@
 
 import React from 'react';
 import { usePermissions } from '@/lib/usePermissions';
-import type { Permission } from '@/types/database';
+import type { Permission } from '@/lib/usePermissions';
 
 type PermissionType = 'create' | 'edit' | 'delete' | 'view';
 
 interface PermissionGuardProps {
-  resource: keyof Permission | string;
+  resource: string;
   type: PermissionType;
   children: React.ReactNode;
   fallback?: React.ReactNode;
@@ -16,7 +16,7 @@ interface PermissionGuardProps {
 /**
  * Component that conditionally renders children based on user permissions
  * @example
- * <PermissionGuard resource="createBooking" type="create">
+ * <PermissionGuard resource="booking" type="create">
  *   <button>Create Booking</button>
  * </PermissionGuard>
  */
@@ -26,31 +26,31 @@ export default function PermissionGuard({
   children,
   fallback = null
 }: PermissionGuardProps) {
-  const { canCreate, canEdit, canDelete, canView, loading } = usePermissions();
+  const { hasPermission, loading } = usePermissions();
   
   // If still loading permissions, don't render anything
   if (loading) return null;
   
-  let hasPermission = false;
+  let hasAccess = false;
+  const resourceName = resource.toLowerCase();
   
-  switch (type) {
-    case 'create':
-      hasPermission = canCreate(resource as keyof Permission);
-      break;
-    case 'edit':
-      hasPermission = canEdit(resource);
-      break;
-    case 'delete':
-      hasPermission = canDelete(resource);
-      break;
-    case 'view':
-      hasPermission = canView(resource as keyof Permission);
-      break;
-    default:
-      hasPermission = false;
+  // Map the permission type to the actual permission string
+  const permissionMap: Record<PermissionType, (resource: string) => Permission> = {
+    create: (r) => `manage${r.charAt(0).toUpperCase() + r.slice(1)}s` as Permission,
+    edit: (r) => `manage${r.charAt(0).toUpperCase() + r.slice(1)}s` as Permission,
+    delete: (r) => `manage${r.charAt(0).toUpperCase() + r.slice(1)}s` as Permission,
+    view: (r) => `view${r.charAt(0).toUpperCase() + r.slice(1)}s` as Permission,
+  };
+
+  try {
+    const permissionString = permissionMap[type](resourceName);
+    hasAccess = hasPermission(permissionString);
+  } catch (error) {
+    console.error(`Invalid permission mapping for resource: ${resourceName}, type: ${type}`);
+    hasAccess = false;
   }
   
-  if (hasPermission) {
+  if (hasAccess) {
     return <>{children}</>;
   }
   
