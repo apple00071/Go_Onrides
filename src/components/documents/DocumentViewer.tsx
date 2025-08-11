@@ -19,9 +19,15 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
   useEffect(() => {
     async function loadDocument() {
       try {
+        // Extract bookingId and fileName from document_url
+        const [bookingId, fileName] = document.document_url.split('/');
+        if (!bookingId || !fileName) {
+          throw new Error('Invalid document URL format');
+        }
+
         const { data: signedUrl, error: urlError } = await supabase.storage
-          .from('documents')
-          .createSignedUrl(document.document_url, 3600); // 1 hour expiry
+          .from('customer-documents')  // Use customer-documents bucket
+          .createSignedUrl(`${bookingId}/${fileName}`, 3600); // 1 hour expiry
 
         if (urlError) throw urlError;
         if (!signedUrl?.signedUrl) throw new Error('Failed to generate signed URL');
@@ -41,7 +47,12 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
       <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-lg font-semibold text-gray-900">
-            Document Viewer
+            {document.document_type === 'customer_photo' ? 'Customer Photo' :
+             document.document_type === 'aadhar_front' ? 'Aadhar Front' :
+             document.document_type === 'aadhar_back' ? 'Aadhar Back' :
+             document.document_type === 'dl_front' ? 'DL Front' :
+             document.document_type === 'dl_back' ? 'DL Back' :
+             'Document'} Viewer
           </h2>
           <button
             onClick={onClose}
@@ -60,13 +71,12 @@ export default function DocumentViewer({ document, onClose }: DocumentViewerProp
             <div className="flex justify-center items-center h-full">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          ) : document.document_type.startsWith('image/') ? (
+          ) : document.document_type.startsWith('image/') || 
+             ['customer_photo', 'aadhar_front', 'aadhar_back', 'dl_front', 'dl_back'].includes(document.document_type) ? (
             <div className="relative">
-              <Image
+              <img
                 src={url}
                 alt="Document preview"
-                width={800}
-                height={600}
                 className="w-full h-auto max-h-[80vh] object-contain"
               />
             </div>

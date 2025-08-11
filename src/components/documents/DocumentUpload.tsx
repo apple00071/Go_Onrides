@@ -26,12 +26,22 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
   }, [existingDocuments]);
 
   const getPublicUrl = async (fileName: string | undefined) => {
-    if (!fileName || !bookingId) return '';
+    if (!fileName) return '';
     try {
       const supabase = getSupabaseClient();
+      
+      // If fileName already contains a path, use it as is
+      const filePath = fileName.includes('/') ? fileName : `${bookingId}/${fileName}`;
+      
       const { data } = await supabase.storage
         .from('customer-documents')
-        .createSignedUrl(`${bookingId}/${fileName}`, 3600); // 1 hour expiry
+        .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+      console.log('Getting signed URL for:', {
+        fileName,
+        filePath,
+        signedUrl: data?.signedUrl
+      });
 
       return data?.signedUrl || '';
     } catch (error) {
@@ -51,14 +61,24 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
 
       // If there's an existing document, delete it first
       if (documents[type]) {
+        const existingPath = documents[type].includes('/') ? 
+          documents[type] : 
+          `${bookingId}/${documents[type]}`;
+
         await supabase.storage
           .from('customer-documents')
-          .remove([`${bookingId}/${documents[type]}`]);
+          .remove([existingPath]);
       }
 
       const fileExt = file.name.split('.').pop();
       const fileName = `${type}-${Date.now()}.${fileExt}`;
       const filePath = `${bookingId}/${fileName}`;
+
+      console.log('Uploading file:', {
+        type,
+        fileName,
+        filePath
+      });
 
       const { error: uploadError } = await supabase.storage
         .from('customer-documents')
@@ -71,11 +91,13 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         throw uploadError;
       }
 
-      // Store just the filename
+      // Store the full path
       const updatedDocuments = {
         ...documents,
-        [type]: fileName
+        [type]: filePath
       };
+
+      console.log('Updated documents:', updatedDocuments);
 
       setDocuments(updatedDocuments);
       onDocumentsUploaded(updatedDocuments);
@@ -103,12 +125,21 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
   const handleRemoveFile = async (type: keyof UploadedDocuments) => {
     try {
       const supabase = getSupabaseClient();
-      const fileName = documents[type]?.split('/').pop();
+      const filePath = documents[type];
 
-      if (fileName) {
+      if (filePath) {
+        // Use the full path if it exists, otherwise construct it
+        const fullPath = filePath.includes('/') ? filePath : `${bookingId}/${filePath}`;
+        
+        console.log('Removing file:', {
+          type,
+          filePath,
+          fullPath
+        });
+
         await supabase.storage
           .from('customer-documents')
-          .remove([`${bookingId}/${fileName}`]);
+          .remove([fullPath]);
       }
 
       const updatedDocuments = { ...documents };

@@ -11,7 +11,7 @@ DROP POLICY IF EXISTS "Allow public to read files" ON storage.objects;
 -- Create the customer-documents bucket if it doesn't exist
 INSERT INTO storage.buckets (id, name, public)
 VALUES ('customer-documents', 'customer-documents', true)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET public = true;
 
 -- Enable Row Level Security
 ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY;
@@ -56,17 +56,7 @@ BEGIN
     )
   ');
 
-  -- Policy to allow authenticated users to read files
-  EXECUTE format('
-    CREATE POLICY "Allow authenticated users to read files"
-    ON storage.objects FOR SELECT
-    TO authenticated
-    USING (
-      bucket_id = ''customer-documents''
-    )
-  ');
-
-  -- Policy to allow public to read files (since bucket is public)
+  -- Policy to allow public access to read files
   EXECUTE format('
     CREATE POLICY "Allow public to read files"
     ON storage.objects FOR SELECT

@@ -483,11 +483,29 @@ export default function NewBookingPage() {
       if (customers && customers.length > 0) {
         const customer = customers[0];
         setIsExistingCustomer(true);
+
+        // Process customer documents to ensure they're in the correct format
+        const processedDocuments = customer.documents ? Object.entries(customer.documents).reduce((acc, [key, value]) => {
+          // Only include documents that have a value and are valid document types
+          if (value && ['customer_photo', 'aadhar_front', 'aadhar_back', 'dl_front', 'dl_back'].includes(key)) {
+            // If the value doesn't include a path, assume it's just the filename
+            const documentPath = value.includes('/') ? value : `${tempBookingId}/${value}`;
+            acc[key as keyof UploadedDocuments] = documentPath;
+          }
+          return acc;
+        }, {} as UploadedDocuments) : {};
+
+        console.log('Loading existing customer documents:', {
+          original: customer.documents,
+          processed: processedDocuments,
+          tempBookingId
+        });
+
         setFormData(prev => ({
           ...prev,
           customer_name: customer.name || '',
           customer_email: customer.email || '',
-          customer_contact: customer.contact || '', // Use contact field
+          customer_contact: customer.contact || '',
           alternative_phone: customer.alternative_phone || '',
           emergency_contact_phone: customer.emergency_contact_phone || '',
           emergency_contact_phone1: customer.emergency_contact_phone1 || '',
@@ -496,7 +514,7 @@ export default function NewBookingPage() {
           dl_expiry_date: customer.dl_expiry_date || '',
           temp_address: customer.temp_address || '',
           perm_address: customer.perm_address || '',
-          uploaded_documents: customer.documents || {}
+          uploaded_documents: processedDocuments
         }));
         toast.success('Found existing customer - form pre-filled with details and documents');
       } else {
@@ -578,13 +596,39 @@ export default function NewBookingPage() {
   };
 
   const handleDocumentsUploaded = (documents: UploadedDocuments) => {
-    setFormData(prev => ({
-      ...prev,
-      uploaded_documents: {
-        ...prev.uploaded_documents,
-        ...documents
-      }
-    }));
+    setFormData(prev => {
+      // Start with existing documents or empty object
+      const existingDocs = prev.uploaded_documents || {};
+      
+      // Create a new object with both existing and new documents
+      const updatedDocs = {
+        ...existingDocs
+      };
+
+      // Update or add new documents
+      Object.entries(documents).forEach(([key, value]) => {
+        if (value) {
+          // If the value doesn't include a path, prepend the booking ID
+          const documentPath = value.includes('/') ? value : `${tempBookingId}/${value}`;
+          updatedDocs[key as keyof UploadedDocuments] = documentPath;
+        } else {
+          // If the value is null/undefined/empty, remove the document
+          delete updatedDocs[key as keyof UploadedDocuments];
+        }
+      });
+
+      console.log('Updating documents:', {
+        existing: existingDocs,
+        new: documents,
+        merged: updatedDocs,
+        tempBookingId
+      });
+
+      return {
+        ...prev,
+        uploaded_documents: updatedDocs
+      };
+    });
   };
 
   const handleSubmittedDocumentsChange = (documents: SubmittedDocuments) => {

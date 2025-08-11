@@ -11,6 +11,7 @@ export interface Document {
 
 // Document types that can be uploaded
 export type DocumentType = 
+  | 'customer_photo'
   | 'aadhar_front'
   | 'aadhar_back'
   | 'dl_front'
@@ -21,6 +22,7 @@ export type DocumentType =
 
 // Map of document types to their display names
 export const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  customer_photo: 'Customer Photo',
   aadhar_front: 'Aadhar Card (Front)',
   aadhar_back: 'Aadhar Card (Back)',
   dl_front: 'Driving License (Front)',

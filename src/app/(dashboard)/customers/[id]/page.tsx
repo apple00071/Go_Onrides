@@ -116,6 +116,22 @@ const isValidUrl = (url: string | null | undefined): url is string => {
   return typeof url === 'string' && url.trim().length > 0;
 };
 
+// Add this function at the top level
+const getPublicUrl = (fileName: string) => {
+  if (!fileName) return '';
+  
+  // If fileName already contains a path (e.g., GN125/file.jpg), use it as is
+  if (fileName.includes('/')) {
+    const supabase = getSupabaseClient();
+    const { data } = supabase.storage
+      .from('customer-documents')
+      .getPublicUrl(fileName);
+    return data?.publicUrl || '';
+  }
+  
+  return '';
+};
+
 export default function CustomerDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -127,83 +143,50 @@ export default function CustomerDetailsPage() {
 
   useEffect(() => {
     const fetchCustomerDetails = async () => {
-      if (!params?.id) {
-        setError('No customer ID provided');
-        setLoading(false);
-        return;
-      }
-
       try {
+        if (!params?.id) {
+          setError('No customer ID provided');
+          return;
+        }
+
+        setLoading(true);
         const supabase = getSupabaseClient();
-        
-        // First, get the customer details with documents
+
+        // First get the customer's latest booking to get the booking ID
+        const { data: latestBooking, error: bookingError } = await supabase
+          .from('bookings')
+          .select('booking_id, documents')
+          .eq('customer_id', params.id)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single();
+
+        if (bookingError && bookingError.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+          console.error('Error fetching latest booking:', bookingError);
+        }
+
+        // Then get the customer details
         const { data: customerData, error: customerError } = await supabase
           .from('customers')
-          .select(`
-            id,
-            name,
-            email,
-            phone,
-            alternative_phone,
-            temp_address_street,
-            temp_address_city,
-            temp_address_state,
-            temp_address_pincode,
-            perm_address_street,
-            perm_address_city,
-            perm_address_state,
-            perm_address_pincode,
-            emergency_contact_name,
-            emergency_contact_phone,
-            emergency_contact_phone1,
-            emergency_contact_relationship,
-            created_at,
-            documents,
-            aadhar_number,
-            dl_number,
-            dl_expiry_date,
-            dob
-          `)
+          .select('*')
           .eq('id', params.id)
           .single();
 
-        if (customerError) {
-          console.error('Customer fetch error:', customerError);
-          throw new Error(customerError.message || 'Failed to fetch customer details');
+        if (customerError) throw customerError;
+        if (!customerData) throw new Error('Customer not found');
+
+        // Process documents to get public URLs using the booking ID
+        if (customerData.documents) {
+          const processedDocuments: Record<string, string> = {};
+          for (const [key, value] of Object.entries(customerData.documents)) {
+            if (value && typeof value === 'string') {
+              processedDocuments[key] = getPublicUrl(value);
+            }
+          }
+          customerData.documents = processedDocuments;
         }
 
-        if (!customerData) {
-          throw new Error('Customer not found');
-        }
-
-        // Get the public URLs for each document
-        const getPublicUrl = (fileName: string) => {
-          if (!fileName) return '';
-          const { data } = supabase.storage
-            .from('customer-documents')
-            .getPublicUrl(`${customerData.id}/${fileName}`);
-          return data?.publicUrl || '';
-        };
-
-        // Process documents to get public URLs
-        const documents = {
-          customer_photo: customerData.documents?.customer_photo ? 
-            getPublicUrl(customerData.documents.customer_photo) : '',
-          aadhar_front: customerData.documents?.aadhar_front ? 
-            getPublicUrl(customerData.documents.aadhar_front) : '',
-          aadhar_back: customerData.documents?.aadhar_back ? 
-            getPublicUrl(customerData.documents.aadhar_back) : '',
-          dl_front: customerData.documents?.dl_front ? 
-            getPublicUrl(customerData.documents.dl_front) : '',
-          dl_back: customerData.documents?.dl_back ? 
-            getPublicUrl(customerData.documents.dl_back) : ''
-        };
-
-        console.log('Raw documents:', customerData.documents);
-        console.log('Customer ID:', customerData.id);
-        console.log('Processed documents with URLs:', documents);
-
-        // Get customer's bookings and their submitted documents
+        // Get customer's bookings
         const { data: bookingsData, error: bookingsError } = await supabase
           .from('bookings')
           .select(`
@@ -223,28 +206,10 @@ export default function CustomerDetailsPage() {
           console.error('Bookings fetch error:', bookingsError);
         }
 
-        // Get the latest submitted documents from the most recent booking
-        const defaultSubmittedDocs = {
-          passport: false,
-          voter_id: false,
-          original_dl: false,
-          original_aadhar: false,
-          other_document: false
-        };
-
-        const latestSubmittedDocuments = bookingsData && bookingsData.length > 0 && bookingsData[0].submitted_documents
-          ? bookingsData[0].submitted_documents
-          : defaultSubmittedDocs;
-
-        const customerWithDetails = {
+        setCustomer({
           ...customerData,
-          documents: documents,
-          bookings: bookingsData || [],
-          submitted_documents: latestSubmittedDocuments,
-        } as CustomerDetails;
-
-        console.log('Customer details:', customerWithDetails);
-        setCustomer(customerWithDetails);
+          bookings: bookingsData || []
+        });
         setError(null);
       } catch (error) {
         console.error('Error fetching customer:', error);

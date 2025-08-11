@@ -46,12 +46,31 @@ const isValidUrl = (url: string | null | undefined): url is string => {
 };
 
 // Update the getPublicUrl function
-const getPublicUrl = (customerId: string, fileName: string) => {
-  if (!fileName || !customerId) return '';
+const getPublicUrl = (bookingId: string, fileName: string) => {
+  if (!fileName || !bookingId) return '';
+  
+  // If fileName is already a full URL, extract just the path part
+  if (fileName.includes('customer-documents/')) {
+    const pathMatch = fileName.match(/customer-documents\/(.+)/);
+    if (pathMatch) {
+      fileName = pathMatch[1];
+    }
+  }
+
+  // If fileName already contains a path with booking ID, use it as is
+  if (fileName.includes('/')) {
+    const supabase = getSupabaseClient();
+    const { data } = supabase.storage
+      .from('customer-documents')
+      .getPublicUrl(fileName);
+    return data?.publicUrl || '';
+  }
+  
+  // Otherwise, construct the path with the booking ID
   const supabase = getSupabaseClient();
   const { data } = supabase.storage
     .from('customer-documents')
-    .getPublicUrl(`${customerId}/${fileName}`);
+    .getPublicUrl(`${bookingId}/${fileName}`);
   return data?.publicUrl || '';
 };
 
@@ -136,6 +155,18 @@ export default function BookingDetailsPage() {
         throw new Error('Booking not found');
       }
 
+      // Process customer documents to get public URLs
+      if (bookingData.customer?.documents) {
+        const processedDocuments: Record<string, string> = {};
+        for (const [key, value] of Object.entries(bookingData.customer.documents as Record<string, string>)) {
+          if (value && typeof value === 'string') {
+            // Use the booking ID instead of customer ID
+            processedDocuments[key] = getPublicUrl(bookingData.booking_id, value);
+          }
+        }
+        bookingData.customer.documents = processedDocuments;
+      }
+
       // Fetch signatures separately
       const { data: signaturesData, error: signaturesError } = await supabase
         .from('booking_signatures')
@@ -154,98 +185,17 @@ export default function BookingDetailsPage() {
       console.log('Raw signatures data:', signaturesData);
       console.log('Processed signatures:', { bookingSignature, completionSignature });
 
-      // Get the public URLs for each document
-      const getPublicUrl = (fileName: string) => {
-        if (!fileName) return '';
-        const path = `${bookingData.customer?.id}/${fileName}`;
-        console.log('Getting public URL for:', path);
-        const { data } = supabase.storage
-          .from('customer-documents')
-          .getPublicUrl(path);
-        console.log('Public URL result:', data);
-        return data?.publicUrl || '';
-      };
-
-      // Process customer documents to get public URLs
-      const customerDocuments = bookingData.customer?.documents ? {
-        customer_photo: bookingData.customer.documents.customer_photo ? 
-          getPublicUrl(bookingData.customer.documents.customer_photo) : '',
-        aadhar_front: bookingData.customer.documents.aadhar_front ? 
-          getPublicUrl(bookingData.customer.documents.aadhar_front) : '',
-        aadhar_back: bookingData.customer.documents.aadhar_back ? 
-          getPublicUrl(bookingData.customer.documents.aadhar_back) : '',
-        dl_front: bookingData.customer.documents.dl_front ? 
-          getPublicUrl(bookingData.customer.documents.dl_front) : '',
-        dl_back: bookingData.customer.documents.dl_back ? 
-          getPublicUrl(bookingData.customer.documents.dl_back) : ''
-      } : {};
-
-      console.log('Raw customer documents:', bookingData.customer?.documents);
-      console.log('Customer ID:', bookingData.customer?.id);
-      console.log('Processed documents with URLs:', customerDocuments);
-      console.log('Signatures:', { bookingSignature, completionSignature });
-
-      // Transform the booking data
-      const transformedBooking: BookingDetailsData = {
+      setBooking({
         ...bookingData,
-        customer_name: bookingData.customer?.name || '',
-        customer_contact: bookingData.customer?.phone || '',
-        customer_email: bookingData.customer?.email || '',
-        alternative_phone: bookingData.customer?.alternative_phone || null,
-        emergency_contact_phone: bookingData.customer?.emergency_contact_phone || null,
-        emergency_contact_phone1: bookingData.customer?.emergency_contact_phone1 || null,
-        colleague_phone: bookingData.colleague_phone || null,
-        aadhar_number: bookingData.customer?.aadhar_number || '',
-        date_of_birth: bookingData.customer?.dob || null,
-        dl_number: bookingData.customer?.dl_number || null,
-        dl_expiry_date: bookingData.customer?.dl_expiry_date || null,
-        temp_address: bookingData.temp_address || null,
-        perm_address: bookingData.perm_address || null,
-        customer: {
-          id: bookingData.customer?.id || '',
-          name: bookingData.customer?.name || '',
-          phone: bookingData.customer?.phone || '',
-          email: bookingData.customer?.email || '',
-          documents: customerDocuments
-        },
-        submitted_documents: bookingData.submitted_documents || {
-          passport: false,
-          voter_id: false,
-          original_dl: false,
-          original_aadhar: false,
-          other_document: false
-        } as {
-          passport: boolean;
-          voter_id: boolean;
-          original_dl: boolean;
-          original_aadhar: boolean;
-          other_document: boolean;
-        },
         signatures: {
           bookingSignature,
           completionSignature
-        },
-        damage_charges: bookingData.damage_charges || 0,
-        late_fee: bookingData.late_fee || 0,
-        extension_fee: bookingData.extension_fee || 0,
-        refund_amount: bookingData.refund_amount || 0,
-        vehicle_remarks: bookingData.vehicle_remarks || ''
-      };
-
-      console.log('Customer documents:', bookingData.customer?.documents);
-      console.log('Submitted documents:', transformedBooking.submitted_documents);
-      console.log('Signatures:', { bookingSignature, completionSignature });
-      console.log('Transformed booking data:', transformedBooking);
-
-      setBooking(transformedBooking);
-      setSignature({
-        bookingSignature,
-        completionSignature
+        }
       });
-      setError(null);
     } catch (error) {
-      console.error('Error fetching booking details:', error);
-      setError(error instanceof Error ? error.message : 'An error occurred while fetching booking details');
+      console.error('Error:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch booking details';
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -770,12 +720,12 @@ export default function BookingDetailsPage() {
                       <>
                         {booking.customer.documents.customer_photo && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.customer_photo), 'Customer Photo')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.customer_photo), 'Customer Photo')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.customer_photo)}
+                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.customer_photo)}
                                   alt="Customer Photo"
                                   fill
                                   className="object-cover"
@@ -786,12 +736,12 @@ export default function BookingDetailsPage() {
                         )}
                         {booking.customer.documents.aadhar_front && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.aadhar_front), 'Aadhar Front')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.aadhar_front), 'Aadhar Front')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.aadhar_front)}
+                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.aadhar_front)}
                                   alt="Aadhar Front"
                                   fill
                                   className="object-cover"
@@ -802,12 +752,12 @@ export default function BookingDetailsPage() {
                         )}
                         {booking.customer.documents.aadhar_back && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.aadhar_back), 'Aadhar Back')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.aadhar_back), 'Aadhar Back')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.aadhar_back)}
+                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.aadhar_back)}
                                   alt="Aadhar Back"
                                   fill
                                   className="object-cover"
@@ -818,12 +768,12 @@ export default function BookingDetailsPage() {
                         )}
                         {booking.customer.documents.dl_front && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.dl_front), 'DL Front')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.dl_front), 'DL Front')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.dl_front)}
+                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.dl_front)}
                                   alt="DL Front"
                                   fill
                                   className="object-cover"
@@ -834,12 +784,12 @@ export default function BookingDetailsPage() {
                         )}
                         {booking.customer.documents.dl_back && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.customer.id, booking.customer.documents.dl_back), 'DL Back')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.dl_back), 'DL Back')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.customer.id, booking.customer.documents.dl_back)}
+                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.dl_back)}
                                   alt="DL Back"
                                   fill
                                   className="object-cover"

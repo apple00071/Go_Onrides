@@ -1,3 +1,4 @@
+
 -- Function to check active bookings and update vehicle status after maintenance
 CREATE OR REPLACE FUNCTION update_vehicle_status_after_maintenance()
 RETURNS TRIGGER AS $$

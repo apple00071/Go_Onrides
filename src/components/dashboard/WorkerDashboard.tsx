@@ -10,7 +10,6 @@ interface WorkerStats {
   totalBookings: number;
   activeRentals: number;
   returnsToday: number;
-  pendingReturns: number;
   pendingAmount: number;
 }
 
@@ -19,7 +18,6 @@ export default function WorkerDashboard() {
     totalBookings: 0,
     activeRentals: 0,
     returnsToday: 0,
-    pendingReturns: 0,
     pendingAmount: 0,
   });
   const [loading, setLoading] = useState(true);
@@ -43,27 +41,53 @@ export default function WorkerDashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
 
-      // Get returns due today
+      // Get all returns (confirmed and in_use bookings)
+      const { data: returnsData } = await supabase
+        .from('bookings')
+        .select('*')
+        .in('status', ['confirmed', 'in_use'])
+        .order('end_date', { ascending: true });
+
+      // Calculate returns using the same logic as VehicleReturns component
       const today = getISTDate();
       today.setHours(0, 0, 0, 0);
-      const { count: returnsToday } = await supabase
-        .from('bookings')
-        .select('*', { count: 'exact', head: true })
-        .eq('end_date', today.toISOString().split('T')[0])
-        .in('status', ['confirmed', 'in_use']);
+      const todayTime = today.getTime();
 
-      // Get pending/overdue returns
-      const { data: pendingData } = await supabase
-        .from('bookings')
-        .select('end_date')
-        .in('status', ['confirmed', 'in_use']);
+      console.log('Debug - Today:', {
+        date: today.toISOString(),
+        timestamp: todayTime
+      });
 
-      // Calculate pending returns (overdue returns)
-      const pendingReturns = (pendingData || []).filter(booking => {
-        const endDate = new Date(booking.end_date);
+      const categorizedReturns = (returnsData || []).reduce((acc: { today: number, pending: number }, booking) => {
+        // Convert end_date string to Date object in IST
+        const endDate = getISTDate(new Date(booking.end_date));
         endDate.setHours(0, 0, 0, 0);
-        return endDate.getTime() < today.getTime();
-      }).length;
+        const endDateTime = endDate.getTime();
+
+        console.log('Debug - Booking:', {
+          id: booking.id,
+          end_date: booking.end_date,
+          endDateIST: endDate.toISOString(),
+          endDateTime,
+          isBeforeToday: endDateTime < todayTime,
+          isToday: endDateTime === todayTime
+        });
+
+        if (endDateTime < todayTime) {
+          acc.pending++;
+          console.log('Debug - Marked as pending:', booking.id);
+        } else if (endDateTime === todayTime) {
+          acc.today++;
+          console.log('Debug - Marked as today:', booking.id);
+        }
+        return acc;
+      }, { today: 0, pending: 0 });
+
+      console.log('Debug - Final counts:', {
+        today: categorizedReturns.today,
+        pending: categorizedReturns.pending,
+        returnsData: returnsData?.length || 0
+      });
 
       // Get pending payments
       const { data: pendingPayments } = await supabase
@@ -82,8 +106,7 @@ export default function WorkerDashboard() {
       setStats({
         totalBookings: totalBookings || 0,
         activeRentals: activeRentals || 0,
-        returnsToday: returnsToday || 0,
-        pendingReturns,
+        returnsToday: categorizedReturns.today,
         pendingAmount,
       });
     } catch (error) {
@@ -120,7 +143,7 @@ export default function WorkerDashboard() {
           </div>
 
           {/* Stats Grid */}
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {/* Total Bookings */}
             <div className="bg-white rounded-lg p-6">
               <div className="flex items-start">
@@ -169,19 +192,6 @@ export default function WorkerDashboard() {
                 <div className="ml-4">
                   <p className="text-sm font-medium text-gray-600">Payment Pending</p>
                   <p className="text-2xl font-semibold text-yellow-600">{formatCurrency(stats.pendingAmount)}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Pending Returns */}
-            <div className="bg-white rounded-lg p-6">
-              <div className="flex items-start">
-                <div className="flex-shrink-0">
-                  <Clock className="h-6 w-6 text-gray-400" />
-                </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">Pending Returns</p>
-                  <p className="text-2xl font-semibold text-gray-900">{stats.pendingReturns}</p>
                 </div>
               </div>
             </div>
