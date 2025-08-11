@@ -7,6 +7,8 @@ import { X } from 'lucide-react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { toast } from 'react-hot-toast';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import { getSupabaseClient } from '@/lib/supabase';
+import ImageModal from '@/components/common/ImageModal';
 
 interface Customer {
   id: string
@@ -60,6 +62,7 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   const supabase = createClientComponentClient();
 
@@ -105,6 +108,23 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
     fetchBookings();
   }, [customer?.id, supabase]);
 
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        setUserRole(profile?.role || null);
+      }
+    };
+
+    fetchUserRole();
+  }, []);
+
   const documentLabels = {
     customer_photo: 'Customer Photo',
     aadhar_front: 'Aadhar Card Front',
@@ -142,12 +162,14 @@ const CustomerDetail = ({ customer }: CustomerDetailProps) => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Customer Details</h1>
         <div className="flex gap-4">
-          <Link
-            href={`/customers/${customer.id}/edit`}
-            className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600"
-          >
-            Edit Customer
-          </Link>
+          {userRole === 'admin' && (
+            <Link
+              href={`/customers/${customer.id}/edit`}
+              className="px-4 py-2 bg-indigo-500 text-white rounded-lg hover:bg-indigo-600"
+            >
+              Edit Customer
+            </Link>
+          )}
           <Link
             href="/customers"
             className="px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600"

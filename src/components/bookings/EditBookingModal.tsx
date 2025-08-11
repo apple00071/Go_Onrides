@@ -10,7 +10,7 @@ import DocumentUpload from '@/components/documents/DocumentUpload';
 import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
 import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRotation';
 import type { UploadedDocuments, SubmittedDocuments, BookingDetails as GlobalBookingDetails } from '@/types/bookings';
-import { formatCurrency, formatDateForInput } from '@/lib/utils';
+import { formatCurrency, formatDateForInput, formatDateForDisplay } from '@/lib/utils';
 
 interface OutstationDetails {
   destination: string;
@@ -113,6 +113,24 @@ export default function EditBookingModal({
 }: EditBookingModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        setUserRole(profile?.role || null);
+      }
+    };
+
+    fetchUserRole();
+  }, []);
 
   // Create form data from booking
   const initialFormData = useMemo<FormData>(() => ({
@@ -280,6 +298,11 @@ export default function EditBookingModal({
         setError('Customer must be at least 18 years old');
         return;
       }
+      setFormData(prev => ({
+        ...prev,
+        [name]: formatDateForInput(selectedDate)
+      }));
+      return;
     }
 
     if (name === 'dl_expiry_date') {
@@ -290,6 +313,11 @@ export default function EditBookingModal({
         setError('Driving license cannot be expired');
         return;
       }
+      setFormData(prev => ({
+        ...prev,
+        [name]: formatDateForInput(selectedDate)
+      }));
+      return;
     }
 
     if (name === 'start_date') {
@@ -305,9 +333,16 @@ export default function EditBookingModal({
       if (endDate < selectedDate) {
         setFormData(prev => ({
           ...prev,
-          end_date: value
+          start_date: formatDateForInput(selectedDate),
+          end_date: formatDateForInput(selectedDate)
+        }));
+      } else {
+        setFormData(prev => ({
+          ...prev,
+          start_date: formatDateForInput(selectedDate)
         }));
       }
+      return;
     }
 
     if (name === 'end_date') {
@@ -325,6 +360,12 @@ export default function EditBookingModal({
         setError('Maximum booking duration is 30 days');
         return;
       }
+
+      setFormData(prev => ({
+        ...prev,
+        end_date: formatDateForInput(selectedDate)
+      }));
+      return;
     }
 
     // Time validation
@@ -490,10 +531,16 @@ export default function EditBookingModal({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    try {
-      setLoading(true);
-      setError(null);
+    // Check if user has admin role
+    if (userRole !== 'admin') {
+      setError('Unauthorized - Only administrators can modify bookings');
+      return;
+    }
 
+    setLoading(true);
+    setError(null);
+
+    try {
       const supabase = getSupabaseClient();
 
       // Get the current user's email to use in the notification
@@ -723,6 +770,9 @@ export default function EditBookingModal({
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
+                    <div className="mt-1 text-sm text-gray-500">
+                      Selected: {formData.date_of_birth ? formatDateForDisplay(formData.date_of_birth) : 'Not selected'}
+                    </div>
                   </div>
                 </div>
 
@@ -753,6 +803,9 @@ export default function EditBookingModal({
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
+                    <div className="mt-1 text-sm text-gray-500">
+                      Selected: {formData.dl_expiry_date ? formatDateForDisplay(formData.dl_expiry_date) : 'Not selected'}
+                    </div>
                   </div>
                 </div>
 
@@ -830,13 +883,16 @@ export default function EditBookingModal({
                       required
                       value={formData.start_date}
                       onChange={handleInputChange}
-                      min={formatDateForInput(today)}
+                      min={formatDateForInput(new Date())}
                       max={formatDateForInput(maxStartDate)}
                       disabled={booking.status === 'in_use' || booking.status === 'completed'}
                       className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
                         booking.status === 'in_use' || booking.status === 'completed' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     />
+                    <div className="mt-1 text-sm text-gray-500">
+                      Selected: {formData.start_date ? formatDateForDisplay(formData.start_date) : 'Not selected'}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -852,6 +908,9 @@ export default function EditBookingModal({
                       max={formatDateForInput(maxEndDate)}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
+                    <div className="mt-1 text-sm text-gray-500">
+                      Selected: {formData.end_date ? formatDateForDisplay(formData.end_date) : 'Not selected'}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">

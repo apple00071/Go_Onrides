@@ -29,29 +29,44 @@ export default function VehicleModal({ isOpen, onClose, onVehicleUpdated, vehicl
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchUserRole = async () => {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        setUserRole(profile?.role || null);
+      }
+    };
+
+    fetchUserRole();
+
     if (vehicle) {
       setFormData({
-        model: vehicle.model || '',
-        registration: vehicle.registration || '',
-        status: vehicle.status || 'available',
+        model: vehicle.model,
+        registration: vehicle.registration,
+        status: vehicle.status,
         next_maintenance_date: vehicle.next_maintenance_date || '',
         notes: vehicle.notes || ''
-      });
-    } else {
-      setFormData({
-        model: '',
-        registration: '',
-        status: 'available',
-        next_maintenance_date: '',
-        notes: ''
       });
     }
   }, [vehicle]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check if user has admin role
+    if (userRole !== 'admin') {
+      setError('Unauthorized - Only administrators can modify vehicles');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 

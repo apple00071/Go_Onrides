@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -21,24 +22,42 @@ import type { UserProfile } from '@/types/database';
 
 interface SidebarProps {
   user: UserProfile | null;
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose?: () => void;
 }
 
 export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const [userRole, setUserRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        setUserRole(profile?.role || null);
+      }
+    };
+
+    fetchUserRole();
+  }, []);
 
   const navigation = [
-    { name: 'Dashboard', href: '/dashboard', icon: Home },
-    { name: 'Bookings', href: '/dashboard/bookings', icon: CalendarRange },
-    { name: "Today's Returns", href: '/dashboard/returns/today', icon: Clock },
-    { name: 'Customers', href: '/dashboard/customers', icon: Users },
-    { name: 'Vehicles', href: '/dashboard/vehicles', icon: Car },
-    { name: 'Maintenance', href: '/dashboard/maintenance', icon: Wrench },
-    { name: 'Invoices', href: '/dashboard/invoices', icon: Receipt },
-    { name: 'Reports', href: '/dashboard/reports', icon: FileText },
-    { name: 'Notifications', href: '/dashboard/notifications', icon: Bell },
-    { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+    { name: 'Dashboard', href: '/dashboard', icon: Home, showAlways: true },
+    { name: 'Bookings', href: '/dashboard/bookings', icon: CalendarRange, showAlways: true },
+    { name: "Today's Returns", href: '/dashboard/returns/today', icon: Clock, showAlways: true },
+    { name: 'Customers', href: '/dashboard/customers', icon: Users, showAlways: true },
+    { name: 'Vehicles', href: '/dashboard/vehicles', icon: Car, showAlways: true },
+    { name: 'Maintenance', href: '/dashboard/maintenance', icon: Wrench, showAlways: true },
+    { name: 'Invoices', href: '/dashboard/invoices', icon: Receipt, showAlways: true },
+    { name: 'Reports', href: '/dashboard/reports', icon: FileText, adminOnly: true },
+    { name: 'Notifications', href: '/dashboard/notifications', icon: Bell, showAlways: true },
+    { name: 'Settings', href: '/dashboard/settings', icon: Settings, adminOnly: true },
   ];
 
   const isActive = (href: string) => {
@@ -54,40 +73,40 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
     window.location.href = '/login';
   };
 
+  const filteredNavigation = navigation.filter(item => 
+    item.showAlways || (item.adminOnly && userRole === 'admin')
+  );
+
   return (
     <aside 
       className={`
-        flex h-screen flex-col
-        fixed md:sticky top-0 z-30
-        w-64 max-w-[80vw]
-        bg-white border-r border-gray-200
-        transition-transform duration-300 ease-in-out
-        ${!isOpen ? '-translate-x-full' : 'translate-x-0'}
+        fixed md:sticky top-0 left-0 z-50 
+        h-screen w-64 
+        bg-white border-r 
+        transform transition-transform duration-300 ease-in-out 
+        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
         md:translate-x-0
       `}
     >
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-gray-200 px-4">
-        <div className="flex items-center gap-2">
+      <div className="flex h-16 items-center justify-between px-4 border-b">
+        <Link href="/dashboard" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-blue text-white">
             GR
           </div>
-          <h1 className="text-lg font-semibold text-primary-text">Goon Riders</h1>
-        </div>
-        
-        {/* Close button for mobile */}
-        <button 
-          type="button"
-          className="md:hidden text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-blue rounded-md p-1"
+          <span className="text-lg font-semibold text-gray-900">Go-On Rides</span>
+        </Link>
+        <button
           onClick={onClose}
+          className="md:hidden rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-blue"
           aria-label="Close sidebar"
         >
           <X className="h-5 w-5" />
         </button>
       </div>
       
-      <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
-        <nav className="flex-1 space-y-1">
-          {navigation.map((item) => {
+      <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
+        <nav className="flex-1 space-y-1 p-4">
+          {filteredNavigation.map((item) => {
             const active = isActive(item.href);
             return (
               <Link
@@ -95,17 +114,16 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
                 href={item.href}
                 onClick={() => onClose && window.innerWidth < 768 ? onClose() : null}
                 className={`
-                  group flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors 
-                  min-h-[44px] touch-manipulation
+                  group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors
                   ${active
                     ? 'bg-primary-blue/10 text-primary-blue'
-                    : 'text-secondary-text hover:bg-gray-50 hover:text-primary-text'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   }
                 `}
               >
                 <item.icon
                   className={`h-5 w-5 flex-shrink-0 transition-colors
-                    ${active ? 'text-primary-blue' : 'text-gray-400 group-hover:text-primary-text'}
+                    ${active ? 'text-primary-blue' : 'text-gray-400 group-hover:text-gray-900'}
                   `}
                   aria-hidden="true"
                 />
@@ -115,13 +133,13 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
           })}
         </nav>
         
-        <div className="mt-auto pt-4 border-t border-gray-200">
+        <div className="p-4 mt-auto border-t border-gray-200">
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-secondary-text hover:bg-gray-50 hover:text-primary-text transition-colors min-h-[44px]"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
           >
             <RotateCcw
-              className="h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-primary-text transition-colors"
+              className="h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-gray-900 transition-colors"
               aria-hidden="true"
             />
             <span className="truncate">Sign Out</span>

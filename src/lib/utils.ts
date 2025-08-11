@@ -121,7 +121,26 @@ export function formatPercentage(number: number): string {
 // Add a new function for date input field format (YYYY-MM-DD)
 export function formatDateForInput(date: string | Date): string {
   const d = new Date(date);
-  return d.toISOString().split('T')[0];
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+// Add a function to format date for display (DD/MM/YYYY)
+export function formatDateForDisplay(date: string | Date): string {
+  const d = new Date(date);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+// Add a function to parse date from display format (DD/MM/YYYY) to ISO format
+export function parseDateFromDisplay(dateStr: string): string {
+  if (!dateStr) return '';
+  const [day, month, year] = dateStr.split('/');
+  return `${year}-${month}-${day}`;
 }
 
 // Add a new function to format time in 12-hour format

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { toast } from 'react-hot-toast';
-import { generateBookingId, formatCurrency } from '@/lib/utils';
+import { generateBookingId, formatCurrency, formatDateForInput, formatDateForDisplay, parseDateFromDisplay } from '@/lib/utils';
 import SignaturePad from 'react-signature-canvas';
 import type SignaturePadType from 'react-signature-canvas';
 import { ArrowLeft, Download } from 'lucide-react';
@@ -240,12 +240,11 @@ export default function NewBookingPage() {
       // Always set end date to next day from start date
       const nextDay = new Date(selectedDate);
       nextDay.setDate(nextDay.getDate() + 1);
-      const nextDayStr = nextDay.toISOString().split('T')[0];
 
       setFormData(prev => ({
         ...prev,
-        [name]: value,
-        end_date: nextDayStr,
+        [name]: formatDateForInput(selectedDate),
+        end_date: formatDateForInput(nextDay),
         // Reset times when date changes
         pickup_time: '',
         dropoff_time: ''
@@ -274,10 +273,9 @@ export default function NewBookingPage() {
       minEndDate.setDate(minEndDate.getDate() + 1);
       
       if (selectedEndDate < minEndDate) {
-        const minEndDateStr = minEndDate.toISOString().split('T')[0];
         setFormData(prev => ({
           ...prev,
-          end_date: minEndDateStr,
+          end_date: formatDateForInput(minEndDate),
           dropoff_time: formData.pickup_time // Set dropoff time same as pickup time
         }));
         return;
@@ -285,7 +283,7 @@ export default function NewBookingPage() {
 
       setFormData(prev => ({
         ...prev,
-        end_date: value,
+        end_date: formatDateForInput(selectedEndDate),
         dropoff_time: formData.pickup_time // Set dropoff time same as pickup time
       }));
       return;
@@ -1423,7 +1421,7 @@ export default function NewBookingPage() {
                       type="date"
                       name="start_date"
                       required
-                      min={today}
+                      min={formatDateForInput(new Date())}
                       max={maxStartDate}
                       value={formData.start_date}
                       onChange={handleInputChange}

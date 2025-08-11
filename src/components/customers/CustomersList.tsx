@@ -1,10 +1,12 @@
 'use client';
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
 import { toast } from 'react-hot-toast'
 import Link from 'next/link'
 import { AlertCircle } from 'lucide-react'
+import { getSupabaseClient } from '@/lib/supabase'
+import { formatDate } from '@/lib/utils'
 
 interface CustomerListItem {
   id: string
@@ -25,7 +27,25 @@ const CustomersList = ({ initialCustomers, error: initialError }: CustomersListP
   const [customers, setCustomers] = useState<CustomerListItem[]>(initialCustomers)
   const [searchTerm, setSearchTerm] = useState('')
   const [error, setError] = useState(initialError)
+  const [userRole, setUserRole] = useState<string | null>(null)
   const supabase = createClientComponentClient()
+
+  useEffect(() => {
+    const fetchUserRole = async () => {
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single();
+        setUserRole(profile?.role || null);
+      }
+    };
+
+    fetchUserRole();
+  }, []);
 
   const filteredCustomers = customers.filter((customer) =>
     customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -144,18 +164,22 @@ const CustomersList = ({ initialCustomers, error: initialError }: CustomersListP
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Link
-                      href={`/customers/${customer.id}/edit`}
-                      className="text-indigo-600 hover:text-indigo-900 mr-4"
-                    >
-                      Edit
-                    </Link>
-                    <button
-                      onClick={() => handleDeleteCustomer(customer.id)}
-                      className="text-red-600 hover:text-red-900"
-                    >
-                      Delete
-                    </button>
+                    {userRole === 'admin' && (
+                      <>
+                        <Link
+                          href={`/customers/${customer.id}/edit`}
+                          className="text-indigo-600 hover:text-indigo-900 mr-4"
+                        >
+                          Edit
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteCustomer(customer.id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))
