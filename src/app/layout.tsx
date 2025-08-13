@@ -11,6 +11,7 @@ const inter = Inter({
 export const metadata: Metadata = {
   title: 'Go-On Rides',
   description: 'Vehicle rental service',
+  viewport: 'width=device-width, initial-scale=1.0',
   other: {
     'fast2sms': 'oENCCqLZoTtQA9F64d0qxNVpBVsPSesI'
   }
@@ -26,13 +27,8 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head>
-        <meta name="fast2sms" content="oENCCqLZoTtQA9F64d0qxNVpBVsPSesI" />
-      </head>
-      <body className={cn('h-full antialiased', inter.className)}>
-        <div className="min-h-screen w-full">
+      <body className={cn('min-h-screen bg-gray-50', inter.className)}>
         {children}
-        </div>
       </body>
     </html>
   );

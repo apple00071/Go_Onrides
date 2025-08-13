@@ -184,20 +184,18 @@ export default function DashboardLayout({
         />
       )}
 
-      <div className="flex h-screen max-h-screen overflow-hidden">
+      <div className="flex">
         {/* Sidebar */}
         <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
         {/* Main content */}
-        <div className="flex-1 flex flex-col w-full max-w-full">
+        <div className="flex-1">
           {/* Header */}
           <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
 
           {/* Main content area */}
-          <main className="flex-1 overflow-y-auto overflow-x-hidden bg-gray-50">
-            <div className="px-3 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8 w-full">
-              {children}
-            </div>
+          <main className="p-4">
+            {children}
           </main>
         </div>
       </div>

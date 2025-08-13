@@ -29,15 +29,15 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDateTime(date: string | Date): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
+  const d = new Date(date);
+  const dateStr = formatDate(d);
+  const timeStr = formatTime(d.toLocaleTimeString('en-US', { 
+    hour: '2-digit', 
+    minute: '2-digit', 
+    hour12: false,
     timeZone: 'Asia/Kolkata'
-  }).format(new Date(date));
+  }));
+  return `${dateStr} ${timeStr}`;
 }
 
 interface BookingRecord {
@@ -103,6 +103,7 @@ export function formatDateShort(date: string | Date): string {
   return new Intl.DateTimeFormat('en-GB', {
     day: '2-digit',
     month: '2-digit',
+    timeZone: 'Asia/Kolkata'
   }).format(new Date(date));
 }
 
@@ -146,8 +147,23 @@ export function parseDateFromDisplay(dateStr: string): string {
 // Add a new function to format time in 12-hour format
 export function formatTime(timeStr: string): string {
   if (!timeStr) return '';
-  const [hourStr, minutes] = timeStr.split(':');
-  const hours = parseInt(hourStr, 10);
+  
+  let hours: number;
+  let minutes: string;
+  
+  // Handle different time string formats
+  if (timeStr.includes(':')) {
+    // Handle HH:MM format
+    const [hourStr, min] = timeStr.split(':');
+    hours = parseInt(hourStr, 10);
+    minutes = min.split(' ')[0]; // Remove any AM/PM if present
+  } else {
+    // Handle numeric format
+    const date = new Date(timeStr);
+    hours = date.getHours();
+    minutes = date.getMinutes().toString().padStart(2, '0');
+  }
+
   const period = hours >= 12 ? 'PM' : 'AM';
   const displayHours = hours % 12 || 12;
   return `${displayHours}:${minutes} ${period}`;

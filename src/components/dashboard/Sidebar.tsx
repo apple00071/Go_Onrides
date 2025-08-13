@@ -16,7 +16,8 @@ import {
   RotateCcw,
   Clock,
   Wrench,
-  Receipt
+  Receipt,
+  IndianRupee
 } from 'lucide-react';
 import type { UserProfile } from '@/types/database';
 
@@ -54,6 +55,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
     { name: 'Customers', href: '/dashboard/customers', icon: Users, showAlways: true },
     { name: 'Vehicles', href: '/dashboard/vehicles', icon: Car, showAlways: true },
     { name: 'Maintenance', href: '/dashboard/maintenance', icon: Wrench, showAlways: true },
+    { name: 'Payments', href: '/dashboard/payments', icon: IndianRupee, showAlways: true },
     { name: 'Invoices', href: '/dashboard/invoices', icon: Receipt, showAlways: true },
     { name: 'Reports', href: '/dashboard/reports', icon: FileText, adminOnly: true },
     { name: 'Notifications', href: '/dashboard/notifications', icon: Bell, showAlways: true },

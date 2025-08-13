@@ -46,10 +46,14 @@ const LoginForm = () => {
 
       if (signInError) throw signInError;
 
-      // Redirect all roles to the main dashboard
+      // First refresh to ensure we have the latest session
+      router.refresh();
+      
+      // Then navigate to dashboard
       router.push('/dashboard');
       
-      router.refresh();
+      // Show success message
+      toast.success('Login successful');
     } catch (error) {
       console.error('Login error:', error);
       setError(error instanceof Error ? error.message : 'Failed to login');

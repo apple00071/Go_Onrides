@@ -36,6 +36,7 @@ export default function DashboardPage() {
 
   const fetchUserProfile = async () => {
     try {
+      setLoading(true);
       const supabase = getSupabaseClient();
       
       const { data: { user }, error: sessionError } = await supabase.auth.getUser();
@@ -55,8 +56,10 @@ export default function DashboardPage() {
       if (profileError) throw profileError;
 
       setUserProfile(profile);
+      
+      // Immediately fetch stats if admin
       if (profile.role === 'admin') {
-        fetchDashboardStats();
+        await fetchDashboardStats();
       }
     } catch (error) {
       console.error('Error fetching user profile:', error);
@@ -80,20 +83,42 @@ export default function DashboardPage() {
         .from('bookings')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
-        
-      console.log(`Found ${totalBookings} total bookings and ${activeRentals} active rentals`);
 
       // Get total income and pending payments
       const { data: bookings, error: bookingsError } = await supabase
         .from('bookings')
-        .select('booking_amount, paid_amount')
+        .select(`
+          id,
+          booking_amount,
+          security_deposit_amount,
+          paid_amount,
+          damage_charges,
+          late_fee,
+          extension_fee,
+          status
+        `)
         .in('status', ['confirmed', 'in_use', 'completed']);
 
       if (bookingsError) throw bookingsError;
 
-      const totalIncome = bookings?.reduce((sum, booking) => sum + (booking.paid_amount || 0), 0) || 0;
+      const totalIncome = bookings?.reduce((sum, booking) => {
+        // Include booking amount and all additional fees in revenue
+        const revenue = (booking.booking_amount || 0) + 
+                       (booking.damage_charges || 0) + 
+                       (booking.late_fee || 0) + 
+                       (booking.extension_fee || 0);
+        return sum + revenue;
+      }, 0) || 0;
+
       const pendingPayments = bookings?.reduce((sum, booking) => {
-        const pending = booking.booking_amount - (booking.paid_amount || 0);
+        // Calculate total required amount (booking amount + security deposit + all fees)
+        const totalRequired = (booking.booking_amount || 0) + 
+                            (booking.security_deposit_amount || 0) +
+                            (booking.damage_charges || 0) + 
+                            (booking.late_fee || 0) + 
+                            (booking.extension_fee || 0);
+        // Calculate pending amount
+        const pending = totalRequired - (booking.paid_amount || 0);
         return sum + (pending > 0 ? pending : 0);
       }, 0) || 0;
 
@@ -144,102 +169,74 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <div className="flex justify-between items-center mb-6">
+        <div className="space-y-6">
+          {/* Stats Grid */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Total Bookings */}
+            <div className="bg-white shadow rounded-lg p-5">
+              <div className="flex items-center">
+                <ClipboardList className="h-6 w-6 text-gray-400 flex-shrink-0" />
+                <div className="ml-3">
+                  <div className="text-sm font-medium text-gray-500">Total Bookings</div>
+                  <div className="text-lg font-semibold text-gray-900">{stats.totalBookings}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Active Rentals */}
+            <div className="bg-white shadow rounded-lg p-5">
+              <div className="flex items-center">
+                <Zap className="h-6 w-6 text-gray-400 flex-shrink-0" />
+                <div className="ml-3">
+                  <div className="text-sm font-medium text-gray-500">Active Rentals</div>
+                  <div className="text-lg font-semibold text-gray-900">{stats.activeRentals}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Total Income */}
+            <div className="bg-white shadow rounded-lg p-5">
+              <div className="flex items-center">
+                <IndianRupee className="h-6 w-6 text-gray-400 flex-shrink-0" />
+                <div className="ml-3">
+                  <div className="text-sm font-medium text-gray-500">Total Income</div>
+                  <div className="text-lg font-semibold text-gray-900">{formatCurrency(stats.totalIncome)}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Pending Payments */}
+            <div className="bg-white shadow rounded-lg p-5">
+              <div className="flex items-center">
+                <Clock className="h-6 w-6 text-gray-400 flex-shrink-0" />
+                <div className="ml-3">
+                  <div className="text-sm font-medium text-gray-500">Pending Payments</div>
+                  <div className="text-lg font-semibold text-gray-900">{formatCurrency(stats.pendingPayments)}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Dashboard Header */}
+          <div className="flex items-center justify-between">
             <h1 className="text-2xl font-semibold text-gray-900">Dashboard</h1>
             <button
               onClick={fetchDashboardStats}
-              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <RefreshCw className="h-4 w-4 mr-2" />
               Refresh
             </button>
           </div>
 
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {/* Total Bookings */}
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Bookings</dt>
-                      <dd className="text-lg font-semibold text-gray-900">{stats.totalBookings}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <VehicleReturns />
             </div>
-
-            {/* Active Rentals */}
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <svg className="h-6 w-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Active Rentals</dt>
-                      <dd className="text-lg font-semibold text-gray-900">{stats.activeRentals}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
+            <div>
+              <PendingPayments />
             </div>
-
-            {/* Total Income */}
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <IndianRupee className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Total Income</dt>
-                      <dd className="text-lg font-semibold text-gray-900">{formatCurrency(stats.totalIncome)}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Pending Payments */}
-            <div className="bg-white overflow-hidden shadow rounded-lg">
-              <div className="p-5">
-                <div className="flex items-center">
-                  <div className="flex-shrink-0">
-                    <Clock className="h-6 w-6 text-gray-400" />
-                  </div>
-                  <div className="ml-5 w-0 flex-1">
-                    <dl>
-                      <dt className="text-sm font-medium text-gray-500 truncate">Pending Payments</dt>
-                      <dd className="text-lg font-semibold text-gray-900">{formatCurrency(stats.pendingPayments)}</dd>
-                    </dl>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Vehicle Returns */}
-          <div>
-            <VehicleReturns />
-          </div>
-
-          {/* Pending Payments */}
-          <div>
-            <PendingPayments />
           </div>
         </div>
       </div>

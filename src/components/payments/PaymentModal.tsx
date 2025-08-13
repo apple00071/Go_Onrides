@@ -8,6 +8,7 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { toast } from 'react-hot-toast';
 import { notifyPaymentEvent } from '@/lib/notification';
 import { cn } from '@/lib/utils';
+import { Dialog } from '@headlessui/react';
 
 interface BookingWithPayments {
   id: string;
@@ -35,6 +36,13 @@ interface PaymentModalProps {
   initialBookingId?: string;
 }
 
+interface FormData {
+  amount: string;
+  payment_mode: string;
+  next_payment_date?: string;
+  booking_id?: string;
+}
+
 export default function PaymentModal({
   isOpen,
   onClose,
@@ -45,10 +53,10 @@ export default function PaymentModal({
   const [error, setError] = useState<string | null>(null);
   const [bookings, setBookings] = useState<BookingWithPayments[]>([]);
   const [selectedBooking, setSelectedBooking] = useState<BookingWithPayments | null>(null);
-  const [formData, setFormData] = useState({
-    booking_id: '',
+  const [formData, setFormData] = useState<FormData>({
     amount: '',
-    payment_mode: 'cash'
+    payment_mode: 'cash',
+    booking_id: initialBookingId || ''
   });
 
   const fetchBookings = async () => {
@@ -210,27 +218,33 @@ export default function PaymentModal({
       }
     }
     
-    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
     setError(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Form submitted with data:', formData);
-    console.log('Selected booking:', selectedBooking);
+    console.log('Form submitted with data:', formData)
 
     if (!selectedBooking) {
-      setError('Please select a booking');
+      setError('No booking selected');
       return;
     }
 
-    if (!formData.amount || parseFloat(formData.amount) <= 0) {
+    if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0) {
       setError('Please enter a valid amount');
       return;
     }
 
-    if (!formData.payment_mode) {
-      setError('Please select a payment mode');
+    const amount = Number(formData.amount);
+    const isFullPayment = amount >= selectedBooking.remaining_amount;
+
+    // Validate next payment date for partial payments
+    if (!isFullPayment && !formData.next_payment_date) {
+      setError('Please select the next payment date for partial payment');
       return;
     }
 
@@ -239,7 +253,6 @@ export default function PaymentModal({
 
     try {
       const supabase = getSupabaseClient();
-      const amount = Number(formData.amount);
 
       // Validate amount against remaining balance
       if (amount > selectedBooking.remaining_amount) {
@@ -251,13 +264,6 @@ export default function PaymentModal({
       if (!user) {
         throw new Error('User not authenticated');
       }
-      
-      console.log('Creating payment record with data:', {
-        booking_id: selectedBooking.id,
-        amount,
-        payment_mode: formData.payment_mode,
-        created_by: user.id
-      });
       
       // Create the payment record
       const { data: paymentData, error: paymentError } = await supabase
@@ -278,44 +284,25 @@ export default function PaymentModal({
         throw new Error(paymentError.message);
       }
 
-      if (!paymentData) {
-        throw new Error('Payment was created but no data was returned');
-      }
-
-      console.log('Created payment record successfully:', paymentData);
-
       // Calculate new paid amount and status
       const newPaidAmount = Number(selectedBooking.paid_amount || 0) + amount;
       const totalRequired = Number(selectedBooking.booking_amount) + Number(selectedBooking.security_deposit_amount);
       const paymentStatus = newPaidAmount >= totalRequired ? 'full' : 'partial';
 
-      console.log('Updating booking payment details:', {
-        newPaidAmount,
-        totalRequired,
-        paymentStatus,
-        booking_id: selectedBooking.id
-      });
-
-      // Update the booking's payment status and paid amount
+      // Update booking with new payment status and next payment date
       const { error: bookingUpdateError } = await supabase
         .from('bookings')
         .update({
           paid_amount: newPaidAmount,
           payment_status: paymentStatus,
-          payment_mode: formData.payment_mode,
+          next_payment_date: paymentStatus === 'partial' ? formData.next_payment_date : null,
           updated_at: new Date().toISOString(),
           updated_by: user.id
         })
         .eq('id', selectedBooking.id);
 
       if (bookingUpdateError) {
-        console.error('Booking update error:', bookingUpdateError);
-        // If booking update fails, we should delete the payment we just created
-        await supabase
-          .from('payments')
-          .delete()
-          .eq('id', paymentData.id);
-        throw new Error('Failed to update booking payment status');
+        throw new Error(bookingUpdateError.message);
       }
 
       // Send notification about the payment
@@ -358,135 +345,153 @@ export default function PaymentModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-lg max-w-md w-full">
-        <div className="flex justify-between items-center p-4 border-b">
-          <h2 className="text-lg font-semibold">New Payment</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-500"
+    <Dialog
+      open={isOpen}
+      onClose={onClose}
+      className="relative z-50"
+    >
+      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4">
+        <Dialog.Panel className="w-full max-w-md transform overflow-hidden rounded-2xl bg-white p-6 text-left align-middle shadow-xl transition-all">
+          <Dialog.Title
+            as="h3"
+            className="text-lg font-medium leading-6 text-gray-900"
           >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
+            Record Payment
+          </Dialog.Title>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-4">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md text-sm">
-              {error}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Select Booking
-            </label>
-            <select
-              name="booking_id"
-              required
-              value={formData.booking_id}
-              onChange={handleBookingChange}
-              className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-              disabled={!!initialBookingId}
-            >
-              <option value="">Choose a booking</option>
-              {bookings.map((booking) => (
-                <option key={booking.id} value={booking.id}>
-                  {booking.booking_id} - {booking.customer_name}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {selectedBooking && (
-            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-              <h3 className="font-medium text-gray-900 mb-3">Payment Details</h3>
-              <PaymentRow label="Booking Amount" amount={selectedBooking.booking_amount} />
-              <PaymentRow label="Security Deposit" amount={selectedBooking.security_deposit_amount} />
-              
-              {/* Show additional fees only if they exist and are greater than 0 */}
-              {selectedBooking.late_fee && selectedBooking.late_fee > 0 && (
-                <PaymentRow label="Late Fee" amount={selectedBooking.late_fee} />
-              )}
-              {selectedBooking.extension_fee && selectedBooking.extension_fee > 0 && (
-                <PaymentRow label="Extension Fee" amount={selectedBooking.extension_fee} />
-              )}
-              {selectedBooking.damage_charges && selectedBooking.damage_charges > 0 && (
-                <PaymentRow label="Damage Charges" amount={selectedBooking.damage_charges} />
-              )}
-              
-              <div className="border-t border-gray-200 my-2" />
-              <PaymentRow label="Total Required" amount={selectedBooking.total_amount} />
-              <PaymentRow label="Amount Paid" amount={selectedBooking.paid_amount} />
-              <div className="border-t border-gray-200 my-2" />
-              <div className="flex justify-between py-2 text-blue-600 font-medium">
-                <span>Remaining Balance</span>
-                <span>{formatCurrency(selectedBooking.remaining_amount)}</span>
+          <form onSubmit={handleSubmit} className="mt-4">
+            {error && (
+              <div className="mt-4 text-sm text-red-600">
+                {error}
               </div>
-            </div>
-          )}
+            )}
 
-          <div className="space-y-4 pt-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Payment Amount
+                Select Booking
               </label>
-              <div className="relative">
-                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
-                  <IndianRupee className="w-4 h-4" />
-                </span>
+              <select
+                name="booking_id"
+                required
+                value={formData.booking_id}
+                onChange={handleBookingChange}
+                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                disabled={!!initialBookingId}
+              >
+                <option value="">Choose a booking</option>
+                {bookings.map((booking) => (
+                  <option key={booking.id} value={booking.id}>
+                    {booking.booking_id} - {booking.customer_name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {selectedBooking && (
+              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                <h3 className="font-medium text-gray-900 mb-3">Payment Details</h3>
+                <PaymentRow label="Booking Amount" amount={selectedBooking.booking_amount} />
+                <PaymentRow label="Security Deposit" amount={selectedBooking.security_deposit_amount} />
+                
+                {/* Show additional fees only if they exist and are greater than 0 */}
+                {selectedBooking.late_fee && selectedBooking.late_fee > 0 && (
+                  <PaymentRow label="Late Fee" amount={selectedBooking.late_fee} />
+                )}
+                {selectedBooking.extension_fee && selectedBooking.extension_fee > 0 && (
+                  <PaymentRow label="Extension Fee" amount={selectedBooking.extension_fee} />
+                )}
+                {selectedBooking.damage_charges && selectedBooking.damage_charges > 0 && (
+                  <PaymentRow label="Damage Charges" amount={selectedBooking.damage_charges} />
+                )}
+                
+                <div className="border-t border-gray-200 my-2" />
+                <PaymentRow label="Total Required" amount={selectedBooking.total_amount} />
+                <PaymentRow label="Amount Paid" amount={selectedBooking.paid_amount} />
+                <div className="border-t border-gray-200 my-2" />
+                <div className="flex justify-between py-2 text-blue-600 font-medium">
+                  <span>Remaining Balance</span>
+                  <span>{formatCurrency(selectedBooking.remaining_amount)}</span>
+                </div>
+              </div>
+            )}
+
+            <div className="mt-4">
+              <label htmlFor="amount" className="block text-sm font-medium text-gray-700">
+                Amount
+              </label>
+              <div className="mt-1">
                 <input
                   type="number"
                   name="amount"
-                  required
+                  id="amount"
+                  step="0.01"
                   value={formData.amount}
                   onChange={handleInputChange}
-                  min="0"
-                  max={selectedBooking?.remaining_amount}
-                  step="1"
-                  placeholder={selectedBooking ? `Enter amount up to ${formatCurrency(selectedBooking.remaining_amount)}` : '0'}
-                  className="pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  required
                 />
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Payment Method
+            <div className="mt-4">
+              <label htmlFor="payment_mode" className="block text-sm font-medium text-gray-700">
+                Payment Mode
               </label>
-              <select
-                name="payment_mode"
-                required
-                value={formData.payment_mode}
-                onChange={handleInputChange}
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-              >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="card">Card</option>
-                <option value="bank_transfer">Bank Transfer</option>
-              </select>
+              <div className="mt-1">
+                <select
+                  id="payment_mode"
+                  name="payment_mode"
+                  value={formData.payment_mode}
+                  onChange={handleInputChange}
+                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="card">Card</option>
+                </select>
+              </div>
             </div>
-          </div>
 
-          <div className="flex justify-end space-x-3 pt-4 border-t mt-6">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={loading || !selectedBooking || !formData.amount}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? 'Processing...' : 'Add Payment'}
-            </button>
-          </div>
-        </form>
+            {selectedBooking && Number(formData.amount) < selectedBooking.remaining_amount && (
+              <div className="mt-4">
+                <label htmlFor="next_payment_date" className="block text-sm font-medium text-gray-700">
+                  Next Payment Date
+                </label>
+                <div className="mt-1">
+                  <input
+                    type="date"
+                    name="next_payment_date"
+                    id="next_payment_date"
+                    value={formData.next_payment_date}
+                    onChange={handleInputChange}
+                    min={new Date().toISOString().split('T')[0]}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    required
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="inline-flex justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                {loading ? 'Processing...' : 'Save Payment'}
+              </button>
+            </div>
+          </form>
+        </Dialog.Panel>
       </div>
-    </div>
+    </Dialog>
   );
 } 
