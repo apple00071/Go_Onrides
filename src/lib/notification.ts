@@ -98,8 +98,10 @@ export async function notifyBookingEvent(
     previousEndDate?: string;
     newEndDate?: string;
     additionalAmount?: string;
-    oldStatus?: string;
-    newStatus?: string;
+    paymentAmount?: string;
+    paymentMethod?: string;
+    remainingBalance?: string;
+    nextPaymentDate?: string;
   }
 ): Promise<boolean | undefined> {
   try {
@@ -317,6 +319,10 @@ function getBookingEventMessage(
     previousEndDate?: string;
     newEndDate?: string;
     additionalAmount?: string;
+    paymentAmount?: string;
+    paymentMethod?: string;
+    remainingBalance?: string;
+    nextPaymentDate?: string;
   }
 ) {
   switch (type) {
@@ -327,7 +333,7 @@ function getBookingEventMessage(
     case 'BOOKING_CANCELLED':
       return `Booking ${details.bookingId} has been cancelled by ${details.actionBy}. Customer: ${details.customerName}`;
     case 'BOOKING_EXTENDED':
-      return `Booking ${details.bookingId} has been extended by ${details.actionBy}. Previous end date: ${details.previousEndDate}, New end date: ${details.newEndDate}, Additional amount: ₹${details.additionalAmount}`;
+      return `Booking ${details.bookingId} has been extended by ${details.actionBy}. Previous end date: ${details.previousEndDate}, New end date: ${details.newEndDate}, Additional amount: ₹${details.additionalAmount}, Payment: ₹${details.paymentAmount} (${details.paymentMethod}), Remaining balance: ₹${details.remainingBalance}, Next payment: ${details.nextPaymentDate}`;
     default:
       return 'A booking event has occurred.';
   }

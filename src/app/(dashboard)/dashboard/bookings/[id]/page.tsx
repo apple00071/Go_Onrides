@@ -999,7 +999,11 @@ export default function BookingDetailsPage() {
             booking_id: booking.booking_id,
             end_date: booking.end_date,
             dropoff_time: booking.dropoff_time,
-            booking_amount: booking.booking_amount
+            booking_amount: booking.booking_amount,
+            paid_amount: booking.paid_amount,
+            security_deposit_amount: booking.security_deposit_amount,
+            total_amount: booking.total_amount,
+            remaining_amount: booking.total_amount - (booking.paid_amount || 0)
           }}
         />
       )}

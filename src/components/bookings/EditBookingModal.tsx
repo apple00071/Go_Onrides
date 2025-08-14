@@ -597,12 +597,10 @@ export default function EditBookingModal({
           'BOOKING_UPDATED',
           booking.id,
           {
-            customerName: formData.customer_name,
+            customerName: booking.customer_name,
             bookingId: booking.booking_id,
             actionBy: user?.id || 'Unknown',
-            vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`,
-            oldStatus: booking.status,
-            newStatus: updatedBooking.status
+            vehicleInfo: `${formData.vehicle_details.model} (${formData.vehicle_details.registration})`
           }
         );
       }

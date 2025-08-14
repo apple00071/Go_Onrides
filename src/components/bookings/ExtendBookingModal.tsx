@@ -14,6 +14,13 @@ interface BookingExtensionDetails {
   end_date: string;
   dropoff_time: string;
   booking_amount: number;
+  paid_amount: number;
+  total_amount?: number;
+  remaining_amount?: number;
+  damage_charges?: number;
+  late_fee?: number;
+  extension_fee?: number;
+  security_deposit_amount?: number;
 }
 
 interface ExtendBookingModalProps {
@@ -25,9 +32,11 @@ interface ExtendBookingModalProps {
 
 interface FormData {
   end_date: string;
-  dropoff_time: string;
   additional_amount: string;
   extension_reason: string;
+  payment_method: string;
+  next_payment_date: string;
+  current_payment: string;
 }
 
 // Helper function to convert 24h to 12h format
@@ -130,13 +139,15 @@ export default function ExtendBookingModal({
   // Initialize form data with empty values
   const initialFormData = useMemo<FormData>(() => ({
     end_date: '',
-    dropoff_time: '',
-    additional_amount: '0',
-    extension_reason: ''
+    additional_amount: '',
+    extension_reason: '',
+    payment_method: 'cash',
+    next_payment_date: '',
+    current_payment: ''
   }), []);
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
-  
+
   // Reset form and interaction state when modal opens
   useEffect(() => {
     if (isOpen && booking) {
@@ -152,56 +163,31 @@ export default function ExtendBookingModal({
     const { name, value } = e.target;
     setHasInteracted(true);
     setError(null);
-    
-    // Date validation
-    if (name === 'end_date') {
-      const selectedDate = getISTDate(value);
-      const todayIST = getISTDate();
-      todayIST.setHours(0, 0, 0, 0);
-      selectedDate.setHours(0, 0, 0, 0);
-      
-      if (selectedDate < todayIST) {
-        setError('New end date cannot be in the past');
-        return;
-      }
-
-      const maxDate = new Date(maxEndDate);
-      if (selectedDate > maxDate) {
-        setError('Maximum extension is 30 days from the current end date');
-        return;
-      }
-
-      // Reset dropoff time if it would be in the past
-      if (formData.dropoff_time && isTimeInPast(formData.dropoff_time)) {
-        setFormData(prev => ({ 
-          ...prev, 
-          [name]: value,
-          dropoff_time: '' // Reset time when date changes and current time would be invalid
-        }));
-        return;
-      }
-
-      setFormData(prev => ({ ...prev, [name]: value }));
-      return;
-    }
-
-    // Time validation
-    if (name === 'dropoff_time') {
-      if (isTimeInPast(value)) {
-        setError('Drop-off time cannot be in the past');
-        return;
-      }
-      setFormData(prev => ({ ...prev, [name]: value }));
-      return;
-    }
 
     // Amount validation
-    if (name === 'additional_amount') {
-      const amount = parseFloat(value);
-      if (amount < 0) {
-        setError('Additional amount cannot be negative');
+    if (name === 'additional_amount' || name === 'current_payment') {
+      // Remove any non-numeric characters except decimal point
+      const sanitizedValue = value.replace(/[^\d.]/g, '');
+      // Ensure only one decimal point
+      const parts = sanitizedValue.split('.');
+      const cleanValue = parts[0] + (parts.length > 1 ? '.' + parts[1] : '');
+      
+      if (cleanValue === '') {
+        setFormData(prev => ({ ...prev, [name]: '' }));
         return;
       }
+
+      const amount = parseFloat(cleanValue);
+      if (isNaN(amount)) {
+        setError('Please enter a valid amount');
+        return;
+      }
+      if (amount < 0) {
+        setError('Amount cannot be negative');
+        return;
+      }
+      setFormData(prev => ({ ...prev, [name]: cleanValue }));
+      return;
     }
 
     setFormData(prev => ({ ...prev, [name]: value }));
@@ -211,13 +197,13 @@ export default function ExtendBookingModal({
     e.preventDefault();
     
     // Validate form data before proceeding
-    if (!formData.end_date || !formData.dropoff_time) {
+    if (!formData.end_date || !formData.additional_amount) {
       setError('Please fill in all required fields');
       return;
     }
 
     // Validate that the selected date and time are not in the past
-    const selectedDateTime = getISTDate(`${formData.end_date}T${formData.dropoff_time}`);
+    const selectedDateTime = getISTDate(`${formData.end_date}T${formData.next_payment_date}`);
     const nowIST = getISTDate();
     if (selectedDateTime <= nowIST) {
       setError('Selected date and time cannot be in the past');
@@ -237,6 +223,7 @@ export default function ExtendBookingModal({
       }
 
       const additionalAmount = parseFloat(formData.additional_amount) || 0;
+      const currentPaymentAmount = parseFloat(formData.current_payment) || 0;
 
       // First, log the extension in the booking_extensions table
       const { error: extensionError } = await supabase
@@ -246,10 +233,12 @@ export default function ExtendBookingModal({
           previous_end_date: booking.end_date,
           previous_dropoff_time: booking.dropoff_time,
           new_end_date: formData.end_date,
-          new_dropoff_time: formData.dropoff_time,
+          new_dropoff_time: formData.next_payment_date, // Assuming next_payment_date is the new dropoff time
           additional_amount: additionalAmount,
           reason: formData.extension_reason,
-          created_by: user.id // Add the created_by field with the current user's ID
+          payment_method: formData.payment_method,
+          next_payment_date: formData.next_payment_date,
+          created_by: user.id
         });
 
       if (extensionError) {
@@ -262,9 +251,8 @@ export default function ExtendBookingModal({
         .from('bookings')
         .update({
           end_date: formData.end_date,
-          dropoff_time: formData.dropoff_time,
           booking_amount: newBookingAmount,
-          updated_by: user.id // Also update the updated_by field in the booking
+          updated_by: user.id
         })
         .eq('id', booking.id);
 
@@ -300,6 +288,34 @@ export default function ExtendBookingModal({
 
   if (!isOpen) return null;
 
+  // Calculate total amount and pending amount including security deposit
+  const bookingAmount = Number(booking?.booking_amount || 0);
+  const securityDeposit = Number(booking?.security_deposit_amount || 0);
+  const totalAmount = bookingAmount + securityDeposit;
+  const paidAmount = Number(booking?.paid_amount || 0);
+  const pendingAmount = totalAmount - paidAmount;
+  const additionalAmount = parseFloat(formData.additional_amount) || 0;
+  const currentPaymentAmount = parseFloat(formData.current_payment) || 0;
+  const totalExtendedAmount = pendingAmount + additionalAmount;
+
+  console.log('Debug booking:', {
+    booking,
+    bookingAmount,
+    securityDeposit,
+    totalAmount,
+    paidAmount,
+    pendingAmount,
+    additionalAmount,
+    totalExtendedAmount,
+    bookingDetails: {
+      id: booking?.id,
+      booking_id: booking?.booking_id,
+      booking_amount: booking?.booking_amount,
+      security_deposit_amount: booking?.security_deposit_amount,
+      paid_amount: booking?.paid_amount
+    }
+  });
+
   return (
     <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-lg max-w-md w-full max-h-[90vh] overflow-y-auto">
@@ -322,92 +338,163 @@ export default function ExtendBookingModal({
             </div>
           )}
 
-          {/* Current End Date (Read-only) */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Current End Date
-            </label>
-            <input
-              type="date"
-              value={booking.end_date}
-              disabled
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-gray-50 opacity-75"
-            />
+          {/* Payment Information Section */}
+          <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+            <h3 className="text-lg font-medium text-gray-900">Payment Information</h3>
+
+            {/* Pending Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Pending Amount
+              </label>
+              <div className="mt-1 text-lg font-semibold text-red-600">
+                ₹{pendingAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+
+            {/* Additional Amount for Extension */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Additional Amount for Extension *
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">₹</span>
+                </div>
+                <input
+                  type="text"
+                  name="additional_amount"
+                  required
+                  value={formData.additional_amount}
+                  onChange={handleInputChange}
+                  className="block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter amount"
+                />
+              </div>
+            </div>
+
+            {/* Total Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Total Amount
+              </label>
+              <div className="mt-1 text-lg font-semibold text-gray-900">
+                ₹{totalExtendedAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+
+            {/* Current Payment Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Current Payment Amount *
+              </label>
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-gray-500 sm:text-sm">₹</span>
+                </div>
+                <input
+                  type="text"
+                  name="current_payment"
+                  required
+                  value={formData.current_payment}
+                  onChange={handleInputChange}
+                  className="block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter payment amount"
+                />
+              </div>
+            </div>
+
+            {/* Previously Paid Amount */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Previously Paid Amount
+              </label>
+              <div className="mt-1 text-lg font-semibold text-green-600">
+                ₹{paidAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+
+            {/* Payment Method */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Payment Method *
+              </label>
+              <select
+                name="payment_method"
+                required
+                value={formData.payment_method}
+                onChange={handleInputChange}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              >
+                <option value="cash">Cash</option>
+                <option value="upi">UPI</option>
+                <option value="card">Card</option>
+                <option value="bank_transfer">Bank Transfer</option>
+              </select>
+            </div>
+
+            {/* Next Payment Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Next Payment Date *
+              </label>
+              <input
+                type="date"
+                name="next_payment_date"
+                required
+                min={minEndDate}
+                value={formData.next_payment_date}
+                onChange={handleInputChange}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+            </div>
           </div>
 
-          {/* New End Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              New End Date *
-            </label>
-            <input
-              type="date"
-              name="end_date"
-              required
-              min={minEndDate}
-              max={maxEndDate}
-              value={formData.end_date}
-              placeholder="Select a date"
-              onChange={handleInputChange}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
-          </div>
+          {/* Extension Details Section */}
+          <div className="bg-gray-50 p-4 rounded-lg space-y-4">
+            <h3 className="text-lg font-medium text-gray-900">Extension Details</h3>
 
-          {/* New Drop-off Time */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              New Drop-off Time *
-            </label>
-            <select
-              name="dropoff_time"
-              required
-              value={formData.dropoff_time}
-              onChange={handleInputChange}
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            >
-              <option value="">Select time</option>
-              {getAvailableTimeSlots().map(time => {
-                const [hour, minute] = time.split(':');
-                return (
-                  <option key={time} value={time}>
-                    {formatTimeDisplay(parseInt(hour), minute)}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+            {/* Current End Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Current End Date
+              </label>
+              <div className="mt-1 text-lg">
+                {formatDate(booking.end_date)}
+              </div>
+            </div>
 
-          {/* Additional Amount */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Additional Amount *
-            </label>
-            <CurrencyInput
-              name="additional_amount"
-              required
-              value={formData.additional_amount}
-              onChange={handleInputChange}
-              error={error?.includes('amount')}
-              helperText={error?.includes('amount') ? error : undefined}
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              This amount will be added to the current booking amount
-            </p>
-          </div>
+            {/* New End Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                New End Date *
+              </label>
+              <input
+                type="date"
+                name="end_date"
+                required
+                min={minEndDate}
+                max={maxEndDate}
+                value={formData.end_date}
+                onChange={handleInputChange}
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+            </div>
 
-          {/* Extension Reason */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700">
-              Reason for Extension
-            </label>
-            <textarea
-              name="extension_reason"
-              rows={3}
-              value={formData.extension_reason}
-              onChange={handleInputChange}
-              placeholder="Explain why the booking is being extended"
-              className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-            />
+            {/* Extension Reason */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">
+                Reason for Extension
+              </label>
+              <textarea
+                name="extension_reason"
+                rows={3}
+                value={formData.extension_reason}
+                onChange={handleInputChange}
+                placeholder="Explain why the booking is being extended"
+                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+              />
+            </div>
           </div>
 
           <div className="flex justify-end space-x-3">
