@@ -83,11 +83,11 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
     <aside 
       className={`
         fixed md:sticky top-0 left-0 z-50 
-        h-screen w-64 
-        bg-white border-r 
+        h-[100dvh] w-[280px] sm:w-64 
+        bg-white border-r shadow-lg md:shadow-none
         transform transition-transform duration-300 ease-in-out 
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
-        md:translate-x-0
+        md:translate-x-0 safe-top safe-bottom
       `}
     >
       <div className="flex h-16 items-center justify-between px-4 border-b">
@@ -99,15 +99,15 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
         </Link>
         <button
           onClick={onClose}
-          className="md:hidden rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-blue"
+          className="md:hidden rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-primary-blue touch-manipulation"
           aria-label="Close sidebar"
         >
-          <X className="h-5 w-5" />
+          <X className="h-6 w-6" />
         </button>
       </div>
       
-      <div className="flex flex-col h-[calc(100vh-4rem)] overflow-y-auto">
-        <nav className="flex-1 space-y-1 p-4">
+      <div className="flex flex-col h-[calc(100dvh-4rem)] overflow-y-auto">
+        <nav className="flex-1 space-y-1 px-3 py-4">
           {filteredNavigation.map((item) => {
             const active = isActive(item.href);
             return (
@@ -116,7 +116,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
                 href={item.href}
                 onClick={() => onClose && window.innerWidth < 768 ? onClose() : null}
                 className={`
-                  group flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors
+                  group flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors touch-manipulation
                   ${active
                     ? 'bg-primary-blue/10 text-primary-blue'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
@@ -135,10 +135,10 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
           })}
         </nav>
         
-        <div className="p-4 mt-auto border-t border-gray-200">
+        <div className="p-3 mt-auto border-t border-gray-200">
           <button
             onClick={handleSignOut}
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 transition-colors touch-manipulation"
           >
             <RotateCcw
               className="h-5 w-5 flex-shrink-0 text-gray-400 group-hover:text-gray-900 transition-colors"

@@ -25,6 +25,15 @@ export interface SubmittedDocuments {
   [key: string]: boolean;
 }
 
+export interface BookingExtension {
+  id: string;
+  previous_end_date: string;
+  previous_dropoff_time: string;
+  new_end_date: string;
+  new_dropoff_time: string;
+  created_at: string;
+}
+
 export interface BookingDetails {
   id: string;
   booking_id: string;
@@ -93,6 +102,8 @@ export interface BookingDetails {
   late_fee: number;
   extension_fee: number;
   refund_amount: number;
+  extensions?: BookingExtension[];
+  previous_dropoff_time?: string;
   vehicle_remarks: string;
 }
 

@@ -7,6 +7,7 @@ import { toast } from 'react-hot-toast';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { notifyBookingEvent } from '@/lib/notification';
 import { formatDate, getISTDate } from '@/lib/utils';
+import React from 'react'; // Added missing import for React
 
 interface BookingExtensionDetails {
   id: string;
@@ -37,6 +38,7 @@ interface FormData {
   payment_method: string;
   next_payment_date: string;
   current_payment: string;
+  dropoff_time: string; // Add new field for time
 }
 
 // Helper function to convert 24h to 12h format
@@ -143,7 +145,8 @@ export default function ExtendBookingModal({
     extension_reason: '',
     payment_method: 'cash',
     next_payment_date: '',
-    current_payment: ''
+    current_payment: '',
+    dropoff_time: '12:00' // Default to noon
   }), []);
 
   const [formData, setFormData] = useState<FormData>(initialFormData);
@@ -197,16 +200,8 @@ export default function ExtendBookingModal({
     e.preventDefault();
     
     // Validate form data before proceeding
-    if (!formData.end_date || !formData.additional_amount) {
+    if (!formData.end_date || !formData.additional_amount || !formData.next_payment_date || !formData.dropoff_time) {
       setError('Please fill in all required fields');
-      return;
-    }
-
-    // Validate that the selected date and time are not in the past
-    const selectedDateTime = getISTDate(`${formData.end_date}T${formData.next_payment_date}`);
-    const nowIST = getISTDate();
-    if (selectedDateTime <= nowIST) {
-      setError('Selected date and time cannot be in the past');
       return;
     }
 
@@ -225,35 +220,48 @@ export default function ExtendBookingModal({
       const additionalAmount = parseFloat(formData.additional_amount) || 0;
       const currentPaymentAmount = parseFloat(formData.current_payment) || 0;
 
+      // Create extension data object
+      const extensionData = {
+        booking_id: booking.id,
+        previous_end_date: booking.end_date,
+        previous_dropoff_time: booking.dropoff_time || '12:00',
+        new_end_date: formData.end_date,
+        new_dropoff_time: formData.dropoff_time,
+        additional_amount: additionalAmount,
+        payment_amount: currentPaymentAmount,
+        reason: formData.extension_reason,
+        payment_method: formData.payment_method,
+        created_by: user.id
+      };
+
+      console.log('Debug - Extension Data:', extensionData);
+
       // First, log the extension in the booking_extensions table
       const { error: extensionError } = await supabase
         .from('booking_extensions')
-        .insert({
-          booking_id: booking.id,
-          previous_end_date: booking.end_date,
-          previous_dropoff_time: booking.dropoff_time,
-          new_end_date: formData.end_date,
-          new_dropoff_time: formData.next_payment_date, // Assuming next_payment_date is the new dropoff time
-          additional_amount: additionalAmount,
-          reason: formData.extension_reason,
-          payment_method: formData.payment_method,
-          next_payment_date: formData.next_payment_date,
-          created_by: user.id
-        });
+        .insert(extensionData);
 
       if (extensionError) {
+        console.error('Extension error:', extensionError);
         throw new Error(`Failed to log extension: ${extensionError.message}`);
       }
 
-      // Then update the booking with the new end date, dropoff time and amount
-      const newBookingAmount = booking.booking_amount + additionalAmount;
+      // Create booking update data object
+      const bookingUpdateData = {
+        end_date: formData.end_date,
+        booking_amount: booking.booking_amount + additionalAmount,
+        paid_amount: booking.paid_amount + currentPaymentAmount,
+        updated_by: user.id,
+        next_payment_date: formData.next_payment_date,
+        dropoff_time: formData.dropoff_time
+      };
+
+      console.log('Debug - Booking Update Data:', bookingUpdateData);
+
+      // Then update the booking
       const { error: bookingError } = await supabase
         .from('bookings')
-        .update({
-          end_date: formData.end_date,
-          booking_amount: newBookingAmount,
-          updated_by: user.id
-        })
+        .update(bookingUpdateData)
         .eq('id', booking.id);
 
       if (bookingError) {
@@ -404,6 +412,18 @@ export default function ExtendBookingModal({
               </div>
             </div>
 
+            {/* Remaining Amount After Current Payment */}
+            {formData.current_payment && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700">
+                  Remaining Amount After Payment
+                </label>
+                <div className="mt-1 text-lg font-semibold text-orange-600">
+                  ₹{(totalExtendedAmount - parseFloat(formData.current_payment || '0')).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+            )}
+
             {/* Previously Paid Amount */}
             <div>
               <label className="block text-sm font-medium text-gray-700">
@@ -454,31 +474,53 @@ export default function ExtendBookingModal({
           <div className="bg-gray-50 p-4 rounded-lg space-y-4">
             <h3 className="text-lg font-medium text-gray-900">Extension Details</h3>
 
-            {/* Current End Date */}
+            {/* Current End Date and Time */}
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                Current End Date
+                Current End Date & Time
               </label>
-              <div className="mt-1 text-lg">
-                {formatDate(booking.end_date)}
+              <div className="mt-1 text-lg flex items-center gap-2">
+                <span>{formatDate(booking.end_date)}</span>
+                <span className="text-gray-500">at</span>
+                <span>{booking.dropoff_time || '12:00'}</span>
               </div>
             </div>
 
             {/* New End Date */}
             <div>
               <label className="block text-sm font-medium text-gray-700">
-                New End Date *
+                New End Date & Time *
               </label>
-              <input
-                type="date"
-                name="end_date"
-                required
-                min={minEndDate}
-                max={maxEndDate}
-                value={formData.end_date}
-                onChange={handleInputChange}
-                className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-              />
+              <div className="grid grid-cols-2 gap-4">
+                <input
+                  type="date"
+                  name="end_date"
+                  required
+                  min={minEndDate}
+                  max={maxEndDate}
+                  value={formData.end_date}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                />
+                <select
+                  name="dropoff_time"
+                  required
+                  value={formData.dropoff_time}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                >
+                  {Array.from({ length: 24 }, (_, hour) => (
+                    <React.Fragment key={hour}>
+                      <option value={`${hour.toString().padStart(2, '0')}:00`}>
+                        {formatTimeDisplay(hour, '00')}
+                      </option>
+                      <option value={`${hour.toString().padStart(2, '0')}:30`}>
+                        {formatTimeDisplay(hour, '30')}
+                      </option>
+                    </React.Fragment>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Extension Reason */}

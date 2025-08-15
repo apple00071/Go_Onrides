@@ -15,7 +15,7 @@ import PaymentHistory from '@/components/payments/PaymentHistory';
 import { usePermissions } from '@/lib/usePermissions';
 import PaymentInformation from '@/components/bookings/PaymentInformation';
 import { generateInvoice } from '@/lib/generateInvoice';
-import type { BookingDetails, BookingDetailsData, OutstationDetails } from '@/types/bookings';
+import type { BookingDetails, BookingDetailsData, OutstationDetails, BookingExtension } from '@/types/bookings';
 
 type BookingStatus = 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
 type PaymentStatus = 'full' | 'partial' | 'pending';
@@ -142,6 +142,14 @@ export default function BookingDetailsPage() {
           completed_by_user:profiles!completed_by (
             email,
             username
+          ),
+          extensions:booking_extensions (
+            id,
+            previous_end_date,
+            previous_dropoff_time,
+            new_end_date,
+            new_dropoff_time,
+            created_at
           )
         `)
         .eq(isUUID ? 'id' : 'booking_id', bookingIdentifier)
@@ -155,6 +163,11 @@ export default function BookingDetailsPage() {
       if (!bookingData) {
         throw new Error('Booking not found');
       }
+
+      // Get the latest extension if any
+      const latestExtension = bookingData.extensions?.sort((a: BookingExtension, b: BookingExtension) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      )[0];
 
       // Process customer documents to get public URLs
       if (bookingData.customer?.documents) {
@@ -188,6 +201,7 @@ export default function BookingDetailsPage() {
 
       setBooking({
         ...bookingData,
+        previous_dropoff_time: latestExtension?.previous_dropoff_time,
         signatures: {
           bookingSignature,
           completionSignature
@@ -611,9 +625,18 @@ export default function BookingDetailsPage() {
                   <Calendar className="h-4 w-4 mr-2 text-gray-400" />
                   <p className="font-medium">{formatDate(booking?.end_date || '')}</p>
                 </div>
-                <div className="flex items-center mt-1">
-                  <Clock className="h-4 w-4 mr-2 text-gray-400" />
-                  <p className="text-sm">{formatTime(booking?.dropoff_time || '')}</p>
+                <div className="flex flex-col mt-1">
+                  <div className="flex items-center">
+                    <Clock className="h-4 w-4 mr-2 text-gray-400" />
+                    <p className="text-sm">{formatTime(booking?.dropoff_time || '')}</p>
+                  </div>
+                  {booking?.extensions && booking.extensions.length > 0 && (
+                    <div className="flex items-center mt-1 ml-6 text-gray-500">
+                      <span className="text-xs italic">
+                        (Extended from {formatDate(booking.extensions[0].previous_end_date)} {formatTime(booking.extensions[0].previous_dropoff_time)})
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
