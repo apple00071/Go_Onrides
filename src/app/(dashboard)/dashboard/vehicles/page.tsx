@@ -1,9 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { formatCurrency, formatDate } from '@/lib/utils';
-import { Search, Plus, RefreshCw, Settings, AlertTriangle, CheckCircle, Clock, Ban, Edit, Edit2, Trash2 } from 'lucide-react';
+import { Search, Plus, RefreshCw, Settings, AlertTriangle, CheckCircle, Clock, Ban, Edit, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import VehicleModal from '@/components/vehicles/VehicleModal';
 import { usePermissions } from '@/lib/usePermissions';
@@ -28,6 +29,7 @@ interface Vehicle {
 }
 
 export default function VehiclesPage() {
+  const router = useRouter();
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,6 +37,10 @@ export default function VehiclesPage() {
   const [showMaintenanceWarning, setShowMaintenanceWarning] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | undefined>();
+  const [expandedVehicleId, setExpandedVehicleId] = useState<string | null>(null);
+  const [maintenanceHistory, setMaintenanceHistory] = useState<any[]>([]);
+  const [bookingHistory, setBookingHistory] = useState<any[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const { hasPermission } = usePermissions();
 
   useEffect(() => {
@@ -123,6 +129,11 @@ export default function VehiclesPage() {
       default:
         return null;
     }
+  };
+
+  const handleRowClick = (vehicle: Vehicle) => {
+    const encodedReg = encodeURIComponent(vehicle.registration.trim());
+    router.push(`/dashboard/vehicles/${encodedReg}`);
   };
 
   const filteredVehicles = vehicles.filter(vehicle => {
@@ -239,81 +250,93 @@ export default function VehiclesPage() {
           <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
               <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                <table className="min-w-full divide-y divide-gray-300">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Model
-                      </th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Registration
-                      </th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Status
-                      </th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Added Date
-                      </th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Next Maintenance
-                      </th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Total Bookings
-                      </th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Revenue
-                      </th>
-                      <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
-                        Actions
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-200 bg-white">
-                    {filteredVehicles.length === 0 ? (
+                {loading ? (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500">Loading vehicles...</p>
+                  </div>
+                ) : filteredVehicles.length === 0 ? (
+                  <div className="text-center py-4">
+                    <p className="text-gray-500">No vehicles found</p>
+                  </div>
+                ) : (
+                  <table className="min-w-full divide-y divide-gray-300">
+                    <thead className="bg-gray-50">
                       <tr>
-                        <td colSpan={8} className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-500">
-                          No vehicles found. Add a vehicle or check your search filters.
-                        </td>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Model
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Registration
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Status
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Added Date
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Next Maintenance
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Total Bookings
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Revenue
+                        </th>
+                        <th scope="col" className="px-3 py-3.5 text-left text-sm font-semibold text-gray-900">
+                          Actions
+                        </th>
                       </tr>
-                    ) : (
-                      filteredVehicles.map((vehicle) => (
-                        <tr key={vehicle.id}>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                      {filteredVehicles.map((vehicle) => (
+                        <tr
+                          key={vehicle.id}
+                          onClick={() => handleRowClick(vehicle)}
+                          className="cursor-pointer hover:bg-gray-50"
+                        >
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                             {vehicle.model}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            #{vehicle.registration}
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {vehicle.registration}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm">
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(vehicle.status)}`}>
+                          <td className="whitespace-nowrap px-3 py-4 text-sm">
+                            <span className={getStatusColor(vehicle.status)}>
                               {getStatusIcon(vehicle.status)}
                               <span className="ml-1 capitalize">{vehicle.status}</span>
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                             {formatDate(vehicle.added_date)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            {vehicle.next_maintenance_date ? formatDate(vehicle.next_maintenance_date) : 'N/A'}
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
+                            {vehicle.next_maintenance_date ? formatDate(vehicle.next_maintenance_date) : 'Not scheduled'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                             {vehicle.total_bookings}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="whitespace-nowrap px-3 py-4 text-sm text-gray-500">
                             {formatCurrency(vehicle.total_revenue)}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                            <div className="flex items-center space-x-4">
+                          <td className="relative whitespace-nowrap px-3 py-4 text-right text-sm font-medium">
+                            <div className="flex items-center space-x-2">
                               {hasPermission('manageVehicles') && (
                                 <>
                                   <button
-                                    onClick={() => handleEditVehicle(vehicle)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleEditVehicle(vehicle);
+                                    }}
                                     className="text-blue-600 hover:text-blue-900"
                                   >
                                     <Edit2 className="h-4 w-4" />
                                   </button>
                                   <button
-                                    onClick={() => handleDeleteVehicle(vehicle)}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteVehicle(vehicle);
+                                    }}
                                     className="text-red-600 hover:text-red-900"
                                   >
                                     <Trash2 className="h-4 w-4" />
@@ -323,10 +346,10 @@ export default function VehiclesPage() {
                             </div>
                           </td>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </div>

@@ -1,3 +1,6 @@
+-- Drop existing maintenance_type enum if it exists
+DROP TYPE IF EXISTS maintenance_type CASCADE;
+
 -- Create maintenance_types enum
 CREATE TYPE maintenance_type AS ENUM (
     'engine_oil',
@@ -8,6 +11,7 @@ CREATE TYPE maintenance_type AS ENUM (
     'brake_pads',
     'chain_sprocket',
     'general_service',
+    'battery',
     'other'
 );
 
@@ -30,6 +34,9 @@ CREATE TABLE IF NOT EXISTS vehicle_maintenance (
     updated_by UUID REFERENCES auth.users(id)
 );
 
+-- Drop existing index if it exists
+DROP INDEX IF EXISTS idx_vehicle_maintenance_registration;
+
 -- Create index for faster lookups
 CREATE INDEX idx_vehicle_maintenance_registration ON vehicle_maintenance(vehicle_registration);
 
@@ -47,8 +54,14 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Drop existing trigger if it exists
+DROP TRIGGER IF EXISTS update_vehicle_maintenance_dates ON vehicle_maintenance;
+
 -- Create trigger to update vehicle maintenance dates
 CREATE TRIGGER update_vehicle_maintenance_dates
     AFTER INSERT OR UPDATE ON vehicle_maintenance
     FOR EACH ROW
-    EXECUTE FUNCTION update_vehicle_maintenance_date(); 
+    EXECUTE FUNCTION update_vehicle_maintenance_date();
+
+-- Notify PostgREST to reload its schema cache
+NOTIFY pgrst, 'reload schema'; 
