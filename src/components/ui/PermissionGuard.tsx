@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { usePermissions } from '@/lib/usePermissions';
-import type { Permission } from '@/lib/usePermissions';
+import type { Permission } from '@/types/database';
 
 type PermissionType = 'create' | 'edit' | 'delete' | 'view';
 
@@ -26,33 +26,26 @@ export default function PermissionGuard({
   children,
   fallback = null
 }: PermissionGuardProps) {
-  const { hasPermission, loading } = usePermissions();
-  
-  // If still loading permissions, don't render anything
-  if (loading) return null;
-  
-  let hasAccess = false;
-  const resourceName = resource.toLowerCase();
-  
-  // Map the permission type to the actual permission string
-  const permissionMap: Record<PermissionType, (resource: string) => Permission> = {
-    create: (r) => `manage${r.charAt(0).toUpperCase() + r.slice(1)}s` as Permission,
-    edit: (r) => `manage${r.charAt(0).toUpperCase() + r.slice(1)}s` as Permission,
-    delete: (r) => `manage${r.charAt(0).toUpperCase() + r.slice(1)}s` as Permission,
-    view: (r) => `view${r.charAt(0).toUpperCase() + r.slice(1)}s` as Permission,
+  const { hasPermission } = usePermissions();
+
+  const getPermissionKey = (resource: string, type: PermissionType): keyof Permission => {
+    switch (type) {
+      case 'create':
+        return `create${resource.charAt(0).toUpperCase() + resource.slice(1)}` as keyof Permission;
+      case 'edit':
+      case 'delete':
+        return `manage${resource.charAt(0).toUpperCase() + resource.slice(1)}s` as keyof Permission;
+      case 'view':
+        return `view${resource.charAt(0).toUpperCase() + resource.slice(1)}s` as keyof Permission;
+      default:
+        throw new Error(`Invalid permission type: ${type}`);
+    }
   };
 
-  try {
-    const permissionString = permissionMap[type](resourceName);
-    hasAccess = hasPermission(permissionString);
-  } catch (error) {
-    console.error(`Invalid permission mapping for resource: ${resourceName}, type: ${type}`);
-    hasAccess = false;
-  }
-  
-  if (hasAccess) {
-    return <>{children}</>;
-  }
-  
-  return <>{fallback}</>;
+  const permissionKey = getPermissionKey(resource, type);
+  const hasAccess = hasPermission(permissionKey);
+
+  if (!hasAccess) return fallback;
+
+  return <>{children}</>;
 } 

@@ -2,20 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from './supabase';
-
-export type Permission = 'manageBookings' | 'manageCustomers' | 'manageVehicles' | 'uploadDocuments' | 'managePayments' | 'accessReports';
+import type { Permission } from '@/types/database';
 
 interface UsePermissionsReturn {
   isAdmin: boolean;
   canEdit: boolean;
-  hasPermission: (permission: Permission) => boolean;
+  hasPermission: (permission: keyof Permission) => boolean;
   loading: boolean;
   error: string | null;
 }
 
 export function usePermissions(): UsePermissionsReturn {
   const [isAdmin, setIsAdmin] = useState(false);
-  const [permissions, setPermissions] = useState<Record<string, boolean>>({});
+  const [permissions, setPermissions] = useState<Permission | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,24 +55,11 @@ export function usePermissions(): UsePermissionsReturn {
     checkPermissions();
   }, []);
 
-  const hasPermission = (permission: Permission): boolean => {
+  const hasPermission = (permission: keyof Permission): boolean => {
     // Admins have all permissions
     if (isAdmin) return true;
 
-    // Workers have limited permissions
-    if (permission === 'manageBookings') {
-      return Boolean(permissions?.manageBookings);
-    }
-    
-    if (permission === 'uploadDocuments') {
-      return Boolean(permissions?.uploadDocuments);
-    }
-
-    // Workers cannot edit customers, vehicles, manage payments, or access reports
-    if (['manageCustomers', 'manageVehicles', 'managePayments', 'accessReports'].includes(permission)) {
-      return false;
-    }
-
+    // Check if the permission exists in the user's permissions
     return Boolean(permissions?.[permission]);
   };
 

@@ -6,6 +6,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { Search, Plus, RefreshCw, Settings, AlertTriangle, CheckCircle, Clock, Ban, Edit, Edit2, Trash2 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import VehicleModal from '@/components/vehicles/VehicleModal';
+import { usePermissions } from '@/lib/usePermissions';
 
 interface Vehicle {
   id: string;
@@ -34,23 +35,9 @@ export default function VehiclesPage() {
   const [showMaintenanceWarning, setShowMaintenanceWarning] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedVehicle, setSelectedVehicle] = useState<Vehicle | undefined>();
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const { hasPermission } = usePermissions();
 
   useEffect(() => {
-    const fetchUserRole = async () => {
-      const supabase = getSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
-        setUserRole(profile?.role || null);
-      }
-    };
-
-    fetchUserRole();
     fetchVehicles();
   }, []);
 
@@ -187,7 +174,7 @@ export default function VehiclesPage() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-2xl font-semibold text-gray-900">Vehicles</h1>
-          {userRole === 'admin' && (
+          {hasPermission('createVehicle') && (
             <button
               onClick={handleAddVehicle}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
@@ -317,7 +304,7 @@ export default function VehiclesPage() {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                             <div className="flex items-center space-x-4">
-                              {userRole === 'admin' && (
+                              {hasPermission('manageVehicles') && (
                                 <>
                                   <button
                                     onClick={() => handleEditVehicle(vehicle)}

@@ -1,9 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { getSupabaseClient } from '@/lib/supabase';
 import { X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { getSupabaseClient } from '@/lib/supabase';
+import { usePermissions } from '@/lib/usePermissions';
+import type { Permission } from '@/types/database';
 
 interface VehicleModalProps {
   isOpen: boolean;
@@ -29,24 +31,9 @@ export default function VehicleModal({ isOpen, onClose, onVehicleUpdated, vehicl
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [userRole, setUserRole] = useState<string | null>(null);
+  const { hasPermission } = usePermissions();
 
   useEffect(() => {
-    const fetchUserRole = async () => {
-      const supabase = getSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
-        setUserRole(profile?.role || null);
-      }
-    };
-
-    fetchUserRole();
-
     if (vehicle) {
       setFormData({
         model: vehicle.model,
@@ -61,9 +48,17 @@ export default function VehicleModal({ isOpen, onClose, onVehicleUpdated, vehicl
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check if user has admin role
-    if (userRole !== 'admin') {
-      setError('Unauthorized - Only administrators can modify vehicles');
+    // Check if user has appropriate permissions
+    const canCreate = hasPermission('createVehicle');
+    const canUpdate = hasPermission('manageVehicles');
+    
+    if (vehicle && !canUpdate) {
+      setError('Unauthorized - You do not have permission to modify vehicles');
+      return;
+    }
+    
+    if (!vehicle && !canCreate) {
+      setError('Unauthorized - You do not have permission to create vehicles');
       return;
     }
 
@@ -121,8 +116,7 @@ export default function VehicleModal({ isOpen, onClose, onVehicleUpdated, vehicl
       onClose();
     } catch (error) {
       console.error('Error saving vehicle:', error);
-      setError('Failed to save vehicle');
-      toast.error('Failed to save vehicle');
+      setError(error instanceof Error ? error.message : 'An error occurred while saving the vehicle');
     } finally {
       setLoading(false);
     }
