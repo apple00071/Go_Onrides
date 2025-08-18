@@ -19,7 +19,7 @@ export default function Header({ user, onMenuClick }: HeaderProps) {
 
   return (
     <header className="sticky top-0 z-10 bg-white border-b w-full safe-top">
-      <div className="flex h-16 items-center justify-between px-4 md:px-6 lg:px-8">
+      <div className="flex h-14 items-center justify-between px-3 md:px-4 lg:px-6">
         <div className="flex items-center">
           <button
             type="button"

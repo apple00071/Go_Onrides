@@ -11,7 +11,7 @@ export function getISTDate(date: string | Date = new Date()) {
 }
 
 export function formatDate(date: string | Date): string {
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
@@ -30,14 +30,15 @@ export function formatCurrency(amount: number): string {
 
 export function formatDateTime(date: string | Date): string {
   const d = new Date(date);
-  const dateStr = formatDate(d);
-  const timeStr = formatTime(d.toLocaleTimeString('en-US', { 
-    hour: '2-digit', 
-    minute: '2-digit', 
-    hour12: false,
+  return d.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
     timeZone: 'Asia/Kolkata'
-  }));
-  return `${dateStr} ${timeStr}`;
+  });
 }
 
 interface BookingRecord {
@@ -100,7 +101,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatDateShort(date: string | Date): string {
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: '2-digit',
     timeZone: 'Asia/Kolkata'
@@ -131,10 +132,12 @@ export function formatDateForInput(date: string | Date): string {
 // Add a function to format date for display (DD/MM/YYYY)
 export function formatDateForDisplay(date: string | Date): string {
   const d = new Date(date);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
-  return `${day}/${month}/${year}`;
+  return d.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata'
+  });
 }
 
 // Add a function to parse date from display format (DD/MM/YYYY) to ISO format
@@ -144,27 +147,14 @@ export function parseDateFromDisplay(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
-// Add a new function to format time in 12-hour format
 export function formatTime(timeStr: string): string {
   if (!timeStr) return '';
   
-  let hours: number;
-  let minutes: string;
-  
-  // Handle different time string formats
-  if (timeStr.includes(':')) {
-    // Handle HH:MM format
-    const [hourStr, min] = timeStr.split(':');
-    hours = parseInt(hourStr, 10);
-    minutes = min.split(' ')[0]; // Remove any AM/PM if present
-  } else {
-    // Handle numeric format
-    const date = new Date(timeStr);
-    hours = date.getHours();
-    minutes = date.getMinutes().toString().padStart(2, '0');
-  }
-
-  const period = hours >= 12 ? 'PM' : 'AM';
-  const displayHours = hours % 12 || 12;
-  return `${displayHours}:${minutes} ${period}`;
+  const date = new Date(`1970-01-01T${timeStr}`);
+  return date.toLocaleTimeString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: 'Asia/Kolkata'
+  });
 } 

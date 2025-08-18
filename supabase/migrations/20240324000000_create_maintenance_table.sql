@@ -40,6 +40,40 @@ DROP INDEX IF EXISTS idx_vehicle_maintenance_registration;
 -- Create index for faster lookups
 CREATE INDEX idx_vehicle_maintenance_registration ON vehicle_maintenance(vehicle_registration);
 
+-- Modify vehicle_maintenance table to support multiple maintenance types
+ALTER TABLE vehicle_maintenance 
+DROP COLUMN IF EXISTS maintenance_type,
+ADD COLUMN IF NOT EXISTS maintenance_types TEXT[] NOT NULL DEFAULT '{}';
+
+-- Add index for faster queries
+CREATE INDEX IF NOT EXISTS idx_vehicle_maintenance_types 
+ON vehicle_maintenance USING GIN (maintenance_types);
+
+-- Update the vehicle_batteries table to ensure all image URLs are tracked
+ALTER TABLE vehicle_batteries
+ADD COLUMN IF NOT EXISTS battery_image_url TEXT,
+ADD COLUMN IF NOT EXISTS old_battery_image_url TEXT,
+ADD COLUMN IF NOT EXISTS warranty_card_image_url TEXT;
+
+-- Create a function to get battery images for a maintenance record
+CREATE OR REPLACE FUNCTION get_battery_images(maintenance_id UUID)
+RETURNS JSON
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN (
+        SELECT json_build_object(
+            'battery_image', vb.battery_image_url,
+            'old_battery_image', vb.old_battery_image_url,
+            'warranty_card_image', vb.warranty_card_image_url
+        )
+        FROM vehicle_maintenance vm
+        LEFT JOIN vehicle_batteries vb ON vm.battery_details = vb.id
+        WHERE vm.id = maintenance_id
+    );
+END;
+$$;
+
 -- Create function to update vehicle's next maintenance date
 CREATE OR REPLACE FUNCTION update_vehicle_maintenance_date()
 RETURNS TRIGGER AS $$

@@ -220,24 +220,24 @@ export default function VehicleDetailsPage({ params }: { params: { registration:
           <div className="px-4 py-5 sm:p-6">
             <h3 className="text-lg font-medium text-gray-900">Vehicle Information</h3>
             <div className="mt-5 border-t border-gray-200">
-              <dl className="divide-y divide-gray-200">
-                <div className="py-4 grid grid-cols-3 gap-4">
+              <dl className="grid grid-cols-2 gap-4 py-4">
+                <div className="sm:col-span-1">
                   <dt className="text-sm font-medium text-gray-500">Status</dt>
-                  <dd className="text-sm text-gray-900 col-span-2 capitalize">{vehicle.status}</dd>
+                  <dd className="mt-1 text-sm text-gray-900 capitalize">{vehicle.status}</dd>
                 </div>
-                <div className="py-4 grid grid-cols-3 gap-4">
+                <div className="sm:col-span-1">
                   <dt className="text-sm font-medium text-gray-500">Added Date</dt>
-                  <dd className="text-sm text-gray-900 col-span-2">{formatDate(vehicle.added_date)}</dd>
+                  <dd className="mt-1 text-sm text-gray-900">{formatDate(vehicle.added_date)}</dd>
                 </div>
-                <div className="py-4 grid grid-cols-3 gap-4">
+                <div className="sm:col-span-1">
                   <dt className="text-sm font-medium text-gray-500">Last Maintenance</dt>
-                  <dd className="text-sm text-gray-900 col-span-2">
+                  <dd className="mt-1 text-sm text-gray-900">
                     {vehicle.last_maintenance_date ? formatDate(vehicle.last_maintenance_date) : 'No maintenance record'}
                   </dd>
                 </div>
-                <div className="py-4 grid grid-cols-3 gap-4">
+                <div className="sm:col-span-1">
                   <dt className="text-sm font-medium text-gray-500">Next Maintenance Due</dt>
-                  <dd className="text-sm text-gray-900 col-span-2">
+                  <dd className="mt-1 text-sm text-gray-900">
                     {vehicle.next_maintenance_date ? formatDate(vehicle.next_maintenance_date) : 'Not scheduled'}
                   </dd>
                 </div>

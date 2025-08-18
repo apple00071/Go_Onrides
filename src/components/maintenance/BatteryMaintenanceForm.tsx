@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, forwardRef, useImperativeHandle } from 'react';
 import { Camera, X } from 'lucide-react';
 import Image from 'next/image';
 import { getSupabaseClient } from '@/lib/supabase';
@@ -15,10 +15,16 @@ interface ImageUpload {
   preview: string;
 }
 
-export default function BatteryMaintenanceForm({ 
+export interface BatteryFormHandle {
+  handleSubmit: () => Promise<void>;
+}
+
+const STORAGE_BUCKET = 'maintenance';  // Change this to match your Supabase bucket name
+
+const BatteryMaintenanceForm = forwardRef<BatteryFormHandle, BatteryMaintenanceFormProps>(({ 
   vehicleRegistration,
   onBatteryDetailsChange 
-}: BatteryMaintenanceFormProps) {
+}, ref) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [images, setImages] = useState<{
@@ -40,6 +46,117 @@ export default function BatteryMaintenanceForm({
     batteryHealth: '',
     warrantyDetails: ''
   });
+
+  const handleSubmit = async () => {
+    try {
+      // Validate required fields
+      if (!formData.newBatteryNumber) {
+        const error = 'New battery number is required';
+        setError(error);
+        throw new Error(error);
+      }
+
+      setLoading(true);
+      setError(null);
+      
+      const supabase = getSupabaseClient();
+      const imageUrls: { [key: string]: string } = {};
+
+      // Upload all images
+      for (const [type, image] of Object.entries(images)) {
+        if (image?.file) {
+          const fileExt = image.file.name.split('.').pop();
+          const fileName = `battery/${vehicleRegistration}-${type}-${Date.now()}.${fileExt}`;
+
+          console.log('Uploading image:', {
+            type,
+            fileName,
+            bucket: STORAGE_BUCKET
+          });
+
+          // Upload the file
+          const { error: uploadError } = await supabase.storage
+            .from(STORAGE_BUCKET)
+            .upload(fileName, image.file);
+
+          if (uploadError) {
+            console.error('Image upload error:', uploadError);
+            throw new Error(`Failed to upload ${type} image: ${uploadError.message}`);
+          }
+          
+          // Get the public URL
+          const { data: { publicUrl } } = supabase.storage
+            .from(STORAGE_BUCKET)
+            .getPublicUrl(fileName);
+            
+          // Map the image type to the correct field name
+          const fieldMap = {
+            'battery': 'battery_image_url',
+            'oldBattery': 'old_battery_image_url',
+            'warrantyCard': 'warranty_card_image_url'
+          };
+          
+          imageUrls[fieldMap[type as keyof typeof fieldMap]] = publicUrl;
+          
+          console.log('Image uploaded successfully:', {
+            type,
+            url: publicUrl
+          });
+        }
+      }
+
+      console.log('Creating battery record with data:', {
+        registration: vehicleRegistration,
+        formData,
+        imageUrls
+      });
+
+      // Create battery record
+      const { data: batteryData, error: batteryError } = await supabase
+        .from('vehicle_batteries')
+        .insert({
+          vehicle_registration: vehicleRegistration,
+          old_battery_number: formData.oldBatteryNumber.trim(),
+          new_battery_number: formData.newBatteryNumber.trim(),
+          battery_image_url: imageUrls.battery_image_url || null,
+          old_battery_image_url: imageUrls.old_battery_image_url || null,
+          warranty_card_image_url: imageUrls.warranty_card_image_url || null,
+          warranty_end_date: formData.warrantyEndDate ? new Date(formData.warrantyEndDate).toISOString() : null,
+          warranty_details: formData.warrantyDetails.trim(),
+          battery_health: formData.batteryHealth ? parseInt(formData.batteryHealth) : null,
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (batteryError) {
+        console.error('Error creating battery record:', batteryError);
+        throw new Error(`Failed to create battery record: ${batteryError.message}`);
+      }
+
+      if (!batteryData || !batteryData.id) {
+        throw new Error('No battery ID received from server');
+      }
+
+      console.log('Battery record created successfully:', batteryData);
+
+      // Pass battery ID back to parent
+      onBatteryDetailsChange(batteryData.id);
+
+    } catch (error) {
+      console.error('Error saving battery details:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to save battery details';
+      setError(errorMessage);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Expose handleSubmit to parent component
+  useImperativeHandle(ref, () => ({
+    handleSubmit
+  }));
 
   const handleImageChange = (type: 'battery' | 'oldBattery' | 'warrantyCard', e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -72,66 +189,6 @@ export default function BatteryMaintenanceForm({
       ...prev,
       [name]: value
     }));
-  };
-
-  const handleSubmit = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const supabase = getSupabaseClient();
-      const imageUrls: { [key: string]: string } = {};
-
-      // Upload all images
-      for (const [type, image] of Object.entries(images)) {
-        if (image?.file) {
-          const fileExt = image.file.name.split('.').pop();
-          const fileName = `${vehicleRegistration}-${type}-${Date.now()}.${fileExt}`;
-          const filePath = `battery-images/${fileName}`;
-
-          const { error: uploadError } = await supabase.storage
-            .from('maintenance')
-            .upload(filePath, image.file);
-
-          if (uploadError) throw uploadError;
-          
-          const { data: { publicUrl } } = supabase.storage
-            .from('maintenance')
-            .getPublicUrl(filePath);
-            
-          imageUrls[`${type}_image_url`] = publicUrl;
-        }
-      }
-
-      // Create battery record
-      const { data: batteryData, error: batteryError } = await supabase
-        .from('vehicle_batteries')
-        .insert({
-          vehicle_registration: vehicleRegistration,
-          old_battery_number: formData.oldBatteryNumber,
-          new_battery_number: formData.newBatteryNumber,
-          battery_image_url: imageUrls.battery_image_url,
-          old_battery_image_url: imageUrls.oldBattery_image_url,
-          warranty_card_image_url: imageUrls.warrantyCard_image_url,
-          warranty_end_date: formData.warrantyEndDate || null,
-          warranty_details: formData.warrantyDetails,
-          battery_health: formData.batteryHealth ? parseInt(formData.batteryHealth) : null,
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (batteryError) throw batteryError;
-
-      // Pass battery ID back to parent
-      onBatteryDetailsChange(batteryData.id);
-
-    } catch (error) {
-      console.error('Error saving battery details:', error);
-      setError(error instanceof Error ? error.message : 'Failed to save battery details');
-    } finally {
-      setLoading(false);
-    }
   };
 
   const renderImageUpload = (type: 'battery' | 'oldBattery' | 'warrantyCard', label: string) => (
@@ -270,4 +327,8 @@ export default function BatteryMaintenanceForm({
       </div>
     </div>
   );
-} 
+});
+
+BatteryMaintenanceForm.displayName = 'BatteryMaintenanceForm';
+
+export default BatteryMaintenanceForm; 

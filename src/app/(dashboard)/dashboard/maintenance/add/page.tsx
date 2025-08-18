@@ -1,13 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Save, Plus, Camera } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { format, parse } from 'date-fns';
 import { formatDate } from '@/lib/utils';
-import BatteryMaintenanceForm from '@/components/maintenance/BatteryMaintenanceForm';
+import BatteryMaintenanceForm, { BatteryFormHandle } from '@/components/maintenance/BatteryMaintenanceForm';
 
 // Date format helpers
 const formatDateForDisplay = (date: Date) => format(date, 'dd-MM-yyyy');
@@ -96,6 +96,8 @@ export default function AddMaintenancePage() {
     performed_by: '',
     notes: ''
   });
+  // Replace useState with useRef for batteryFormRef
+  const batteryFormRef = useRef<BatteryFormHandle | null>(null);
   const [selectedBatteryId, setSelectedBatteryId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -165,127 +167,139 @@ export default function AddMaintenancePage() {
   };
 
   const handleBatteryDetailsChange = (batteryId: string | null) => {
+    console.log('Battery details changed:', batteryId);
     setSelectedBatteryId(batteryId);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formData.maintenance_types.length === 0) {
+      setError('Please select at least one maintenance type');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    const maxRetries = 3;
-    let retryCount = 0;
-
-    const attemptInsert = async () => {
-      try {
-        const supabase = getSupabaseClient();
-        
-        // Check and refresh auth session if needed
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        if (sessionError) throw sessionError;
-        if (!session) {
-          throw new Error('No active session found');
-        }
-
-        // Parse the DD-MM-YYYY date to YYYY-MM-DD for database
-        const dbDate = format(parse(formData.maintenance_date, 'dd-MM-yyyy', new Date()), 'yyyy-MM-dd');
-
-        // Create separate maintenance records for each type
-        for (const maintenanceType of formData.maintenance_types) {
-          // Ensure all numeric fields are properly typed
-          const maintenanceData = {
-            vehicle_registration: vehicleRegistration.trim(), // Use the decoded registration directly
-            maintenance_date: dbDate,
-            maintenance_type: maintenanceType.value,
-            description: (formData.description || '').trim(),
-            cost: Number(formData.cost) / formData.maintenance_types.length, // Ensure it's a number
-            next_due_date: maintenanceType.nextDueDate ? 
-              format(parse(maintenanceType.nextDueDate, 'dd-MM-yyyy', new Date()), 'yyyy-MM-dd') : 
-              null,
-            odometer_reading: Number(formData.odometer_reading), // Ensure it's a number
-            performed_by: (formData.performed_by || '').trim(),
-            notes: (formData.notes || '').trim(),
-            created_by: session.user.id,
-            updated_by: session.user.id,
-            updated_at: new Date().toISOString()
-          };
-
-          // Only add battery details if this is a battery maintenance and we have a battery ID
-          if (maintenanceType.value === 'battery' && selectedBatteryId) {
-            Object.assign(maintenanceData, { battery_details: selectedBatteryId });
-          }
-
-          console.log('Inserting maintenance data:', maintenanceData);
-
-          const { error: insertError } = await supabase
-            .from('vehicle_maintenance')
-            .insert([maintenanceData]);
-
-          if (insertError) {
-            console.error('Insert error:', insertError);
-            throw insertError;
-          }
-        }
-
-        // Check for active bookings before updating vehicle status
-        const { data: activeBookings, error: bookingError } = await supabase
-          .from('bookings')
-          .select('id')
-          .contains('vehicle_details', { registration: vehicleRegistration })
-          .in('status', ['confirmed', 'in_use'])
-          .limit(1);
-
-        if (bookingError) {
-          console.error('Booking query error:', bookingError);
-          throw bookingError;
-        }
-
-        // Only update vehicle status if there are no active bookings
-        if (!activeBookings?.length) {
-          const { error: vehicleError } = await supabase
-            .from('vehicles')
-            .update({ 
-              status: 'available',
-              updated_at: new Date().toISOString(),
-              updated_by: session.user.id
-            })
-            .eq('registration', vehicleRegistration);
-
-          if (vehicleError) {
-            if (vehicleError.message.includes('Cannot change vehicle status: Vehicle has active bookings')) {
-              setError('Cannot update vehicle status: Vehicle has active bookings');
-              setLoading(false);
-              return;
-            }
-            throw vehicleError;
-          }
-        }
-
-        toast.success('Maintenance record added successfully');
-        router.push('/dashboard/maintenance');
-      } catch (error: any) {
-        console.error('Operation error:', error);
-        if (error.code === 'PGRST204' && retryCount < maxRetries) {
-          // Retry the entire operation
-          return attemptInsert();
-        }
-        if (error.message === 'No active session found') {
-          // Redirect to login if session is invalid
-          router.push('/login');
-          return;
-        }
-        throw error;
-      }
-    };
-
     try {
-      await attemptInsert();
-    } catch (error: any) {
-      console.error('Error adding maintenance record:', error);
-      setError(error.message || 'An error occurred while adding the maintenance record');
-    } finally {
+      // If battery maintenance is selected, submit battery form first
+      const hasBatteryMaintenance = formData.maintenance_types.some(type => type.value === 'battery');
+      if (hasBatteryMaintenance) {
+        console.log('Battery maintenance selected, checking form ref:', batteryFormRef.current);
+        
+        if (!batteryFormRef.current) {
+          throw new Error('Battery form not initialized');
+        }
+        
+        console.log('Submitting battery form...');
+        try {
+          await batteryFormRef.current.handleSubmit();
+          console.log('Battery form submitted successfully, selectedBatteryId:', selectedBatteryId);
+        } catch (error) {
+          console.error('Error submitting battery form:', error);
+          throw new Error('Failed to save battery details. Please check the form and try again.');
+        }
+        
+        if (!selectedBatteryId) {
+          console.error('No battery ID received after form submission');
+          throw new Error('Battery details are incomplete. Please fill all required fields.');
+        }
+      }
+
+      const supabase = getSupabaseClient();
+      
+      // Get the session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('No session found');
+      }
+
+      // Format the date for database
+      const dbDate = format(parse(formData.maintenance_date, 'dd-MM-yyyy', new Date()), 'yyyy-MM-dd');
+
+      // Get the next due date (use the latest date if multiple types selected)
+      const nextDueDate = formData.maintenance_types
+        .map(type => type.nextDueDate)
+        .filter((date): date is string => typeof date === 'string' && date.length > 0)
+        .sort((a, b) => parse(b, 'dd-MM-yyyy', new Date()).getTime() - parse(a, 'dd-MM-yyyy', new Date()).getTime())[0];
+
+      // Create maintenance data object
+      const maintenanceData = {
+        vehicle_registration: vehicleRegistration.trim(),
+        maintenance_date: dbDate,
+        maintenance_types: formData.maintenance_types.map(type => type.value),
+        description: (formData.description || '').trim(),
+        cost: Number(formData.cost),
+        next_due_date: nextDueDate ? 
+          format(parse(nextDueDate, 'dd-MM-yyyy', new Date()), 'yyyy-MM-dd') : 
+          null,
+        odometer_reading: Number(formData.odometer_reading),
+        performed_by: (formData.performed_by || '').trim(),
+        notes: (formData.notes || '').trim(),
+        created_by: session.user.id,
+        updated_by: session.user.id,
+        updated_at: new Date().toISOString(),
+        battery_details: selectedBatteryId
+      };
+
+      console.log('Inserting maintenance data:', maintenanceData);
+
+      // Insert maintenance record
+      const { error: maintenanceError } = await supabase
+        .from('vehicle_maintenance')
+        .insert(maintenanceData);
+
+      if (maintenanceError) {
+        console.error('Error inserting maintenance record:', maintenanceError);
+        throw maintenanceError;
+      }
+
+      // Check for active bookings before updating vehicle status
+      const { data: activeBookings, error: bookingError } = await supabase
+        .from('bookings')
+        .select('id')
+        .contains('vehicle_details', { registration: vehicleRegistration })
+        .in('status', ['confirmed', 'in_use'])
+        .limit(1);
+
+      if (bookingError) {
+        console.error('Booking query error:', bookingError);
+        throw bookingError;
+      }
+
+      // Only update vehicle status if there are no active bookings
+      if (!activeBookings?.length) {
+        const { error: updateError } = await supabase
+          .from('vehicles')
+          .update({
+            status: 'available',
+            last_maintenance_date: dbDate,
+            next_maintenance_date: maintenanceData.next_due_date,
+            updated_at: new Date().toISOString(),
+            updated_by: session.user.id
+          })
+          .eq('registration', vehicleRegistration);
+
+        if (updateError) {
+          console.error('Vehicle update error:', updateError);
+          throw updateError;
+        }
+      }
+
+      // Show success message and redirect
+      toast.success('Maintenance record added successfully');
+      router.push(`/dashboard/maintenance/vehicle/${encodeURIComponent(vehicleRegistration)}/history`);
+
+    } catch (error) {
+      console.error('Error saving maintenance:', error);
+      setError(error instanceof Error ? error.message : 'Failed to save maintenance record');
       setLoading(false);
     }
+  };
+
+  // Remove the useCallback since we're using useRef directly
+  const setBatteryFormRefCallback = (ref: BatteryFormHandle | null) => {
+    batteryFormRef.current = ref;
   };
 
   return (
@@ -412,6 +426,7 @@ export default function AddMaintenancePage() {
               {formData.maintenance_types.some(type => type.value === 'battery') && (
                 <div className="border-t border-gray-200 pt-6">
                   <BatteryMaintenanceForm
+                    ref={setBatteryFormRefCallback}
                     vehicleRegistration={formData.vehicle_registration}
                     onBatteryDetailsChange={handleBatteryDetailsChange}
                   />

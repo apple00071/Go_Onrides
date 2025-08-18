@@ -90,7 +90,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
         md:translate-x-0 safe-top safe-bottom
       `}
     >
-      <div className="flex h-16 items-center justify-between px-4 border-b">
+      <div className="flex h-14 items-center justify-between px-4 border-b">
         <Link href="/dashboard" className="flex items-center gap-2">
           <div className="flex h-8 w-8 items-center justify-center rounded bg-primary-blue text-white">
             GR

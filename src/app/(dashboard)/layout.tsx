@@ -174,7 +174,10 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="flex h-screen bg-gray-100">
+      {/* Sidebar */}
+      <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+
       {/* Overlay for mobile sidebar */}
       {isSidebarOpen && (
         <div 
@@ -184,24 +187,15 @@ export default function DashboardLayout({
         />
       )}
 
-      <div className="flex h-screen overflow-hidden">
-        {/* Sidebar */}
-        <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      {/* Main content */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* Header */}
+        <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-        {/* Main content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          {/* Header */}
-          <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
-
-          {/* Main content area */}
-          <main className="flex-1 overflow-y-auto bg-gray-100 px-2 sm:px-4 lg:px-6">
-            <div className="w-full max-w-[1920px] mx-auto py-4">
-              <div className="grid gap-4">
-                {children}
-              </div>
-            </div>
-          </main>
-        </div>
+        {/* Main content area */}
+        <main className="flex-1 overflow-y-auto bg-gray-100">
+          {children}
+        </main>
       </div>
     </div>
   );
