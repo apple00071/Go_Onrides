@@ -1,14 +1,14 @@
-'use client'
+'use client';
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
-import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
-import CustomerForm from '@/components/customers/CustomerForm'
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import CustomerForm from '@/components/customers/CustomerForm';
 
 export default function NewCustomerPage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const supabase = createClientComponentClient()
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const supabase = createClientComponentClient();
 
   useEffect(() => {
     const checkSession = async () => {
