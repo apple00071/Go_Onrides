@@ -25,6 +25,12 @@ const adminSupabase = createClient<Database>(
   }
 )
 
+interface DeletionLog {
+  user_id: string;
+  error: string;
+  attempted_at: string;
+}
+
 export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
@@ -119,7 +125,7 @@ export async function DELETE(
           user_id: params.id,
           error: profileDeleteError.message,
           attempted_at: new Date().toISOString()
-        })
+        } as DeletionLog);
       } catch (logError) {
         console.error('Failed to log deletion error:', logError)
       }

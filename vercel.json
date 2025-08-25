@@ -3,5 +3,12 @@
     "path": "/api/reports/daily",
     "schedule": "30 16 * * *"
   }],
-  "regions": ["bom1"]
+  "version": 2,
+  "regions": ["bom1"],
+  "builds": [
+    {
+      "src": "next.config.js",
+      "use": "@vercel/next"
+    }
+  ]
 } 
