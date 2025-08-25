@@ -210,10 +210,6 @@ export default function VehicleReturns() {
       
       {returns.overdue.length > 0 && (
         <div className="p-4 border-b">
-          <h3 className="text-sm font-medium text-red-600 flex items-center mb-3">
-            <AlertTriangle className="h-4 w-4 mr-1" />
-            Overdue Returns
-          </h3>
           <div className="space-y-3">
             {returns.overdue.map((booking) => renderBookingCard(booking, 'overdue'))}
           </div>

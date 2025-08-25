@@ -28,15 +28,34 @@ export async function POST(request: Request) {
 
     // Format phone number
     const cleaned = phone_number.replace(/\D/g, '');
-    const formattedPhone = cleaned.replace(/^91/, '');
-    console.log('Formatted phone:', formattedPhone);
-
-    if (formattedPhone.length !== 10) {
+    let formattedPhone = cleaned;
+    
+    // If number starts with 91 and is longer than 10 digits, check if removing 91 gives a valid number
+    if (cleaned.length > 10 && cleaned.startsWith('91')) {
+      const withoutCountryCode = cleaned.slice(2);
+      // Only remove 91 if the remaining number is exactly 10 digits
+      if (withoutCountryCode.length === 10) {
+        formattedPhone = withoutCountryCode;
+      }
+    }
+    
+    // If still longer than 10 digits, it's invalid
+    if (formattedPhone.length > 10) {
       return NextResponse.json(
-        { error: 'Invalid phone number format' },
+        { error: 'Phone number must be 10 digits (excluding optional country code 91)' },
         { status: 400 }
       );
     }
+    
+    // If less than 10 digits, it's invalid
+    if (formattedPhone.length < 10) {
+      return NextResponse.json(
+        { error: 'Phone number must be exactly 10 digits' },
+        { status: 400 }
+      );
+    }
+
+    console.log('Formatted phone:', formattedPhone);
 
     // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();

@@ -123,15 +123,6 @@ export default function PendingPayments() {
         <h2 className="text-lg font-semibold">Pending Payments</h2>
       </div>
       
-      {hasOverduePayments && (
-        <div className="p-4 border-b bg-red-50">
-          <div className="flex items-center text-red-600">
-            <AlertTriangle className="h-5 w-5 mr-2" />
-            <span className="font-medium">Overdue Payments</span>
-          </div>
-        </div>
-      )}
-
       <div className="p-4">
         {pendingPayments.length === 0 ? (
           <div className="text-center text-gray-500 py-4">

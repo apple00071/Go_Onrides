@@ -111,12 +111,9 @@ export default function DashboardPage() {
       }, 0) || 0;
 
       const pendingPayments = bookings?.reduce((sum, booking) => {
-        // Calculate total required amount (booking amount + security deposit + all fees)
+        // Calculate total required amount (only booking amount + security deposit)
         const totalRequired = (booking.booking_amount || 0) + 
-                            (booking.security_deposit_amount || 0) +
-                            (booking.damage_charges || 0) + 
-                            (booking.late_fee || 0) + 
-                            (booking.extension_fee || 0);
+                            (booking.security_deposit_amount || 0);
         // Calculate pending amount
         const pending = totalRequired - (booking.paid_amount || 0);
         return sum + (pending > 0 ? pending : 0);
