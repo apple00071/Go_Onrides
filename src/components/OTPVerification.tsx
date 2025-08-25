@@ -19,15 +19,25 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
 
   // Format phone number to ensure it's valid for India
   const formatPhoneNumber = (phone: string) => {
+    // Remove all non-digit characters
     const cleaned = phone.replace(/\D/g, '');
-    // Remove any leading zeros
-    const withoutLeadingZeros = cleaned.replace(/^0+/, '');
-    // Remove country code if present
-    const withoutCode = withoutLeadingZeros.replace(/^91/, '');
-    if (withoutCode.length !== 10) {
+    let formattedPhone = cleaned;
+    
+    // If number starts with 91 and is longer than 10 digits, check if removing 91 gives a valid number
+    if (cleaned.length > 10 && cleaned.startsWith('91')) {
+      const withoutCountryCode = cleaned.slice(2);
+      // Only remove 91 if the remaining number is exactly 10 digits
+      if (withoutCountryCode.length === 10) {
+        formattedPhone = withoutCountryCode;
+      }
+    }
+    
+    // Check if the number is valid (exactly 10 digits)
+    if (formattedPhone.length !== 10) {
       return null;
     }
-    return withoutCode;
+    
+    return formattedPhone;
   };
 
   const handleSendOTP = async () => {

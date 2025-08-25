@@ -231,6 +231,33 @@ export default function NewBookingPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     
+    // Handle phone number fields
+    if (name === 'customer_contact' || name === 'emergency_contact_phone' || 
+        name === 'emergency_contact_phone1' || name === 'alternative_phone' || 
+        name === 'colleague_phone') {
+      // Remove all non-digit characters
+      const cleaned = value.replace(/\D/g, '');
+      let formattedPhone = cleaned;
+      
+      // If number starts with 91 and is longer than 10 digits, check if removing 91 gives a valid number
+      if (cleaned.length > 10 && cleaned.startsWith('91')) {
+        const withoutCountryCode = cleaned.slice(2);
+        // Only remove 91 if the remaining number is exactly 10 digits
+        if (withoutCountryCode.length === 10) {
+          formattedPhone = withoutCountryCode;
+        }
+      }
+      
+      // Only update if the number is valid or empty
+      if (formattedPhone.length <= 10) {
+        setFormData(prev => ({
+          ...prev,
+          [name]: formattedPhone
+        }));
+      }
+      return;
+    }
+    
     // Handle start date changes
     if (name === 'start_date') {
       const selectedDate = new Date(value);
@@ -732,8 +759,8 @@ export default function NewBookingPage() {
       if (!formData.customer_name?.trim()) {
         throw new Error('Customer name is required');
       }
-      if (!formData.customer_contact || formData.customer_contact.length !== 10) {
-        throw new Error('Valid 10-digit phone number is required');
+      if (!formData.customer_contact) {
+        throw new Error('Phone number is required');
       }
       if (!formData.aadhar_number || formData.aadhar_number.length !== 12) {
         throw new Error('Valid 12-digit Aadhar number is required');
@@ -997,7 +1024,7 @@ export default function NewBookingPage() {
   const checkRequiredFields = (data: BookingFormData) => {
     return (
       data.customer_name?.trim() &&
-      data.customer_contact?.length === 10 &&
+      data.customer_contact &&
       data.aadhar_number?.length === 12 &&
       data.emergency_contact_phone?.length === 10 &&
       data.dl_number?.trim() &&
@@ -1113,9 +1140,7 @@ export default function NewBookingPage() {
                           otpVerified ? 'bg-gray-100' : ''
                         }`}
                         aria-required="true"
-                        maxLength={10}
-                        pattern="\d{10}"
-                        title="Please enter a valid 10-digit phone number"
+                        maxLength={12}
                         inputMode="numeric"
                       />
                       {otpVerified && (
