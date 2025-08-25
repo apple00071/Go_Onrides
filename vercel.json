@@ -10,11 +10,5 @@
       "src": "next.config.js",
       "use": "@vercel/next"
     }
-  ],
-  "functions": {
-    "/api/reports/daily": {
-      "memory": 1024,
-      "maxDuration": 60
-    }
-  }
+  ]
 } 
