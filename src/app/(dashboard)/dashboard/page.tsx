@@ -84,39 +84,45 @@ export default function DashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
 
-      // Get total income and pending payments
-      const { data: bookings, error: bookingsError } = await supabase
+      // Get pending payments
+      const { data: pendingBookings, error: pendingError } = await supabase
         .from('bookings')
         .select(`
-          id,
           booking_amount,
           security_deposit_amount,
-          paid_amount,
-          damage_charges,
-          late_fee,
-          extension_fee,
-          status
+          paid_amount
         `)
-        .in('status', ['confirmed', 'in_use', 'completed']);
+        .eq('payment_status', 'partial')
+        .in('status', ['confirmed', 'in_use']);
 
-      if (bookingsError) throw bookingsError;
+      if (pendingError) throw pendingError;
 
-      const totalIncome = bookings?.reduce((sum, booking) => {
-        // Include booking amount and all additional fees in revenue
-        const revenue = (booking.booking_amount || 0) + 
-                       (booking.damage_charges || 0) + 
-                       (booking.late_fee || 0) + 
-                       (booking.extension_fee || 0);
-        return sum + revenue;
+      const pendingPayments = pendingBookings?.reduce((sum, booking) => {
+        const totalAmount = (booking.booking_amount || 0) + (booking.security_deposit_amount || 0);
+        const paidAmount = booking.paid_amount || 0;
+        const pendingAmount = totalAmount - paidAmount;
+        return sum + pendingAmount;
       }, 0) || 0;
 
-      const pendingPayments = bookings?.reduce((sum, booking) => {
-        // Calculate total required amount (only booking amount + security deposit)
-        const totalRequired = (booking.booking_amount || 0) + 
-                            (booking.security_deposit_amount || 0);
-        // Calculate pending amount
-        const pending = totalRequired - (booking.paid_amount || 0);
-        return sum + (pending > 0 ? pending : 0);
+      // Get total income from completed bookings
+      const { data: completedBookings, error: completedError } = await supabase
+        .from('bookings')
+        .select(`
+          booking_amount,
+          damage_charges,
+          late_fee,
+          extension_fee
+        `)
+        .eq('status', 'completed');
+
+      if (completedError) throw completedError;
+
+      const totalIncome = completedBookings?.reduce((sum, booking) => {
+        const revenue = (booking.booking_amount || 0) + 
+                     (booking.damage_charges || 0) + 
+                     (booking.late_fee || 0) + 
+                     (booking.extension_fee || 0);
+        return sum + revenue;
       }, 0) || 0;
 
       setStats({

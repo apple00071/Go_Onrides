@@ -12,7 +12,8 @@ interface BookingData {
   booking_id: string;
   customer_name: string;
   customer_contact: string;
-  total_amount: number;
+  booking_amount: number;
+  security_deposit_amount: number;
   paid_amount: number;
   next_payment_date: string;
   created_at: string;
@@ -43,7 +44,8 @@ export default function PendingPayments() {
             booking_id,
             customer_name,
             customer_contact,
-            total_amount,
+            booking_amount,
+            security_deposit_amount,
             paid_amount,
             next_payment_date,
             created_at,
@@ -51,16 +53,20 @@ export default function PendingPayments() {
             status
           `)
           .eq('payment_status', 'partial')
-          .neq('status', 'cancelled')
+          .in('status', ['confirmed', 'in_use'])
           .order('next_payment_date', { ascending: true });
 
         if (error) throw error;
 
         const bookings = data as BookingData[];
-        const payments: PendingPayment[] = bookings.map(booking => ({
-          ...booking,
-          remaining_amount: booking.total_amount - (booking.paid_amount || 0)
-        }));
+        const payments: PendingPayment[] = bookings.map(booking => {
+          const totalAmount = (booking.booking_amount || 0) + (booking.security_deposit_amount || 0);
+          const paidAmount = booking.paid_amount || 0;
+          return {
+            ...booking,
+            remaining_amount: totalAmount - paidAmount
+          };
+        });
 
         // Sort payments: those with next_payment_date first (ordered by date), then those without
         const sortedPayments = payments.sort((a, b) => {
@@ -132,6 +138,7 @@ export default function PendingPayments() {
           <div className="space-y-3">
             {pendingPayments.map((payment) => {
               const isPaymentOverdue = isOverdue(payment.next_payment_date);
+              const totalAmount = (payment.booking_amount || 0) + (payment.security_deposit_amount || 0);
               
               return (
                 <div key={payment.id} className="relative">
@@ -183,7 +190,7 @@ export default function PendingPayments() {
                               {formatCurrency(payment.remaining_amount)}
                             </div>
                             <div className="text-sm text-gray-500">
-                              Paid: {formatCurrency(payment.paid_amount)} of {formatCurrency(payment.total_amount)}
+                              Paid: {formatCurrency(payment.paid_amount)} of {formatCurrency(totalAmount)}
                             </div>
                           </div>
                           {payment.customer_contact && (

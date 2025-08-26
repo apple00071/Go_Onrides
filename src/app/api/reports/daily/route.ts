@@ -3,6 +3,39 @@ import { getSupabaseClient } from '@/lib/supabase';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import nodemailer from 'nodemailer';
 
+interface BookingDetails {
+  id: string;
+  booking_id: string;
+  customer_name: string;
+  customer_contact: string;
+  vehicle_details: {
+    model: string;
+    registration: string;
+  };
+  booking_amount: number;
+  security_deposit_amount: number;
+  paid_amount: number;
+  payment_status: string;
+  status: string;
+  created_at: string;
+}
+
+interface PaymentDetails {
+  id: string;
+  booking_id: string;
+  amount: number;
+  payment_mode: string;
+  created_at: string;
+  booking: {
+    id: string;
+    customer_name: string;
+    vehicle_details: {
+      model: string;
+      registration: string;
+    };
+  } | null;
+}
+
 // Configure email transport
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -18,21 +51,34 @@ async function generateDailyReport() {
   const supabase = getSupabaseClient();
   
   // Set up IST date range for today
-  const today = new Date();
-  // Convert to IST (UTC+5:30)
-  today.setHours(today.getHours() + 5);
-  today.setMinutes(today.getMinutes() + 30);
-  // Set to start of day
-  today.setHours(0, 0, 0, 0);
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istDate = new Date(now.getTime() + istOffset);
   
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
+  // Set to start of day in IST
+  const startOfDay = new Date(istDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  
+  // Set to end of day in IST
+  const endOfDay = new Date(istDate);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  // Convert back to UTC for database query
+  const queryStart = new Date(startOfDay.getTime() - istOffset);
+  const queryEnd = new Date(endOfDay.getTime() - istOffset);
+
+  console.log('Fetching data for:', {
+    istDate: istDate.toISOString(),
+    queryStart: queryStart.toISOString(),
+    queryEnd: queryEnd.toISOString()
+  });
 
   // Get today's bookings
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(`
-      *,
+      id,
+      booking_id,
       customer_name,
       customer_contact,
       vehicle_details,
@@ -40,10 +86,11 @@ async function generateDailyReport() {
       security_deposit_amount,
       paid_amount,
       payment_status,
+      status,
       created_at
     `)
-    .gte('created_at', today.toISOString())
-    .lt('created_at', tomorrow.toISOString());
+    .gte('created_at', queryStart.toISOString())
+    .lt('created_at', queryEnd.toISOString());
 
   if (bookingsError) throw bookingsError;
 
@@ -51,23 +98,34 @@ async function generateDailyReport() {
   const { data: payments, error: paymentsError } = await supabase
     .from('payments')
     .select(`
-      *,
-      booking:bookings(customer_name, vehicle_details)
+      id,
+      booking_id,
+      amount,
+      payment_mode,
+      created_at,
+      booking:bookings(
+        id,
+        customer_name,
+        vehicle_details
+      )
     `)
-    .gte('created_at', today.toISOString())
-    .lt('created_at', tomorrow.toISOString());
+    .gte('created_at', queryStart.toISOString())
+    .lt('created_at', queryEnd.toISOString());
 
   if (paymentsError) throw paymentsError;
 
+  const typedBookings = (bookings || []) as BookingDetails[];
+  const typedPayments = (payments || []) as PaymentDetails[];
+
   // Calculate totals
-  const totalBookings = bookings?.length || 0;
-  const totalBookingAmount = bookings?.reduce((sum, booking) => sum + (booking.booking_amount || 0), 0) || 0;
-  const totalSecurityDeposit = bookings?.reduce((sum, booking) => sum + (booking.security_deposit_amount || 0), 0) || 0;
-  const totalPayments = payments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+  const totalBookings = typedBookings.length;
+  const totalBookingAmount = typedBookings.reduce((sum, booking) => sum + (booking.booking_amount || 0), 0);
+  const totalSecurityDeposit = typedBookings.reduce((sum, booking) => sum + (booking.security_deposit_amount || 0), 0);
+  const totalPayments = typedPayments.reduce((sum, payment) => sum + (payment.amount || 0), 0);
 
   // Generate HTML report with IST timestamp
   const html = `
-    <h2>Daily Report - ${formatDate(today)} (IST)</h2>
+    <h2>Daily Report - ${formatDate(istDate)} (IST)</h2>
     
     <h3>Summary</h3>
     <ul>
@@ -88,7 +146,7 @@ async function generateDailyReport() {
         <th>Paid Amount</th>
         <th>Status</th>
       </tr>
-      ${bookings?.map(booking => `
+      ${typedBookings.length ? typedBookings.map(booking => `
         <tr>
           <td>${booking.booking_id}</td>
           <td>${booking.customer_name}<br>${booking.customer_contact}</td>
@@ -96,9 +154,9 @@ async function generateDailyReport() {
           <td>${formatCurrency(booking.booking_amount)}</td>
           <td>${formatCurrency(booking.security_deposit_amount)}</td>
           <td>${formatCurrency(booking.paid_amount)}</td>
-          <td>${booking.payment_status}</td>
+          <td>${booking.status} (${booking.payment_status})</td>
         </tr>
-      `).join('') || '<tr><td colspan="7">No new bookings today</td></tr>'}
+      `).join('') : '<tr><td colspan="7">No new bookings today</td></tr>'}
     </table>
 
     <h3>Payments Received</h3>
@@ -110,7 +168,7 @@ async function generateDailyReport() {
         <th>Amount</th>
         <th>Payment Mode</th>
       </tr>
-      ${payments?.map(payment => `
+      ${typedPayments.length ? typedPayments.map(payment => `
         <tr>
           <td>${payment.booking_id}</td>
           <td>${payment.booking?.customer_name || 'N/A'}</td>
@@ -118,11 +176,11 @@ async function generateDailyReport() {
           <td>${formatCurrency(payment.amount)}</td>
           <td>${payment.payment_mode}</td>
         </tr>
-      `).join('') || '<tr><td colspan="5">No payments received today</td></tr>'}
+      `).join('') : '<tr><td colspan="5">No payments received today</td></tr>'}
     </table>
 
     <p style="color: #666; font-size: 12px; margin-top: 20px;">
-      This report was automatically generated at ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
+      This report was automatically generated at ${istDate.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })} IST
     </p>
   `;
 
