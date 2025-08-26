@@ -36,6 +36,22 @@ interface PaymentDetails {
   } | null;
 }
 
+interface DatabasePayment {
+  id: string;
+  booking_id: string;
+  amount: number;
+  payment_mode: string;
+  created_at: string;
+  booking: {
+    id: string;
+    customer_name: string;
+    vehicle_details: {
+      model: string;
+      registration: string;
+    };
+  };
+}
+
 // Configure email transport
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -103,7 +119,7 @@ async function generateDailyReport() {
       amount,
       payment_mode,
       created_at,
-      booking:bookings(
+      booking:bookings!inner(
         id,
         customer_name,
         vehicle_details
@@ -115,7 +131,21 @@ async function generateDailyReport() {
   if (paymentsError) throw paymentsError;
 
   const typedBookings = (bookings || []) as BookingDetails[];
-  const typedPayments = (payments || []) as PaymentDetails[];
+  const typedPayments = (payments || []).map(payment => {
+    const booking = payment.booking as unknown as { id: string; customer_name: string; vehicle_details: { model: string; registration: string } };
+    return {
+      id: String(payment.id),
+      booking_id: String(payment.booking_id),
+      amount: Number(payment.amount),
+      payment_mode: String(payment.payment_mode),
+      created_at: String(payment.created_at),
+      booking: booking ? {
+        id: String(booking.id),
+        customer_name: String(booking.customer_name),
+        vehicle_details: booking.vehicle_details
+      } : null
+    };
+  });
 
   // Calculate totals
   const totalBookings = typedBookings.length;
