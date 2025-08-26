@@ -84,52 +84,75 @@ export default function DashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
 
-      // Get pending payments
+      // Get pending payments from all relevant bookings
       const { data: pendingBookings, error: pendingError } = await supabase
         .from('bookings')
         .select(`
+          id,
+          booking_id,
           booking_amount,
           security_deposit_amount,
-          paid_amount
+          total_amount,
+          paid_amount,
+          damage_charges,
+          refund_amount,
+          payment_status,
+          status
         `)
-        .eq('payment_status', 'partial')
+        .or('payment_status.eq.pending,payment_status.eq.partial')
         .in('status', ['confirmed', 'in_use']);
 
       if (pendingError) throw pendingError;
 
       const pendingPayments = pendingBookings?.reduce((sum, booking) => {
-        const totalAmount = (booking.booking_amount || 0) + (booking.security_deposit_amount || 0);
-        const paidAmount = booking.paid_amount || 0;
-        const pendingAmount = totalAmount - paidAmount;
+        // Calculate total charges
+        const totalCharges = Number(booking.total_amount || 0) + 
+                           Number(booking.damage_charges || 0) -
+                           Number(booking.refund_amount || 0);
+        
+        // Get paid amount
+        const paidAmount = Number(booking.paid_amount || 0);
+
+        // Calculate pending amount
+        const pendingAmount = Math.max(0, totalCharges - paidAmount);
         return sum + pendingAmount;
       }, 0) || 0;
 
-      // Get total income from completed bookings
-      const { data: completedBookings, error: completedError } = await supabase
+      // Get total income from all bookings (both completed and in_use)
+      const { data: allBookings, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
+          id,
           booking_amount,
+          security_deposit_amount,
+          total_amount,
+          paid_amount,
           damage_charges,
-          late_fee,
-          extension_fee
+          refund_amount,
+          status
         `)
-        .eq('status', 'completed');
+        .in('status', ['completed', 'in_use']);
 
-      if (completedError) throw completedError;
+      if (bookingsError) throw bookingsError;
 
-      const totalIncome = completedBookings?.reduce((sum, booking) => {
-        const revenue = (booking.booking_amount || 0) + 
-                     (booking.damage_charges || 0) + 
-                     (booking.late_fee || 0) + 
-                     (booking.extension_fee || 0);
-        return sum + revenue;
+      const totalIncome = allBookings?.reduce((sum, booking) => {
+        // For completed bookings, count all charges minus refunds
+        if (booking.status === 'completed') {
+          return sum + (
+            Number(booking.total_amount || 0) +
+            Number(booking.damage_charges || 0) -
+            Number(booking.refund_amount || 0)
+          );
+        }
+        // For in_use bookings, only count what has been paid
+        return sum + Number(booking.paid_amount || 0);
       }, 0) || 0;
 
       setStats({
         totalBookings: totalBookings || 0,
         activeRentals: activeRentals || 0,
-        totalIncome,
         pendingPayments,
+        totalIncome,
       });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);

@@ -14,7 +14,10 @@ interface BookingData {
   customer_contact: string;
   booking_amount: number;
   security_deposit_amount: number;
+  total_amount: number;
   paid_amount: number;
+  damage_charges: number;
+  refund_amount: number;
   next_payment_date: string;
   created_at: string;
   vehicle_details: {
@@ -22,6 +25,7 @@ interface BookingData {
     registration: string;
   };
   status: string;
+  payment_status: string;
 }
 
 interface PendingPayment extends BookingData {
@@ -46,13 +50,17 @@ export default function PendingPayments() {
             customer_contact,
             booking_amount,
             security_deposit_amount,
+            total_amount,
             paid_amount,
+            damage_charges,
+            refund_amount,
             next_payment_date,
             created_at,
             vehicle_details,
-            status
+            status,
+            payment_status
           `)
-          .eq('payment_status', 'partial')
+          .or('payment_status.eq.pending,payment_status.eq.partial')
           .in('status', ['confirmed', 'in_use'])
           .order('next_payment_date', { ascending: true });
 
@@ -60,11 +68,18 @@ export default function PendingPayments() {
 
         const bookings = data as BookingData[];
         const payments: PendingPayment[] = bookings.map(booking => {
-          const totalAmount = (booking.booking_amount || 0) + (booking.security_deposit_amount || 0);
-          const paidAmount = booking.paid_amount || 0;
+          // Calculate total charges
+          const totalCharges = Number(booking.total_amount || 0) + 
+                             Number(booking.damage_charges || 0) -
+                             Number(booking.refund_amount || 0);
+          
+          // Get paid amount
+          const paidAmount = Number(booking.paid_amount || 0);
+
+          // Calculate remaining amount
           return {
             ...booking,
-            remaining_amount: totalAmount - paidAmount
+            remaining_amount: Math.max(0, totalCharges - paidAmount)
           };
         });
 
@@ -88,40 +103,24 @@ export default function PendingPayments() {
     fetchPendingPayments();
   }, []);
 
-  const formatDate = (date: string | null) => {
-    if (!date) return 'N/A';
-    return format(new Date(date), 'dd/MM/yyyy');
-  };
+  if (loading) {
+    return <div className="p-4 text-center">Loading pending payments...</div>;
+  }
+
+  if (error) {
+    return <div className="p-4 text-center text-red-600">{error}</div>;
+  }
 
   const isOverdue = (date: string | null) => {
     if (!date) return false;
     return isAfter(new Date(), new Date(date));
   };
 
-  if (loading) {
-    return (
-      <div className="animate-pulse">
-        <div className="h-8 bg-gray-200 rounded w-1/4 mb-4"></div>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-20 bg-gray-200 rounded"></div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="text-red-600 bg-red-50 p-4 rounded-lg">
-        {error}
-      </div>
-    );
-  }
-
-  const hasOverduePayments = pendingPayments.some(payment => 
-    isOverdue(payment.next_payment_date)
-  );
+  const getDaysOverdue = (date: string | null) => {
+    if (!date) return 0;
+    const diffInDays = Math.floor((new Date().getTime() - new Date(date).getTime()) / (1000 * 60 * 60 * 24));
+    return diffInDays;
+  };
 
   return (
     <div className="bg-white rounded-lg shadow">
@@ -138,7 +137,9 @@ export default function PendingPayments() {
           <div className="space-y-3">
             {pendingPayments.map((payment) => {
               const isPaymentOverdue = isOverdue(payment.next_payment_date);
-              const totalAmount = (payment.booking_amount || 0) + (payment.security_deposit_amount || 0);
+              const totalCharges = Number(payment.total_amount || 0) + 
+                                 Number(payment.damage_charges || 0) -
+                                 Number(payment.refund_amount || 0);
               
               return (
                 <div key={payment.id} className="relative">
@@ -147,66 +148,61 @@ export default function PendingPayments() {
                     className="block transition-colors hover:bg-gray-50"
                   >
                     <div
-                      className={`p-4 rounded-lg border ${
-                        isPaymentOverdue ? 'bg-red-50 border-red-200 hover:bg-red-100' : 'bg-white border-gray-200'
+                      className={`p-4 rounded-lg ${
+                        isPaymentOverdue ? 'bg-red-50' : 'bg-gray-50'
                       }`}
                     >
-                      <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
-                        <div className="space-y-1 w-full sm:w-auto">
-                          <div className="flex items-center gap-2">
-                            <Car className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                            <span className="font-medium text-gray-900">
-                              {payment.vehicle_details?.model} ({payment.vehicle_details?.registration})
-                            </span>
-                            {payment.customer_contact && (
-                              <a
-                                href={`tel:${payment.customer_contact}`}
-                                className="ml-auto sm:hidden p-2 rounded-full bg-white shadow-sm border border-gray-200 text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors"
-                                onClick={(e) => e.stopPropagation()}
-                                title="Call customer"
-                              >
-                                <Phone className="h-4 w-4" />
-                              </a>
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-500">
-                            #{payment.booking_id} • {payment.customer_name}
-                          </div>
-                          <div className="flex items-center text-sm text-gray-500">
-                            <CalendarDays className="h-4 w-4 mr-1 flex-shrink-0" />
-                            <span>
-                              Due: {formatDate(payment.next_payment_date)}
-                              {isPaymentOverdue && payment.next_payment_date && (
-                                <span className="text-red-600 ml-2">
-                                  ({Math.floor((new Date().getTime() - new Date(payment.next_payment_date).getTime()) / (1000 * 60 * 60 * 24))} days overdue)
-                                </span>
-                              )}
-                            </span>
-                          </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Car className="h-5 w-5 text-gray-500" />
+                          <span className="font-medium">
+                            {payment.vehicle_details.model} ({payment.vehicle_details.registration})
+                          </span>
                         </div>
-                        <div className="text-right ml-auto flex items-center gap-4">
-                          <div>
-                            <div className="text-gray-900 font-medium">
-                              {formatCurrency(payment.remaining_amount)}
-                            </div>
-                            <div className="text-sm text-gray-500">
-                              Paid: {formatCurrency(payment.paid_amount)} of {formatCurrency(totalAmount)}
-                            </div>
-                          </div>
-                          {payment.customer_contact && (
-                            <a
-                              href={`tel:${payment.customer_contact}`}
-                              className="hidden sm:flex p-2 rounded-full bg-white shadow-sm border border-gray-200 text-blue-600 hover:text-blue-800 hover:bg-blue-50 transition-colors"
-                              onClick={(e) => e.stopPropagation()}
-                              title="Call customer"
-                            >
-                              <Phone className="h-4 w-4" />
-                            </a>
-                          )}
+                        <div className="text-lg font-semibold">
+                          ₹{formatCurrency(payment.remaining_amount)}
                         </div>
                       </div>
+
+                      <div className="mt-2">
+                        <div className="flex items-center space-x-1 text-gray-600">
+                          <span className="font-medium">#{payment.booking_id}</span>
+                          <span>•</span>
+                          <span>{payment.customer_name}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between text-sm">
+                        <div className="flex items-center space-x-2 text-gray-600">
+                          <CalendarDays className="h-4 w-4" />
+                          <span>
+                            Due: {format(new Date(payment.next_payment_date), 'dd/MM/yyyy')}
+                            {isPaymentOverdue && (
+                              <span className="text-red-600 ml-1">
+                                ({getDaysOverdue(payment.next_payment_date)} days overdue)
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                        <div className="text-gray-600">
+                          Paid: ₹{formatCurrency(payment.paid_amount)} of ₹{formatCurrency(totalCharges)}
+                        </div>
+                      </div>
+
+                      {isPaymentOverdue && (
+                        <div className="mt-2 flex items-center space-x-2 text-red-600">
+                          <AlertTriangle className="h-4 w-4" />
+                          <span className="text-sm">Payment overdue</span>
+                        </div>
+                      )}
                     </div>
                   </Link>
+                  <a
+                    href={`tel:${payment.customer_contact}`}
+                    className="absolute top-1/2 -translate-y-1/2 right-4 p-2 text-blue-600 hover:text-blue-800"
+                  >
+                    <Phone className="h-5 w-5" />
+                  </a>
                 </div>
               );
             })}
