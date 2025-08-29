@@ -24,9 +24,10 @@ import {
   Legend
 } from 'recharts';
 import { addDays, format, eachDayOfInterval, eachMonthOfInterval, eachWeekOfInterval } from 'date-fns';
-import { AlertTriangle, Calendar, Car, RefreshCw, Users, TrendingUp, IndianRupee as RupeeIcon, Filter, Download } from 'lucide-react';
+import { AlertTriangle, Calendar, Car, RefreshCw, Users, TrendingUp, IndianRupee as RupeeIcon, Filter, Download, Loader2, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { toast } from "sonner";
 
 interface RevenueData {
   date: string;
@@ -96,6 +97,7 @@ export default function ReportsPage() {
   const [timeframe, setTimeframe] = useState('30d');
   const [selectedChart, setSelectedChart] = useState<ChartType>('area');
   const [revenuePeriod, setRevenuePeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
+  const [sendingEmail, setSendingEmail] = useState(false);
   
   const fetchReportData = useCallback(async () => {
     setLoading(true);
@@ -380,6 +382,43 @@ export default function ReportsPage() {
     document.body.removeChild(link);
   };
 
+  const handleSendEmail = async () => {
+    try {
+      setSendingEmail(true);
+      const supabase = getSupabaseClient();
+      
+      // Get the session
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        throw new Error('Not authenticated');
+      }
+
+      const response = await fetch('/api/reports/daily/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          startDate: format(dateRange.from, 'yyyy-MM-dd'),
+          endDate: format(dateRange.to, 'yyyy-MM-dd'),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to send report');
+      }
+
+      toast.success('Report email sent successfully');
+    } catch (error) {
+      console.error('Error sending report:', error);
+      toast.error('Failed to send report email');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const stats = [
     {
       name: 'Total Income',
@@ -475,6 +514,24 @@ export default function ReportsPage() {
           >
             <Download className="h-4 w-4" />
             Export CSV
+          </Button>
+
+          <Button
+            onClick={handleSendEmail} 
+            disabled={sendingEmail}
+            className="flex items-center gap-2"
+          >
+            {sendingEmail ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              <>
+                <Mail className="h-4 w-4" />
+                Send Report Email
+              </>
+            )}
           </Button>
         </div>
       </div>

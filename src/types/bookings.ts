@@ -1,110 +1,167 @@
 export type BookingStatus = 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
+export type PaymentStatus = 'pending' | 'partial' | 'full';
+export type PaymentMode = 'cash' | 'upi' | 'card' | 'bank_transfer';
+export type RentalPurpose = 'local' | 'outstation';
+
+export interface VehicleDetails {
+  model: string;
+  registration: string;
+}
+
+export interface BookingRecord {
+  id: string;
+  booking_id: string;
+  customer_name: string;
+  customer_contact: string;
+  vehicle_details: VehicleDetails;
+  booking_amount: number;
+  security_deposit_amount: number;
+  paid_amount: number;
+  payment_status: PaymentStatus;
+  status: BookingStatus;
+  created_at: string;
+  damage_charges: number;
+  late_fee: number;
+  extension_fee: number;
+  completed_at: string | null;
+  completed_by: string | null;
+  start_date: string;
+  end_date: string;
+  dropoff_time: string;
+  payments: PaymentRecord[];
+  refund_amount: number;
+  total_amount: number;
+}
+
+export interface PaymentRecord {
+  id: string;
+  booking_id: string;
+  amount: number;
+  payment_mode: PaymentMode;
+  created_at: string;
+  booking: {
+    id: string;
+    customer_name: string;
+    vehicle_details: VehicleDetails;
+  } | null;
+}
 
 export interface OutstationDetails {
+  purpose: string;
   destination: string;
+  colleague_name?: string;
+  colleague_phone?: string;
   estimated_kms: number;
   start_odo: number;
   end_odo: number;
 }
 
-export interface UploadedDocuments {
-  customer_photo?: string | undefined;
-  aadhar_front?: string | undefined;
-  aadhar_back?: string | undefined;
-  dl_front?: string | undefined;
-  dl_back?: string | undefined;
-  [key: string]: string | undefined;
+export interface BookingExtension {
+  id: string;
+  booking_id: string;
+  additional_amount: number;
+  created_at: string;
+  previous_end_date?: string;
+  previous_dropoff_time?: string;
 }
 
 export interface SubmittedDocuments {
-  original_aadhar: boolean;
-  original_dl: boolean;
   passport: boolean;
   voter_id: boolean;
+  original_dl: boolean;
+  original_aadhar: boolean;
   other_document: boolean;
-  [key: string]: boolean;
 }
 
-export interface BookingExtension {
-  id: string;
-  previous_end_date: string;
-  previous_dropoff_time: string;
-  new_end_date: string;
-  new_dropoff_time: string;
-  created_at: string;
+export interface UploadedDocuments {
+  customer_photo?: string;
+  aadhar_front?: string;
+  aadhar_back?: string;
+  dl_front?: string;
+  dl_back?: string;
+  passport?: string;
+  voter_id?: string;
+  original_dl?: string;
+  original_aadhar?: string;
+  other_document?: string;
 }
 
-export interface BookingDetails {
+export interface CustomerDetails {
   id: string;
-  booking_id: string;
-  customer_id: string;
-  customer_name: string;
-  customer_contact: string;
-  customer_email: string;
-  alternative_phone?: string | null;
-  emergency_contact_phone?: string | null;
-  emergency_contact_phone1?: string | null;
-  colleague_phone?: string | null;
-  aadhar_number: string;
-  date_of_birth?: string | null;
-  dl_number?: string | null;
-  dl_expiry_date?: string | null;
-  temp_address?: string | null;
-  perm_address?: string | null;
-  vehicle_details: {
-    model: string;
-    registration: string;
-  };
-  start_date: string;
-  end_date: string;
-  pickup_time: string;
-  dropoff_time: string;
-  booking_amount: number;
-  security_deposit_amount: number;
-  total_amount: number;
-  paid_amount: number;
-  payment_mode: string;
-  payment_status: string;
-  status: string;
-  rental_purpose?: 'local' | 'outstation';
+  name: string;
+  email: string;
+  phone: string;
+  documents: Record<string, string>;
+}
+
+export interface BookingDetailsData extends BookingRecord {
   outstation_details?: OutstationDetails;
-  created_at: string;
-  updated_at: string;
-  created_by: string;
-  updated_by: string;
-  completed_at?: string;
-  completed_by?: string;
-  created_by_user?: {
-    email: string;
-    username: string;
+  booking_extensions?: BookingExtension[];
+  customer_email?: string;
+  customer_address?: string;
+  customer_documents?: Record<string, string>;
+  submitted_documents?: SubmittedDocuments;
+  signatures?: {
+    bookingSignature?: string;
+    completionSignature?: string;
   };
-  updated_by_user?: {
+  payment_mode?: PaymentMode;
+  rental_purpose?: RentalPurpose;
+  pickup_time?: string;
+  extensions?: BookingExtension[];
+  alternative_phone?: string;
+  emergency_contact_phone?: string;
+  emergency_contact_phone1?: string;
+  colleague_phone?: string;
+  aadhar_number?: string;
+  date_of_birth?: string;
+  dl_number?: string;
+  dl_expiry_date?: string;
+  temp_address?: string;
+  perm_address?: string;
+  customer?: CustomerDetails;
+  vehicle_remarks?: string;
+  created_by_user?: {
+    id: string;
     email: string;
+    role: string;
     username: string;
   };
   completed_by_user?: {
+    id: string;
     email: string;
+    role: string;
     username: string;
   };
-  customer?: {
+  updated_by_user?: {
     id: string;
-    name: string;
-    phone: string;
     email: string;
-    documents: Record<string, string>;
+    role: string;
+    username: string;
   };
-  submitted_documents?: SubmittedDocuments;
-  signatures?: {
-    bookingSignature: string | null;
-    completionSignature: string | null;
-  };
-  damage_charges: number;
-  late_fee: number;
-  extension_fee: number;
-  refund_amount: number;
-  extensions?: BookingExtension[];
-  previous_dropoff_time?: string;
-  vehicle_remarks: string;
+  updated_at?: string;
 }
 
-export type BookingDetailsData = BookingDetails; 
+export interface BookingDetails extends BookingDetailsData {
+  payments: PaymentRecord[];
+}
+
+// Update Database interface
+import { Database as BaseDatabase } from './database';
+
+export interface Database extends BaseDatabase {
+  public: {
+    Tables: {
+      bookings: {
+        Row: BookingRecord;
+        Insert: Omit<BookingRecord, 'id' | 'created_at'>;
+        Update: Partial<Omit<BookingRecord, 'id'>>;
+      };
+      payments: {
+        Row: PaymentRecord;
+        Insert: Omit<PaymentRecord, 'id' | 'created_at'>;
+        Update: Partial<Omit<PaymentRecord, 'id'>>;
+      };
+    } & BaseDatabase['public']['Tables'];
+  };
+} 

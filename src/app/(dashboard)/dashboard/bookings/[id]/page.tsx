@@ -15,7 +15,7 @@ import PaymentHistory from '@/components/payments/PaymentHistory';
 import { usePermissions } from '@/lib/usePermissions';
 import PaymentInformation from '@/components/bookings/PaymentInformation';
 import { generateInvoice } from '@/lib/generateInvoice';
-import type { BookingDetails, BookingDetailsData, OutstationDetails, BookingExtension } from '@/types/bookings';
+import type { BookingDetails, BookingDetailsData, OutstationDetails, BookingExtension, CustomerDetails } from '@/types/bookings';
 
 type BookingStatus = 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
 type PaymentStatus = 'full' | 'partial' | 'pending';
@@ -283,7 +283,9 @@ export default function BookingDetailsPage() {
         other_document: false
       };
 
-      const currentSubmittedDocs = booking.submitted_documents || defaultSubmittedDocs;
+      const currentSubmittedDocs = typeof booking.submitted_documents === 'object' && !Array.isArray(booking.submitted_documents)
+        ? booking.submitted_documents as SubmittedDocuments
+        : defaultSubmittedDocs;
       
       const submittedDocuments: SubmittedDocuments = {
         passport: Boolean(currentSubmittedDocs.passport),
@@ -387,7 +389,7 @@ export default function BookingDetailsPage() {
         gstNumber: '', // Add if you have GST number
         invoiceNumber: booking.booking_id,
         invoiceDate: new Date().toISOString().split('T')[0],
-        paymentMethod: booking.payment_mode,
+        paymentMethod: booking.payment_mode as PaymentMode,
         vehicleDetails: {
           model: booking.vehicle_details.model,
           registration: booking.vehicle_details.registration
@@ -460,6 +462,23 @@ export default function BookingDetailsPage() {
 
   // Add debug logging in render
   console.log('Current booking state:', booking);
+
+  // Handle customer documents
+  const customerDocs = booking.customer?.documents || {};
+  const hasPassport = Boolean(customerDocs['passport']);
+  const hasVoterId = Boolean(customerDocs['voter_id']);
+  const hasOriginalDL = Boolean(customerDocs['original_dl']);
+  const hasOriginalAadhar = Boolean(customerDocs['original_aadhar']);
+
+      // Handle extension dates
+      const extension = booking.extensions?.[0];
+      if (extension && extension.previous_end_date && extension.previous_dropoff_time) {
+        console.log('Extension details:', {
+          prevEndDate: extension.previous_end_date,
+          prevDropoffTime: extension.previous_dropoff_time,
+          extension
+        });
+      }
 
   return (
     <div className="min-h-screen p-6">
@@ -630,7 +649,7 @@ export default function BookingDetailsPage() {
                     <Clock className="h-4 w-4 mr-2 text-gray-400" />
                     <p className="text-sm">{formatTime(booking?.dropoff_time || '')}</p>
                   </div>
-                  {booking?.extensions && booking.extensions.length > 0 && (
+                  {booking?.extensions && booking.extensions.length > 0 && booking.extensions[0].previous_end_date && booking.extensions[0].previous_dropoff_time && (
                     <div className="flex items-center mt-1 ml-6 text-gray-500">
                       <span className="text-xs italic">
                         (Extended from {formatDate(booking.extensions[0].previous_end_date)} {formatTime(booking.extensions[0].previous_dropoff_time)})
@@ -756,14 +775,14 @@ export default function BookingDetailsPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {booking?.customer?.documents ? (
                       <>
-                        {booking.customer.documents.customer_photo && (
+                        {customerDocs.customer_photo && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.customer_photo), 'Customer Photo')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, customerDocs.customer_photo), 'Customer Photo')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.customer_photo)}
+                                  src={getPublicUrl(booking.booking_id, customerDocs.customer_photo)}
                                   alt="Customer Photo"
                                   fill
                                   className="object-cover"
@@ -772,14 +791,14 @@ export default function BookingDetailsPage() {
                             </div>
                           </div>
                         )}
-                        {booking.customer.documents.aadhar_front && (
+                        {customerDocs.aadhar_front && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.aadhar_front), 'Aadhar Front')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, customerDocs.aadhar_front), 'Aadhar Front')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.aadhar_front)}
+                                  src={getPublicUrl(booking.booking_id, customerDocs.aadhar_front)}
                                   alt="Aadhar Front"
                                   fill
                                   className="object-cover"
@@ -788,14 +807,14 @@ export default function BookingDetailsPage() {
                             </div>
                           </div>
                         )}
-                        {booking.customer.documents.aadhar_back && (
+                        {customerDocs.aadhar_back && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.aadhar_back), 'Aadhar Back')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, customerDocs.aadhar_back), 'Aadhar Back')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.aadhar_back)}
+                                  src={getPublicUrl(booking.booking_id, customerDocs.aadhar_back)}
                                   alt="Aadhar Back"
                                   fill
                                   className="object-cover"
@@ -804,14 +823,14 @@ export default function BookingDetailsPage() {
                             </div>
                           </div>
                         )}
-                        {booking.customer.documents.dl_front && (
+                        {customerDocs.dl_front && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.dl_front), 'DL Front')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, customerDocs.dl_front), 'DL Front')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.dl_front)}
+                                  src={getPublicUrl(booking.booking_id, customerDocs.dl_front)}
                                   alt="DL Front"
                                   fill
                                   className="object-cover"
@@ -820,14 +839,14 @@ export default function BookingDetailsPage() {
                             </div>
                           </div>
                         )}
-                        {booking.customer.documents.dl_back && (
+                        {customerDocs.dl_back && (
                           <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, booking.customer.documents.dl_back), 'DL Back')}>
+                               onClick={() => booking.customer && handleImageClick(getPublicUrl(booking.booking_id, customerDocs.dl_back), 'DL Back')}>
                             <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>
                             <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
                               {booking.customer && (
                                 <Image
-                                  src={getPublicUrl(booking.booking_id, booking.customer.documents.dl_back)}
+                                  src={getPublicUrl(booking.booking_id, customerDocs.dl_back)}
                                   alt="DL Back"
                                   fill
                                   className="object-cover"
@@ -1002,13 +1021,17 @@ export default function BookingDetailsPage() {
       {/* Modals */}
       {showEditModal && booking && (
         <EditBookingModal
+          booking={{
+            ...booking,
+            customer: {
+              ...booking.customer,
+              documents: booking.customer?.documents || {}
+            } as CustomerDetails,
+            payments: booking.payments
+          }}
           isOpen={showEditModal}
           onClose={() => setShowEditModal(false)}
-          onBookingUpdated={(updatedBooking) => {
-            setBooking(updatedBooking);
-            setShowEditModal(false);
-          }}
-          booking={booking}
+          onBookingUpdated={handleEditComplete}
         />
       )}
 

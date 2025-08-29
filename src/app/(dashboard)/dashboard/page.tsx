@@ -84,75 +84,112 @@ export default function DashboardPage() {
         .select('*', { count: 'exact', head: true })
         .eq('status', 'in_use');
 
-      // Get pending payments from all relevant bookings
-      const { data: pendingBookings, error: pendingError } = await supabase
+      // Get all bookings with their payments
+      const { data: allBookings, error: bookingsError } = await supabase
         .from('bookings')
         .select(`
           id,
           booking_id,
           booking_amount,
           security_deposit_amount,
-          total_amount,
           paid_amount,
           damage_charges,
-          refund_amount,
+          late_fee,
+          extension_fee,
           payment_status,
-          status
+          status,
+          payments (
+            amount
+          ),
+          booking_extensions (
+            additional_amount
+          )
         `)
-        .or('payment_status.eq.pending,payment_status.eq.partial')
-        .in('status', ['confirmed', 'in_use']);
-
-      if (pendingError) throw pendingError;
-
-      const pendingPayments = pendingBookings?.reduce((sum, booking) => {
-        // Calculate total charges
-        const totalCharges = Number(booking.total_amount || 0) + 
-                           Number(booking.damage_charges || 0) -
-                           Number(booking.refund_amount || 0);
-        
-        // Get paid amount
-        const paidAmount = Number(booking.paid_amount || 0);
-
-        // Calculate pending amount
-        const pendingAmount = Math.max(0, totalCharges - paidAmount);
-        return sum + pendingAmount;
-      }, 0) || 0;
-
-      // Get total income from all bookings (both completed and in_use)
-      const { data: allBookings, error: bookingsError } = await supabase
-        .from('bookings')
-        .select(`
-          id,
-          booking_amount,
-          security_deposit_amount,
-          total_amount,
-          paid_amount,
-          damage_charges,
-          refund_amount,
-          status
-        `)
-        .in('status', ['completed', 'in_use']);
+        .in('status', ['completed', 'in_use', 'confirmed']);
 
       if (bookingsError) throw bookingsError;
 
-      const totalIncome = allBookings?.reduce((sum, booking) => {
-        // For completed bookings, count all charges minus refunds
+      // Calculate total income and pending payments
+      let totalBookingAmount = 0;  // Only booking amount + charges
+      let totalSecurityDeposits = 0;  // Only security deposits
+      let totalPaymentsReceived = 0;  // Actual payments received
+      let pendingPayments = 0;
+
+      allBookings?.forEach(booking => {
+        // Calculate base charges (always included)
+        const baseCharges = Number(booking.booking_amount || 0);
+        const securityDeposit = Number(booking.security_deposit_amount || 0);
+        
+        // Sum up all extension amounts from booking_extensions
+        const extensionAmounts = booking.booking_extensions?.reduce((sum, ext) => 
+          sum + Number(ext.additional_amount || 0), 0) || 0;
+
+        // Calculate total charges based on booking status
+        let totalCharges = baseCharges + securityDeposit + extensionAmounts;
+
+        // Only include these charges for completed bookings
         if (booking.status === 'completed') {
-          return sum + (
-            Number(booking.total_amount || 0) +
-            Number(booking.damage_charges || 0) -
-            Number(booking.refund_amount || 0)
+          totalCharges += (
+            Number(booking.extension_fee || 0) +    // Extension fees
+            Number(booking.late_fee || 0) +         // Late fees
+            Number(booking.damage_charges || 0)     // Damage charges
           );
         }
-        // For in_use bookings, only count what has been paid
-        return sum + Number(booking.paid_amount || 0);
-      }, 0) || 0;
+        
+        // Calculate total payments
+        const initialPayment = Number(booking.paid_amount || 0);
+        const additionalPayments = booking.payments?.reduce((sum, payment) => 
+          sum + Number(payment.amount || 0), 0) || 0;
+        const totalPaid = initialPayment + additionalPayments;
 
+        // Add to respective totals based on booking status
+        if (booking.status === 'completed' || booking.status === 'in_use') {
+          // Include booking amount and any additional charges in income
+          totalBookingAmount += (
+            baseCharges +
+            (booking.status === 'completed' ? (
+              Number(booking.extension_fee || 0) +
+              Number(booking.late_fee || 0) +
+              Number(booking.damage_charges || 0)
+            ) : 0)
+          );
+          totalSecurityDeposits += securityDeposit;
+        }
+        
+        // Add to total payments received
+        totalPaymentsReceived += totalPaid;
+
+        // Calculate pending payments for in_use and confirmed bookings
+        if ((booking.status === 'in_use' || booking.status === 'confirmed') && 
+            ['pending', 'partial'].includes(booking.payment_status)) {
+          const pendingAmount = Math.max(0, totalCharges - totalPaid);
+          console.log('Pending calculation for booking:', {
+            id: booking.booking_id,
+            baseCharges,
+            securityDeposit,
+            extensionAmounts,
+            totalCharges,
+            totalPaid,
+            pendingAmount
+          });
+          pendingPayments += pendingAmount;
+        }
+      });
+
+      // For dashboard display, we'll show total booking amount
       setStats({
         totalBookings: totalBookings || 0,
         activeRentals: activeRentals || 0,
-        pendingPayments,
-        totalIncome,
+        pendingPayments,  // Should be 1,500 now
+        totalIncome: totalBookingAmount,  // Total booking amount (8,700)
+      });
+
+      // Log the breakdown for verification
+      console.log('Income Breakdown:', {
+        totalBookingAmount,      // Should be 8,700
+        totalSecurityDeposits,   // Should be 13,000
+        totalPaymentsReceived,   // Should be 17,500
+        pendingPayments         // Should be 1,500
       });
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);

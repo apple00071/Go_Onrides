@@ -1,67 +1,9 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseClient } from '@/lib/supabase';
 import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
 import nodemailer from 'nodemailer';
-import { format } from 'date-fns';
-
-interface BookingDetails {
-  id: string;
-  booking_id: string;
-  customer_name: string;
-  customer_contact: string;
-  vehicle_details: {
-    model: string;
-    registration: string;
-  };
-  booking_amount: number;
-  security_deposit_amount: number;
-  paid_amount: number;
-  payment_status: string;
-  status: string;
-  created_at: string;
-  damage_charges: number;
-  late_fee: number;
-  extension_fee: number;
-  completed_at: string | null;
-  completed_by: string | null;
-  start_date: string;
-  end_date: string;
-  payments?: Array<{
-    amount: number;
-  }>;
-}
-
-interface PaymentDetails {
-  id: string;
-  booking_id: string;
-  amount: number;
-  payment_mode: string;
-  created_at: string;
-  booking: {
-    id: string;
-    customer_name: string;
-    vehicle_details: {
-      model: string;
-      registration: string;
-    };
-  } | null;
-}
-
-interface DatabasePayment {
-  id: string;
-  booking_id: string;
-  amount: number;
-  payment_mode: string;
-  created_at: string;
-  booking: {
-    id: string;
-    customer_name: string;
-    vehicle_details: {
-      model: string;
-      registration: string;
-    };
-  };
-}
+import { format, parse } from 'date-fns';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { Database, BookingRecord, PaymentRecord } from '@/types/bookings';
 
 // Configure email transport
 const transporter = nodemailer.createTransport({
@@ -72,35 +14,50 @@ const transporter = nodemailer.createTransport({
   }
 });
 
-export const dynamic = 'force-dynamic';
-
-async function generateDailyReport() {
-  const supabase = getSupabaseClient();
-  
-  // Set up IST date range for today
-  const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-  const istDate = new Date(now.getTime() + istOffset);
-  
-  // Set to start of day in IST
-  const startOfDay = new Date(istDate);
-  startOfDay.setHours(0, 0, 0, 0);
-  
-  // Set to end of day in IST
-  const endOfDay = new Date(istDate);
-  endOfDay.setHours(23, 59, 59, 999);
-
-  // Convert back to UTC for database query
-  const queryStart = new Date(startOfDay.getTime() - istOffset);
-  const queryEnd = new Date(endOfDay.getTime() - istOffset);
-
-  console.log('Fetching data for:', {
-    istDate: istDate.toISOString(),
-    queryStart: queryStart.toISOString(),
-    queryEnd: queryEnd.toISOString()
+async function generateReport(startDate: Date, endDate: Date, supabase: SupabaseClient<Database>) {
+  console.log('Querying with dates:', {
+    start: startDate.toISOString(),
+    end: endDate.toISOString()
   });
 
-  // Get today's bookings (both created and completed today)
+  // Test query to verify data exists without any filters
+  const { data: testData, error: testError } = await supabase
+    .from('bookings')
+    .select('id, created_at, completed_at, status')
+    .order('created_at', { ascending: false })
+    .limit(5)
+    .returns<Pick<BookingRecord, 'id' | 'created_at' | 'completed_at' | 'status'>[]>();
+
+  console.log('Test query results (most recent bookings):', {
+    count: testData?.length || 0,
+    sample: testData?.map(b => ({
+      id: b.id,
+      created: b.created_at,
+      completed: b.completed_at,
+      status: b.status
+    }))
+  });
+
+  if (testError) {
+    console.error('Error in test query:', testError);
+  }
+
+  // Get all bookings without date filters first
+  const { data: allBookings, error: allBookingsError } = await supabase
+    .from('bookings')
+    .select('id, created_at, completed_at')
+    .returns<Pick<BookingRecord, 'id' | 'created_at' | 'completed_at'>[]>();
+
+  console.log('All bookings in database:', {
+    total: allBookings?.length || 0,
+    dateRange: allBookings?.map(b => ({
+      id: b.id,
+      created: b.created_at,
+      completed: b.completed_at
+    }))
+  });
+
+  // Now get bookings for the date range
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(`
@@ -126,11 +83,30 @@ async function generateDailyReport() {
         amount
       )
     `)
-    .or(`created_at.gte.${queryStart.toISOString()},created_at.lt.${queryEnd.toISOString()},and(completed_at.gte.${queryStart.toISOString()},completed_at.lt.${queryEnd.toISOString()})`);
+    .gte('created_at', startDate.toISOString())
+    .lte('created_at', endDate.toISOString())
+    .returns<BookingRecord[]>();
 
-  if (bookingsError) throw bookingsError;
+  if (bookingsError) {
+    console.error('Error fetching bookings:', bookingsError);
+    throw bookingsError;
+  }
 
-  // Get today's payments
+  // Get completed bookings
+  const { data: completedInRange, error: completedError } = await supabase
+    .from('bookings')
+    .select('*')
+    .eq('status', 'completed')
+    .gte('completed_at', startDate.toISOString())
+    .lte('completed_at', endDate.toISOString())
+    .returns<BookingRecord[]>();
+
+  if (completedError) {
+    console.error('Error fetching completed bookings:', completedError);
+    throw completedError;
+  }
+
+  // Get payments
   const { data: payments, error: paymentsError } = await supabase
     .from('payments')
     .select(`
@@ -145,39 +121,67 @@ async function generateDailyReport() {
         vehicle_details
       )
     `)
-    .gte('created_at', queryStart.toISOString())
-    .lt('created_at', queryEnd.toISOString());
+    .gte('created_at', startDate.toISOString())
+    .lte('created_at', endDate.toISOString())
+    .returns<(Omit<PaymentRecord, 'booking'> & {
+      booking: {
+        id: string;
+        customer_name: string;
+        vehicle_details: {
+          model: string;
+          registration: string;
+        };
+      };
+    })[]>();
 
-  if (paymentsError) throw paymentsError;
+  if (paymentsError) {
+    console.error('Error fetching payments:', paymentsError);
+    throw paymentsError;
+  }
 
-  const typedBookings = (bookings || []) as BookingDetails[];
+  // Combine and deduplicate bookings
+  const allBookingsInRange = [...(bookings || [])];
+  completedInRange?.forEach(booking => {
+    if (!allBookingsInRange.find(b => b.id === booking.id)) {
+      allBookingsInRange.push(booking);
+    }
+  });
 
-  const typedPayments = (payments || []).map(payment => {
-    const bookingData = Array.isArray(payment.booking) ? payment.booking[0] : payment.booking;
-    return {
-      id: String(payment.id),
-      booking_id: String(payment.booking_id),
-      amount: Number(payment.amount),
-      payment_mode: String(payment.payment_mode),
-      created_at: String(payment.created_at),
-      booking: bookingData ? {
-        id: String(bookingData.id),
-        customer_name: String(bookingData.customer_name),
-        vehicle_details: bookingData.vehicle_details
-      } : null
-    };
+  const typedBookings = allBookingsInRange;
+  const typedPayments = (payments || []).map(payment => ({
+    ...payment,
+    booking: payment.booking ? {
+      id: payment.booking.id,
+      customer_name: payment.booking.customer_name,
+      vehicle_details: payment.booking.vehicle_details
+    } : null
+  }));
+
+  // Log processed data for debugging
+  console.log('Processed data:', {
+    totalBookings: typedBookings.length,
+    newBookings: typedBookings.filter(b => {
+      const createdDate = new Date(b.created_at);
+      return createdDate >= startDate && createdDate <= endDate;
+    }).length,
+    completedBookings: typedBookings.filter(b => {
+      if (!b.completed_at) return false;
+      const completedDate = new Date(b.completed_at);
+      return completedDate >= startDate && completedDate <= endDate;
+    }).length,
+    totalPayments: typedPayments.length
   });
 
   // Separate new and completed bookings
   const newBookings = typedBookings.filter(booking => 
-    isDateInRange(new Date(booking.created_at), queryStart, queryEnd)
+    isDateInRange(new Date(booking.created_at), startDate, endDate)
   );
 
   const completedBookings = typedBookings.filter(booking => 
-    booking.completed_at && isDateInRange(new Date(booking.completed_at), queryStart, queryEnd)
+    booking.completed_at && isDateInRange(new Date(booking.completed_at), startDate, endDate)
   );
 
-  // Calculate totals using the same logic as dashboard
+  // Calculate totals
   const totalBookingAmount = typedBookings.reduce((sum, booking) => {
     const amount = Number(booking.booking_amount || 0) +
                   Number(booking.damage_charges || 0) +
@@ -192,7 +196,7 @@ async function generateDailyReport() {
   const totalPayments = typedPayments.reduce((sum, payment) => 
     sum + Number(payment.amount || 0), 0);
 
-  // Calculate pending payments using the same logic as dashboard
+  // Calculate pending payments
   const pendingAmount = typedBookings.reduce((sum, booking) => {
     if (!['confirmed', 'in_use'].includes(booking.status) || 
         !['pending', 'partial'].includes(booking.payment_status)) {
@@ -206,20 +210,14 @@ async function generateDailyReport() {
       Number(booking.late_fee || 0) +
       Number(booking.extension_fee || 0)
     );
-
-    // Calculate total payments including both paid_amount and any additional payments
-    const additionalPayments = booking.payments?.reduce((pSum, payment) => 
-      pSum + Number(payment.amount || 0), 0) || 0;
-    const totalPaid = Number(booking.paid_amount || 0) + additionalPayments;
-
-    // Calculate pending amount
-    const pendingAmount = Math.max(0, totalCharges - totalPaid);
+    const paidAmount = Number(booking.paid_amount || 0);
+    const pendingAmount = Math.max(0, totalCharges - paidAmount);
     return sum + pendingAmount;
   }, 0);
 
-  // Generate HTML report with IST timestamp
+  // Generate HTML report
   const html = `
-    <h2>Daily Report - ${formatDate(istDate)} (IST)</h2>
+    <h2>Report for ${formatDate(startDate)} to ${formatDate(endDate)}</h2>
     
     <h3>Summary</h3>
     <ul>
@@ -227,7 +225,7 @@ async function generateDailyReport() {
       <li>Total Completed Bookings: ${completedBookings.length}</li>
       <li>Total Booking Amount (including charges): ${formatCurrency(totalBookingAmount)}</li>
       <li>Total Security Deposits: ${formatCurrency(totalSecurityDeposit)}</li>
-      <li>Total Payments Received Today: ${formatCurrency(totalPayments)}</li>
+      <li>Total Payments Received: ${formatCurrency(totalPayments)}</li>
       <li>Total Pending Payments: ${formatCurrency(pendingAmount)}</li>
     </ul>
 
@@ -260,10 +258,10 @@ async function generateDailyReport() {
           <td>${formatCurrency(booking.paid_amount)}</td>
           <td>${booking.status} (${booking.payment_status})</td>
         </tr>
-      `}).join('') : '<tr><td colspan="8">No new bookings today</td></tr>'}
+      `}).join('') : '<tr><td colspan="8">No new bookings in this period</td></tr>'}
     </table>
 
-    <h3>Completed Bookings Today</h3>
+    <h3>Completed Bookings</h3>
     <table border="1" cellpadding="5" style="border-collapse: collapse;">
       <tr>
         <th>Booking ID</th>
@@ -304,10 +302,10 @@ async function generateDailyReport() {
           <td>${booking.completed_at ? formatDateTime(booking.completed_at) : 'N/A'}</td>
           <td>${booking.completed_by || 'N/A'}</td>
         </tr>
-      `}).join('') : '<tr><td colspan="8">No bookings completed today</td></tr>'}
+      `}).join('') : '<tr><td colspan="8">No bookings completed in this period</td></tr>'}
     </table>
 
-    <h3>Payments Received Today</h3>
+    <h3>Payments Received</h3>
     <table border="1" cellpadding="5" style="border-collapse: collapse;">
       <tr>
         <th>Time</th>
@@ -326,11 +324,11 @@ async function generateDailyReport() {
           <td>${formatCurrency(payment.amount)}</td>
           <td>${payment.payment_mode}</td>
         </tr>
-      `).join('') : '<tr><td colspan="6">No payments received today</td></tr>'}
+      `).join('') : '<tr><td colspan="6">No payments received in this period</td></tr>'}
     </table>
 
     <p style="color: #666; font-size: 12px; margin-top: 20px;">
-      Generated at ${formatDateTime(istDate)}
+      Generated at ${formatDateTime(new Date())}
     </p>
   `;
 
@@ -342,34 +340,50 @@ function isDateInRange(date: Date, start: Date, end: Date): boolean {
   return date >= start && date < end;
 }
 
-export async function GET(request: Request) {
+export async function POST(request: Request) {
   try {
-    // Check for API key or other authentication
-    const authHeader = request.headers.get('authorization');
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // Create authenticated Supabase client
+    const supabase = createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
 
-    const reportHtml = await generateDailyReport();
+    const { startDate, endDate } = await request.json();
+    console.log('Received dates:', { startDate, endDate });
 
-    // Get IST date for email subject
-    const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-    const istDate = new Date(now.getTime() + istOffset);
+    // Parse dates and convert to UTC
+    const start = parse(startDate, 'yyyy-MM-dd', new Date());
+    start.setUTCHours(0, 0, 0, 0);
+
+    const end = parse(endDate, 'yyyy-MM-dd', new Date());
+    end.setUTCHours(23, 59, 59, 999);
+
+    console.log('UTC dates:', {
+      start: start.toISOString(),
+      end: end.toISOString()
+    });
+
+    const reportHtml = await generateReport(start, end, supabase);
 
     // Send email
     await transporter.sendMail({
       from: 'goonriders6@gmail.com',
       to: 'goonriders6@gmail.com',
-      subject: `Daily Report - ${formatDate(istDate)}`,
+      subject: `Report - ${formatDate(start)} to ${formatDate(end)}`,
       html: reportHtml
     });
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Error generating daily report:', error);
+    console.error('Error sending report:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate report' },
+      { error: error instanceof Error ? error.message : 'Failed to send report' },
       { status: 500 }
     );
   }

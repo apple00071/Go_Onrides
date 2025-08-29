@@ -26,6 +26,18 @@ interface BookingData {
   };
   status: string;
   payment_status: string;
+  extension_fee: number;
+  late_fee: number;
+  payments: {
+    id: string;
+    amount: number;
+    created_at: string;
+  }[];
+  booking_extensions: {
+    id: string;
+    additional_amount: number;
+    created_at: string;
+  }[];
 }
 
 interface PendingPayment extends BookingData {
@@ -58,7 +70,19 @@ export default function PendingPayments() {
             created_at,
             vehicle_details,
             status,
-            payment_status
+            payment_status,
+            extension_fee,
+            late_fee,
+            payments (
+              id,
+              amount,
+              created_at
+            ),
+            booking_extensions (
+              id,
+              additional_amount,
+              created_at
+            )
           `)
           .or('payment_status.eq.pending,payment_status.eq.partial')
           .in('status', ['confirmed', 'in_use'])
@@ -68,18 +92,49 @@ export default function PendingPayments() {
 
         const bookings = data as BookingData[];
         const payments: PendingPayment[] = bookings.map(booking => {
-          // Calculate total charges
-          const totalCharges = Number(booking.total_amount || 0) + 
-                             Number(booking.damage_charges || 0) -
-                             Number(booking.refund_amount || 0);
+          // Calculate base charges (always included)
+          const baseCharges = Number(booking.booking_amount || 0);
+          const securityDeposit = Number(booking.security_deposit_amount || 0);
           
-          // Get paid amount
-          const paidAmount = Number(booking.paid_amount || 0);
+          // Sum up all extension amounts from booking_extensions
+          const extensionAmounts = booking.booking_extensions?.reduce((sum, ext) => 
+            sum + Number(ext.additional_amount || 0), 0) || 0;
+
+          // Calculate total charges based on booking status
+          let totalCharges = baseCharges + securityDeposit + extensionAmounts;
+
+          // Only include these charges for completed bookings
+          if (booking.status === 'completed') {
+            totalCharges += (
+              Number(booking.extension_fee || 0) +    // Extension fees
+              Number(booking.late_fee || 0) +         // Late fees
+              Number(booking.damage_charges || 0)     // Damage charges
+            );
+          }
+          
+          // Calculate total payments
+          const initialPayment = Number(booking.paid_amount || 0);
+          const additionalPayments = booking.payments?.reduce((sum, payment) => 
+            sum + Number(payment.amount || 0), 0) || 0;
+          const totalPaid = initialPayment + additionalPayments;
+
+          console.log('Payment calculation for booking:', {
+            id: booking.booking_id,
+            status: booking.status,
+            baseCharges,
+            securityDeposit,
+            extensionAmounts,
+            totalCharges,
+            initialPayment,
+            additionalPayments,
+            totalPaid,
+            remaining: Math.max(0, totalCharges - totalPaid)
+          });
 
           // Calculate remaining amount
           return {
             ...booking,
-            remaining_amount: Math.max(0, totalCharges - paidAmount)
+            remaining_amount: Math.max(0, totalCharges - totalPaid)
           };
         });
 
@@ -185,7 +240,12 @@ export default function PendingPayments() {
                           </span>
                         </div>
                         <div className="text-gray-600">
-                          Paid: ₹{formatCurrency(payment.paid_amount)} of ₹{formatCurrency(totalCharges)}
+                          Paid: ₹{formatCurrency(
+                            Number(payment.paid_amount || 0)
+                          )} of ₹{formatCurrency(
+                            Number(payment.booking_amount || 0) +
+                            Number(payment.security_deposit_amount || 0)
+                          )}
                         </div>
                       </div>
 
