@@ -13,6 +13,7 @@ export function getISTDate(date: string | Date = new Date()) {
 export function formatDate(date: string | Date): string {
   const inputDate = new Date(date);
   
+  // Format in IST timezone
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: '2-digit',
@@ -32,6 +33,7 @@ export function formatCurrency(amount: number): string {
 export function formatDateTime(date: string | Date): string {
   const inputDate = new Date(date);
   
+  // Format in IST timezone with time
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
     month: '2-digit',

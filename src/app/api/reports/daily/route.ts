@@ -72,7 +72,7 @@ const transporter = nodemailer.createTransport({
 
 export const dynamic = 'force-dynamic';
 
-async function generateDailyReport(forDate?: Date) {
+async function generateDailyReport(forDate: Date) {
   // Create authenticated Supabase client with service role
   const supabase = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -85,21 +85,23 @@ async function generateDailyReport(forDate?: Date) {
     }
   );
   
-  // Get current time in IST
-  const now = new Date();
-  
-  // If forDate is provided, use it, otherwise use current date
-  const baseDate = forDate || now;
+  // Convert the date to IST for querying
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istDate = new Date(forDate.getTime() + istOffset);
   
   // Format the date as YYYY-MM-DD for database query
-  const queryDate = baseDate.toISOString().split('T')[0];
+  const queryDate = istDate.toISOString().split('T')[0];
   
-  console.log('Query date:', {
-    baseDate: baseDate.toISOString(),
-    queryDate,
+  console.log('Database query parameters:', {
+    inputDate: forDate.toISOString(),
+    istDate: istDate.toISOString(),
+    queryDate: queryDate
   });
 
-  // Get bookings for the specified day
+  // Get bookings for the specified day using a time range to account for timezone
+  const startOfDay = new Date(queryDate + 'T00:00:00+05:30');
+  const endOfDay = new Date(queryDate + 'T23:59:59.999+05:30');
+
   const { data: bookings, error: bookingsError } = await supabase
     .from('bookings')
     .select(`
@@ -125,7 +127,8 @@ async function generateDailyReport(forDate?: Date) {
         amount
       )
     `)
-    .eq('start_date', queryDate)
+    .gte('start_date', startOfDay.toISOString())
+    .lt('start_date', endOfDay.toISOString())
     .returns<BookingDetails[]>();
 
   if (bookingsError) {
@@ -135,12 +138,13 @@ async function generateDailyReport(forDate?: Date) {
 
   console.log('Found bookings:', bookings?.length || 0, bookings);
 
-  // Get completed bookings
+  // Get completed bookings using the same time range
   const { data: completedInRange, error: completedError } = await supabase
     .from('bookings')
     .select('*')
     .eq('status', 'completed')
-    .eq('completed_at::date', queryDate)
+    .gte('completed_at', startOfDay.toISOString())
+    .lt('completed_at', endOfDay.toISOString())
     .returns<BookingDetails[]>();
 
   if (completedError) {
@@ -148,7 +152,7 @@ async function generateDailyReport(forDate?: Date) {
     throw completedError;
   }
 
-  // Get payments for the specified day
+  // Get payments for the specified day using the same time range
   const { data: payments, error: paymentsError } = await supabase
     .from('payments')
     .select(`
@@ -163,7 +167,8 @@ async function generateDailyReport(forDate?: Date) {
         vehicle_details
       )
     `)
-    .eq('created_at::date', queryDate)
+    .gte('created_at', startOfDay.toISOString())
+    .lt('created_at', endOfDay.toISOString())
     .returns<PaymentDetails[]>();
 
   if (paymentsError) {
@@ -171,7 +176,13 @@ async function generateDailyReport(forDate?: Date) {
     throw paymentsError;
   }
 
-  console.log('Found payments:', payments?.length || 0);
+  console.log('Query parameters:', {
+    startOfDay: startOfDay.toISOString(),
+    endOfDay: endOfDay.toISOString(),
+    foundBookings: bookings?.length || 0,
+    foundCompletedBookings: completedInRange?.length || 0,
+    foundPayments: payments?.length || 0
+  });
 
   const typedBookings = (bookings || []) as BookingDetails[];
   const typedCompletedBookings = (completedInRange || []) as BookingDetails[];
@@ -211,7 +222,7 @@ async function generateDailyReport(forDate?: Date) {
 
   // Generate HTML report
   const html = `
-    <h2>Daily Report - ${formatDate(baseDate)} (IST)</h2>
+    <h2>Daily Report - ${formatDate(forDate)} (IST)</h2>
     
     <h3>Summary</h3>
     <ul>
@@ -351,19 +362,27 @@ export async function GET(request: Request) {
     // Get current date in IST
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-    const istDate = new Date(now.getTime() + istOffset);
+    const istNow = new Date(now.getTime() + istOffset);
     
-    // Format as YYYY-MM-DD
-    const currentDate = istDate.toISOString().split('T')[0];
-    console.log('Generating report for current date:', currentDate);
+    // Create a new date object for the report date (to avoid modifying istNow)
+    const reportDate = new Date(istNow);
+    // Set to midnight IST
+    reportDate.setHours(0, 0, 0, 0);
+    
+    console.log('Date calculations:', {
+      currentUTC: now.toISOString(),
+      currentIST: istNow.toISOString(),
+      reportDate: reportDate.toISOString(),
+      reportDateFormatted: formatDate(reportDate)
+    });
 
-    const reportHtml = await generateDailyReport(istDate);
+    const reportHtml = await generateDailyReport(reportDate);
 
     // Send email
     await transporter.sendMail({
       from: 'goonriders6@gmail.com',
       to: 'goonriders6@gmail.com',
-      subject: `Daily Report - ${formatDate(istDate)}`,
+      subject: `Daily Report - ${formatDate(reportDate)}`,
       html: reportHtml
     });
 
