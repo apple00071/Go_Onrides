@@ -45,6 +45,25 @@ export function formatDateTime(date: string | Date): string {
   }).format(inputDate);
 }
 
+export function formatDateTimeIST(date: string | Date): string {
+  const inputDate = new Date(date);
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istDate = new Date(inputDate.getTime() + istOffset);
+  
+  // Format hours and minutes with leading zeros
+  const hours = istDate.getUTCHours();
+  const minutes = istDate.getUTCMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12; // Convert 24h to 12h format
+  
+  // Format date in DD/MM/YYYY format
+  const day = istDate.getUTCDate().toString().padStart(2, '0');
+  const month = (istDate.getUTCMonth() + 1).toString().padStart(2, '0');
+  const year = istDate.getUTCFullYear();
+  
+  return `${day}/${month}/${year} ${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+}
+
 interface BookingRecord {
   booking_id: string | null;
 }

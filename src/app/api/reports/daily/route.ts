@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { formatCurrency, formatDate, formatDateTime } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateTime, formatDateTimeIST } from '@/lib/utils';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
@@ -84,7 +84,7 @@ async function generateDailyReport(forDate: Date) {
       }
     }
   );
-  
+
   // Format the date as YYYY-MM-DD for database query
   const queryDate = forDate.toISOString().split('T')[0];
   
@@ -186,9 +186,9 @@ async function generateDailyReport(forDate: Date) {
   // Calculate pending payments
   const totalPendingPayments = typedBookings.reduce((sum, booking) => {
     const totalCharges = Number(booking.booking_amount || 0) +
-                        Number(booking.security_deposit_amount || 0) +
-                        Number(booking.damage_charges || 0) +
-                        Number(booking.late_fee || 0) +
+      Number(booking.security_deposit_amount || 0) +
+      Number(booking.damage_charges || 0) +
+      Number(booking.late_fee || 0) +
                         Number(booking.extension_fee || 0);
     const paid = Number(booking.paid_amount || 0);
     return sum + (totalCharges - paid);
@@ -233,8 +233,8 @@ async function generateDailyReport(forDate: Date) {
           <td>${booking.customer_name}<br>${booking.customer_contact}</td>
           <td>${booking.vehicle_details.model}<br>${booking.vehicle_details.registration}</td>
           <td>
-            Pickup: ${formatDateTime(booking.start_date)}<br>
-            Return: ${formatDateTime(booking.end_date)}
+            Pickup: ${formatDateTimeIST(booking.start_date)}<br>
+            Return: ${formatDateTimeIST(booking.end_date)}
           </td>
           <td>${formatCurrency(booking.booking_amount)}</td>
           <td>${formatCurrency(additionalCharges)}</td>
@@ -274,9 +274,9 @@ async function generateDailyReport(forDate: Date) {
           <td>${booking.customer_name}<br>${booking.customer_contact}</td>
           <td>${booking.vehicle_details.model}<br>${booking.vehicle_details.registration}</td>
           <td>
-            Pickup: ${formatDateTime(booking.start_date)}<br>
-            Return: ${formatDateTime(booking.end_date)}<br>
-            ${booking.completed_at ? `Actual Return: ${formatDateTime(booking.completed_at)}` : ''}
+            Pickup: ${formatDateTimeIST(booking.start_date)}<br>
+            Return: ${formatDateTimeIST(booking.end_date)}<br>
+            ${booking.completed_at ? `Actual Return: ${formatDateTimeIST(booking.completed_at)}` : ''}
           </td>
           <td>${formatCurrency(totalAmount)}</td>
           <td>
@@ -284,7 +284,7 @@ async function generateDailyReport(forDate: Date) {
             Security: ${formatCurrency(booking.security_deposit_amount)}<br>
             ${additionalCharges > 0 ? `Additional: ${formatCurrency(additionalCharges)}` : ''}
           </td>
-          <td>${booking.completed_at ? formatDateTime(booking.completed_at) : 'N/A'}</td>
+          <td>${booking.completed_at ? formatDateTimeIST(booking.completed_at) : 'N/A'}</td>
           <td>${booking.completed_by || 'N/A'}</td>
         </tr>
       `}).join('') : '<tr><td colspan="8">No bookings completed today</td></tr>'}
@@ -304,7 +304,7 @@ async function generateDailyReport(forDate: Date) {
         const bookingData = Array.isArray(payment.booking) ? payment.booking[0] : payment.booking;
         return `
         <tr>
-          <td>${formatDateTime(payment.created_at)}</td>
+          <td>${formatDateTimeIST(payment.created_at)}</td>
           <td>${bookingData?.booking_id || payment.booking_id}</td>
           <td>${bookingData?.customer_name || 'N/A'}</td>
           <td>${bookingData?.vehicle_details?.model || 'N/A'}<br>${bookingData?.vehicle_details?.registration || 'N/A'}</td>
@@ -315,7 +315,7 @@ async function generateDailyReport(forDate: Date) {
     </table>
 
     <p style="color: #666; font-size: 12px; margin-top: 20px;">
-      Generated at ${formatDateTime(new Date())}
+      Generated at ${formatDateTimeIST(new Date())}
     </p>
   `;
 
@@ -339,7 +339,7 @@ export async function GET(request: Request) {
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
     const istDate = new Date(now.getTime() + istOffset);
-    
+
     // Set to start of current day in IST
     const reportDate = new Date(istDate);
     reportDate.setHours(0, 0, 0, 0);
