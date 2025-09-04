@@ -45,25 +45,6 @@ export function formatDateTime(date: string | Date): string {
   }).format(inputDate);
 }
 
-export function formatDateTimeIST(date: string | Date): string {
-  const inputDate = new Date(date);
-  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
-  const istDate = new Date(inputDate.getTime() + istOffset);
-  
-  // Format hours and minutes with leading zeros
-  const hours = istDate.getUTCHours();
-  const minutes = istDate.getUTCMinutes();
-  const ampm = hours >= 12 ? 'PM' : 'AM';
-  const displayHours = hours % 12 || 12; // Convert 24h to 12h format
-  
-  // Format date in DD/MM/YYYY format
-  const day = istDate.getUTCDate().toString().padStart(2, '0');
-  const month = (istDate.getUTCMonth() + 1).toString().padStart(2, '0');
-  const year = istDate.getUTCFullYear();
-  
-  return `${day}/${month}/${year} ${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
-}
-
 interface BookingRecord {
   booking_id: string | null;
 }
@@ -143,7 +124,18 @@ export function formatPercentage(number: number): string {
   }).format(number / 100);
 }
 
-// Add a new function for date input field format (YYYY-MM-DD)
+// Format date for display (DD/MM/YYYY)
+export function formatDateForDisplay(date: string | Date): string {
+  const d = new Date(date);
+  return new Intl.DateTimeFormat('en-IN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone: 'Asia/Kolkata'
+  }).format(d);
+}
+
+// Format date for input fields (YYYY-MM-DD)
 export function formatDateForInput(date: string | Date): string {
   const d = new Date(date);
   const year = d.getFullYear();
@@ -152,22 +144,37 @@ export function formatDateForInput(date: string | Date): string {
   return `${year}-${month}-${day}`;
 }
 
-// Add a function to format date for display (DD/MM/YYYY)
-export function formatDateForDisplay(date: string | Date): string {
-  const d = new Date(date);
-  return d.toLocaleDateString('en-IN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'Asia/Kolkata'
-  });
-}
-
-// Add a function to parse date from display format (DD/MM/YYYY) to ISO format
+// Parse date from display format (DD/MM/YYYY) to ISO format
 export function parseDateFromDisplay(dateStr: string): string {
   if (!dateStr) return '';
   const [day, month, year] = dateStr.split('/');
   return `${year}-${month}-${day}`;
+}
+
+// Format date for API (YYYY-MM-DD)
+export function formatDateForAPI(date: string | Date): string {
+  const d = new Date(date);
+  return d.toISOString().split('T')[0];
+}
+
+// Format date and time in IST
+export function formatDateTimeIST(date: string | Date): string {
+  const inputDate = new Date(date);
+  const istOffset = 5.5 * 60 * 60 * 1000; // IST is UTC+5:30
+  const istDate = new Date(inputDate.getTime() + istOffset);
+  
+  // Format hours and minutes with leading zeros
+  const hours = istDate.getUTCHours();
+  const minutes = istDate.getUTCMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  const displayHours = hours % 12 || 12; // Convert 24h to 12h format
+  
+  // Format date in DD/MM/YYYY format
+  const day = istDate.getUTCDate().toString().padStart(2, '0');
+  const month = (istDate.getUTCMonth() + 1).toString().padStart(2, '0');
+  const year = istDate.getUTCFullYear();
+  
+  return `${day}/${month}/${year} ${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
 }
 
 export function formatTime(timeStr: string): string {

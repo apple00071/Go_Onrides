@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import { ArrowLeft, Plus, X } from 'lucide-react';
-import { formatDate, formatCurrency } from '@/lib/utils';
+import { formatDateForDisplay, formatCurrency } from '@/lib/utils';
 
 const getMaintenanceTypeLabel = (types: string[]) => {
   const typeLabels: { [key: string]: string } = {
@@ -98,7 +98,7 @@ function MaintenanceModal({ isOpen, onClose, record, batteryDetails }: Maintenan
           <div className="grid grid-cols-2 gap-6 mb-6">
             <div>
               <p className="text-sm font-medium text-gray-500">Date</p>
-              <p className="mt-1 text-sm text-gray-900">{formatDate(record.maintenance_date)}</p>
+              <p className="text-base text-gray-900">{formatDateForDisplay(record.maintenance_date)}</p>
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">Cost</p>
@@ -117,8 +117,8 @@ function MaintenanceModal({ isOpen, onClose, record, batteryDetails }: Maintenan
           {/* Next Due Date Section */}
           <div className="mb-6">
             <h3 className="text-sm font-medium text-gray-500 mb-2">Next Due Date</h3>
-            <p className="text-sm text-gray-900">
-              {record.next_due_date ? formatDate(record.next_due_date) : 'Not specified'}
+            <p className="text-base text-gray-900">
+              {record.next_due_date ? formatDateForDisplay(record.next_due_date) : 'Not specified'}
             </p>
             <p className="text-xs text-gray-500 mt-1">
               This date applies to all services performed in this maintenance.
@@ -149,7 +149,7 @@ function MaintenanceModal({ isOpen, onClose, record, batteryDetails }: Maintenan
                 <div>
                   <p className="text-sm font-medium text-gray-500">Warranty End Date</p>
                   <p className="mt-1 text-sm text-gray-900">
-                    {batteryDetails.warranty_end_date ? formatDate(batteryDetails.warranty_end_date) : '-'}
+                    {batteryDetails.warranty_end_date ? formatDateForDisplay(batteryDetails.warranty_end_date) : '-'}
                   </p>
                 </div>
                 <div>
@@ -372,7 +372,7 @@ export default function VehicleMaintenanceHistoryPage({ params }: { params: { re
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Warranty End Date</p>
-            <p className="text-sm text-gray-900">{formatDate(battery.warranty_end_date)}</p>
+            <p className="text-sm text-gray-900">{formatDateForDisplay(battery.warranty_end_date)}</p>
           </div>
           <div>
             <p className="text-sm font-medium text-gray-500">Battery Health</p>
@@ -535,7 +535,7 @@ export default function VehicleMaintenanceHistoryPage({ params }: { params: { re
                             setIsModalOpen(true);
                           }}
                         >
-                          {formatDate(record.maintenance_date)}
+                          {formatDateForDisplay(record.maintenance_date)}
                         </td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           {record.description || '-'}
@@ -544,7 +544,7 @@ export default function VehicleMaintenanceHistoryPage({ params }: { params: { re
                           {formatCurrency(record.cost)}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                          {record.next_due_date ? formatDate(record.next_due_date) : '-'}
+                          {record.next_due_date ? formatDateForDisplay(record.next_due_date) : '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                           {record.odometer_reading.toLocaleString()} km

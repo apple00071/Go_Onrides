@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
-import { formatDate, formatDateTime, formatTime } from '@/lib/utils';
+import { formatDateTimeIST, formatDateForDisplay, formatTime } from '@/lib/utils';
 
 interface BookingExtension {
   id: string;
@@ -118,7 +118,7 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
             <div className="flex justify-between items-start">
               <div>
                 <div className="text-base font-medium">
-                  {formatDateTime(extension.created_at)}
+                  {formatDateTimeIST(extension.created_at)}
                 </div>
                 <div className="text-gray-500 text-sm mt-1">
                   By: {extension.created_by_user?.username || 'System'}
@@ -126,10 +126,10 @@ export default function BookingExtensionHistory({ bookingId }: BookingExtensionH
                 
                 <div className="mt-3 text-sm">
                   <div className="mb-1">
-                    <span className="text-gray-500">From:</span> {formatDate(extension.previous_end_date)} {formatTime(extension.previous_dropoff_time)}
+                    <span className="text-gray-500">From:</span> {formatDateForDisplay(extension.previous_end_date)} {formatTime(extension.previous_dropoff_time)}
                   </div>
                   <div>
-                    <span className="text-gray-500">To:</span> {formatDate(extension.new_end_date)} {formatTime(extension.new_dropoff_time)}
+                    <span className="text-gray-500">To:</span> {formatDateForDisplay(extension.new_end_date)} {formatTime(extension.new_dropoff_time)}
                   </div>
                 </div>
               </div>

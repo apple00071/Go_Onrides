@@ -1447,12 +1447,15 @@ export default function NewBookingPage() {
                       name="start_date"
                       required
                       min={formatDateForInput(new Date())}
-                      max={maxStartDate}
+                      max={formatDateForInput(maxStartDate)}
                       value={formData.start_date}
                       onChange={handleInputChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
                     />
+                    <div className="mt-1 text-sm text-gray-500">
+                      {formData.start_date ? formatDateForDisplay(formData.start_date) : 'Not selected'}
+                    </div>
                   </div>
                   <div>
                     <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
@@ -1463,13 +1466,16 @@ export default function NewBookingPage() {
                       type="date"
                       name="end_date"
                       required
-                      min={minEndDate}
-                      max={maxEndDate}
+                      min={formatDateForInput(minEndDate)}
+                      max={formatDateForInput(maxEndDate)}
                       value={formData.end_date}
                       onChange={handleInputChange}
                       className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                       aria-required="true"
                     />
+                    <div className="mt-1 text-sm text-gray-500">
+                      {formData.end_date ? formatDateForDisplay(formData.end_date) : 'Not selected'}
+                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">

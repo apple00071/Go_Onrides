@@ -6,6 +6,7 @@ import Image from 'next/image';
 import { getSupabaseClient } from '@/lib/supabase';
 import { generateInvoice } from '@/lib/generateInvoice';
 import { toast } from 'react-hot-toast';
+import { formatDateForDisplay, formatDateForInput } from '@/lib/utils';
 
 interface InvoiceFormData {
   customerName: string;
@@ -33,14 +34,14 @@ export default function InvoicesPage() {
     customerName: '',
     gstNumber: '',
     invoiceNumber: `INV${Math.floor(Math.random() * 1000000)}`,
-    invoiceDate: format(new Date(), 'dd-MM-yyyy'),
+    invoiceDate: formatDateForDisplay(new Date()),
     paymentMethod: 'Bank Transfer',
     vehicleDetails: {
       model: '',
       registration: ''
     },
-    pickupDate: format(new Date(), 'dd-MM-yyyy'),
-    dropoffDate: format(new Date(), 'dd-MM-yyyy'),
+    pickupDate: formatDateForDisplay(new Date()),
+    dropoffDate: formatDateForDisplay(new Date()),
     items: [
       {
         description: '',
@@ -52,22 +53,18 @@ export default function InvoicesPage() {
   });
 
   // Helper function to convert date format for input
-  const formatDateForInput = (dateStr: string) => {
+  const handleDateChange = (field: string, value: string) => {
     try {
-      const [day, month, year] = dateStr.split('-');
-      return `${year}-${month}-${day}`;
+      const date = new Date(value);
+      setFormData(prev => ({
+        ...prev,
+        [field]: formatDateForDisplay(date)
+      }));
     } catch {
-      return '';
-    }
-  };
-
-  // Helper function to convert date from input to display format
-  const formatDateForState = (dateStr: string) => {
-    try {
-      const date = new Date(dateStr);
-      return format(date, 'dd-MM-yyyy');
-    } catch {
-      return '';
+      setFormData(prev => ({
+        ...prev,
+        [field]: ''
+      }));
     }
   };
 
@@ -217,12 +214,12 @@ export default function InvoicesPage() {
                     type="date"
                     required
                     value={formatDateForInput(formData.invoiceDate)}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      invoiceDate: formatDateForState(e.target.value)
-                    }))}
+                    onChange={(e) => handleDateChange('invoiceDate', e.target.value)}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
+                  <div className="mt-1 text-sm text-gray-500">
+                    {formData.invoiceDate ? formatDateForDisplay(formData.invoiceDate) : 'Not selected'}
+                  </div>
                 </div>
               </div>
 
@@ -269,12 +266,12 @@ export default function InvoicesPage() {
                     type="date"
                     required
                     value={formatDateForInput(formData.pickupDate)}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      pickupDate: formatDateForState(e.target.value)
-                    }))}
+                    onChange={(e) => handleDateChange('pickupDate', e.target.value)}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
+                  <div className="mt-1 text-sm text-gray-500">
+                    {formData.pickupDate ? formatDateForDisplay(formData.pickupDate) : 'Not selected'}
+                  </div>
                 </div>
 
                 <div>
@@ -285,12 +282,12 @@ export default function InvoicesPage() {
                     type="date"
                     required
                     value={formatDateForInput(formData.dropoffDate)}
-                    onChange={(e) => setFormData(prev => ({ 
-                      ...prev, 
-                      dropoffDate: formatDateForState(e.target.value)
-                    }))}
+                    onChange={(e) => handleDateChange('dropoffDate', e.target.value)}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
+                  <div className="mt-1 text-sm text-gray-500">
+                    {formData.dropoffDate ? formatDateForDisplay(formData.dropoffDate) : 'Not selected'}
+                  </div>
                 </div>
               </div>
 

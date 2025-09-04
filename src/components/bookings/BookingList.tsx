@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { formatCurrency, formatDate, formatTime } from '@/lib/utils';
+import { formatCurrency, formatDateForDisplay, formatTime } from '@/lib/utils';
 
 interface Booking {
   id: string;
@@ -120,13 +120,13 @@ export default function BookingList({ bookings }: BookingListProps) {
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
                   <div className="text-sm text-gray-900">
-                    {formatDate(booking.start_date)}
+                    {formatDateForDisplay(booking.start_date)}
                     <span className="text-gray-500 ml-2">
                       {formatTime(booking.pickup_time)}
                     </span>
                   </div>
                   <div className="text-sm text-gray-500">
-                    to {formatDate(booking.end_date)}
+                    to {formatDateForDisplay(booking.end_date)}
                     <span className="ml-2">
                       {formatTime(booking.dropoff_time)}
                     </span>
