@@ -85,7 +85,7 @@ export default function BookingDetailsPage() {
   const [payments, setPayments] = useState<any[]>([]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showExtendModal, setShowExtendModal] = useState(false);
-  const [signature, setSignature] = useState<{ bookingSignature?: string; completionSignature?: string } | null>(null);
+  // Remove signature state
   const { isAdmin, canEdit, hasPermission } = usePermissions();
   const [userRole, setUserRole] = useState<string | null>(null);
 
@@ -181,31 +181,10 @@ export default function BookingDetailsPage() {
         bookingData.customer.documents = processedDocuments;
       }
 
-      // Fetch signatures separately
-      const { data: signaturesData, error: signaturesError } = await supabase
-        .from('booking_signatures')
-        .select('signature_data, signature_type, created_at')
-        .eq('booking_id', bookingData.id)
-        .order('created_at', { ascending: true });
-
-      if (signaturesError) {
-        console.error('Error fetching signatures:', signaturesError);
-      }
-
-      // Process signatures
-      const bookingSignature = signaturesData?.find(s => !s.signature_type || s.signature_type === 'booking')?.signature_data || null;
-      const completionSignature = signaturesData?.find(s => s.signature_type === 'completion')?.signature_data || null;
-
-      console.log('Raw signatures data:', signaturesData);
-      console.log('Processed signatures:', { bookingSignature, completionSignature });
-
+      // Remove signature fetching code
       setBooking({
         ...bookingData,
-        previous_dropoff_time: latestExtension?.previous_dropoff_time,
-        signatures: {
-          bookingSignature,
-          completionSignature
-        }
+        previous_dropoff_time: latestExtension?.previous_dropoff_time
       });
     } catch (error) {
       console.error('Error:', error);
@@ -1023,6 +1002,37 @@ export default function BookingDetailsPage() {
         <EditBookingModal
           booking={{
             ...booking,
+            id: booking.id,
+            booking_id: booking.booking_id,
+            customer_name: booking.customer_name,
+            customer_contact: booking.customer_contact,
+            customer_email: booking.customer_email,
+            alternative_phone: booking.alternative_phone,
+            emergency_contact_phone: booking.emergency_contact_phone,
+            emergency_contact_phone1: booking.emergency_contact_phone1,
+            colleague_phone: booking.colleague_phone,
+            aadhar_number: booking.aadhar_number,
+            date_of_birth: booking.date_of_birth,
+            dl_number: booking.dl_number,
+            dl_expiry_date: booking.dl_expiry_date,
+            start_date: booking.start_date,
+            end_date: booking.end_date,
+            pickup_time: booking.pickup_time,
+            dropoff_time: booking.dropoff_time,
+            temp_address: booking.temp_address,
+            perm_address: booking.perm_address,
+            vehicle_details: booking.vehicle_details,
+            booking_amount: booking.booking_amount,
+            security_deposit_amount: booking.security_deposit_amount,
+            total_amount: booking.total_amount,
+            payment_status: booking.payment_status,
+            paid_amount: booking.paid_amount,
+            payment_mode: booking.payment_mode,
+            status: booking.status,
+            rental_purpose: booking.rental_purpose,
+            outstation_details: booking.outstation_details,
+            uploaded_documents: booking.customer?.documents || {},
+            submitted_documents: booking.submitted_documents,
             customer: {
               ...booking.customer,
               documents: booking.customer?.documents || {}

@@ -1,10 +1,10 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Upload, X, Camera, RefreshCw } from 'lucide-react';
-import { toast } from 'react-hot-toast';
+import { useRef, useState, useEffect } from 'react';
+import { Camera, RefreshCw, Upload, X } from 'lucide-react';
+import Image from 'next/image';
 import { getSupabaseClient } from '@/lib/supabase';
-import type { UploadedDocuments } from '@/types/bookings';
+import { toast } from 'react-hot-toast';
 
 interface DocumentUploadProps {
   bookingId: string;
@@ -12,145 +12,224 @@ interface DocumentUploadProps {
   existingDocuments?: UploadedDocuments;
 }
 
+interface UploadedDocuments {
+  customer_photo?: string;
+  aadhar_front?: string;
+  aadhar_back?: string;
+  dl_front?: string;
+  dl_back?: string;
+}
+
+const STORAGE_BUCKET = 'customer-documents';
+
 export default function DocumentUpload({ bookingId, onDocumentsUploaded, existingDocuments }: DocumentUploadProps) {
   const [uploading, setUploading] = useState(false);
   const [documents, setDocuments] = useState<UploadedDocuments>(existingDocuments || {});
   const [loadingDocuments, setLoadingDocuments] = useState(true);
   const [tempPreviews, setTempPreviews] = useState<Record<string, string>>({});
+  const [documentUrls, setDocumentUrls] = useState<Record<string, string>>({});
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  const supabase = getSupabaseClient();
+
+  const getPublicUrl = async (path: string): Promise<string | undefined> => {
+    try {
+      const { data } = await supabase.storage
+        .from(STORAGE_BUCKET)
+        .getPublicUrl(path);
+      // Add cache busting parameter to prevent browser caching
+      return data.publicUrl + '?t=' + new Date().getTime();
+    } catch (error) {
+      console.error('Error getting public URL:', error);
+      return undefined;
+    }
+  };
 
   useEffect(() => {
     if (existingDocuments) {
       setDocuments(existingDocuments);
+      // Get URLs for all existing documents
+      Object.entries(existingDocuments).forEach(([type, path]) => {
+        if (path) {
+          // If the path is already a full URL, use it directly
+          if (path.startsWith('http')) {
+            setDocumentUrls(prev => ({ ...prev, [type]: path }));
+          } else {
+            // Otherwise, get the public URL from storage
+            const supabase = getSupabaseClient();
+            const { data } = supabase.storage
+              .from(STORAGE_BUCKET)
+              .getPublicUrl(path);
+            if (data?.publicUrl) {
+              setDocumentUrls(prev => ({ ...prev, [type]: data.publicUrl }));
+            }
+          }
+        }
+      });
     }
     setLoadingDocuments(false);
   }, [existingDocuments]);
 
-  const getPublicUrl = async (fileName: string | undefined) => {
-    if (!fileName) return '';
-    try {
-      const supabase = getSupabaseClient();
-      
-      // If fileName already contains a path, use it as is
-      const filePath = fileName.includes('/') ? fileName : `${bookingId}/${fileName}`;
-      
-      const { data } = await supabase.storage
-        .from('customer-documents')
-        .createSignedUrl(filePath, 3600); // 1 hour expiry
-
-      console.log('Getting signed URL for:', {
-        fileName,
-        filePath,
-        signedUrl: data?.signedUrl
-      });
-
-      return data?.signedUrl || '';
-    } catch (error) {
-      console.error('Error getting signed URL:', error);
-      return '';
-    }
-  };
-
   const handleFileUpload = async (file: File, type: keyof UploadedDocuments) => {
     try {
-      // Show immediate preview
+      setUploading(true);
+      
+      // Create temporary preview immediately
       const previewUrl = URL.createObjectURL(file);
       setTempPreviews(prev => ({ ...prev, [type]: previewUrl }));
-      
-      setUploading(true);
-      const supabase = getSupabaseClient();
 
-      // If there's an existing document, delete it first
+      // If there's an existing file, delete it first
       if (documents[type]) {
-        const existingPath = documents[type].includes('/') ? 
-          documents[type] : 
-          `${bookingId}/${documents[type]}`;
+        const { error: deleteError } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .remove([documents[type]!]);
 
-        await supabase.storage
-          .from('customer-documents')
-          .remove([existingPath]);
+        if (deleteError) {
+          console.error('Error deleting existing file:', deleteError);
+          toast.error('Failed to delete existing file');
+          return;
+        }
       }
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${type}-${Date.now()}.${fileExt}`;
-      const filePath = `${bookingId}/${fileName}`;
+      // Generate unique filename with timestamp
+      const timestamp = new Date().getTime();
+      const filename = `${type}_${timestamp}`;
+      const filePath = `${bookingId}/${filename}`;
 
-      console.log('Uploading file:', {
-        type,
-        fileName,
-        filePath
-      });
-
-      const { error: uploadError } = await supabase.storage
-        .from('customer-documents')
+      // Upload to Supabase Storage
+      const { data, error } = await supabase.storage
+        .from(STORAGE_BUCKET)
         .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: true
+          upsert: true,
+          cacheControl: 'no-cache'
         });
 
-      if (uploadError) {
-        throw uploadError;
+      if (error) throw error;
+
+      // Update documents state with new path
+      const newDocuments = { ...documents, [type]: data.path };
+      setDocuments(newDocuments);
+      
+      // Get and set the public URL
+      const publicUrl = await getPublicUrl(data.path);
+      if (publicUrl) {
+        setDocumentUrls(prev => {
+          const newUrls = { ...prev };
+          newUrls[type] = publicUrl;
+          return newUrls;
+        });
       }
 
-      // Store the full path
-      const updatedDocuments = {
-        ...documents,
-        [type]: filePath
-      };
+      // Reset file inputs
+      if (fileInputRefs.current[type]) {
+        fileInputRefs.current[type]!.value = '';
+      }
+      if (fileInputRefs.current[`${type}_camera`]) {
+        fileInputRefs.current[`${type}_camera`]!.value = '';
+      }
+      if (fileInputRefs.current[`${type}_reupload`]) {
+        fileInputRefs.current[`${type}_reupload`]!.value = '';
+      }
 
-      console.log('Updated documents:', updatedDocuments);
-
-      setDocuments(updatedDocuments);
-      onDocumentsUploaded(updatedDocuments);
-      
-      // Clean up preview URL
+      // Clean up preview URL only after public URL is available
       URL.revokeObjectURL(previewUrl);
       setTempPreviews(prev => {
-        const { [type]: removed, ...rest } = prev;
-        return rest;
+        const newPreviews = { ...prev };
+        delete newPreviews[type];
+        return newPreviews;
       });
-      
-      toast.success(`${formatDocumentType(type)} uploaded successfully`);
+
+      // Notify parent component
+      if (onDocumentsUploaded) {
+        onDocumentsUploaded(newDocuments);
+      }
+
+      toast.success('Document uploaded successfully');
     } catch (error) {
       console.error('Error uploading file:', error);
+      toast.error('Failed to upload file. Please try again.');
+      
+      // Clean up preview on error
       setTempPreviews(prev => {
-        const { [type]: removed, ...rest } = prev;
-        return rest;
+        const newPreviews = { ...prev };
+        delete newPreviews[type];
+        return newPreviews;
       });
-      toast.error('Failed to upload file');
+      
+      // Reset file inputs on error too
+      if (fileInputRefs.current[type]) {
+        fileInputRefs.current[type]!.value = '';
+      }
+      if (fileInputRefs.current[`${type}_camera`]) {
+        fileInputRefs.current[`${type}_camera`]!.value = '';
+      }
+      if (fileInputRefs.current[`${type}_reupload`]) {
+        fileInputRefs.current[`${type}_reupload`]!.value = '';
+      }
     } finally {
       setUploading(false);
     }
   };
 
-  const handleRemoveFile = async (type: keyof UploadedDocuments) => {
-    try {
-      const supabase = getSupabaseClient();
-      const filePath = documents[type];
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadedDocuments) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleFileUpload(file, type);
+    }
+  };
 
-      if (filePath) {
-        // Use the full path if it exists, otherwise construct it
-        const fullPath = filePath.includes('/') ? filePath : `${bookingId}/${filePath}`;
-        
-        console.log('Removing file:', {
-          type,
-          filePath,
-          fullPath
+  const handleRemoveDocument = async (type: keyof UploadedDocuments) => {
+    try {
+      setUploading(true);
+
+      // If there's an existing file, delete it from storage
+      if (documents[type]) {
+        const { error } = await supabase.storage
+          .from(STORAGE_BUCKET)
+          .remove([documents[type]!]);
+
+        if (error) throw error;
+
+        // Update state
+        setDocuments(prev => {
+          const newDocs = { ...prev };
+          delete newDocs[type];
+          return newDocs;
         });
 
-        await supabase.storage
-          .from('customer-documents')
-          .remove([fullPath]);
+        // Reset file inputs
+        if (fileInputRefs.current[type]) {
+          fileInputRefs.current[type]!.value = '';
+        }
+        if (fileInputRefs.current[`${type}_camera`]) {
+          fileInputRefs.current[`${type}_camera`]!.value = '';
+        }
+        if (fileInputRefs.current[`${type}_reupload`]) {
+          fileInputRefs.current[`${type}_reupload`]!.value = '';
+        }
+
+        // Remove from URLs and previews
+        setDocumentUrls(prev => {
+          const newUrls = { ...prev };
+          delete newUrls[type];
+          return newUrls;
+        });
+
+        setTempPreviews(prev => {
+          const newPreviews = { ...prev };
+          delete newPreviews[type];
+          return newPreviews;
+        });
+
+        // Notify parent component
+        onDocumentsUploaded({ ...documents });
+
+        toast.success('Document removed successfully');
       }
-
-      const updatedDocuments = { ...documents };
-      delete updatedDocuments[type];
-
-      setDocuments(updatedDocuments);
-      onDocumentsUploaded(updatedDocuments);
-      toast.success(`${formatDocumentType(type)} removed`);
     } catch (error) {
       console.error('Error removing file:', error);
-      toast.error('Failed to remove file');
+      toast.error('Failed to remove file. Please try again.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -172,25 +251,25 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
     return new File([u8arr], filename, { type: mime });
   };
 
+  const documentTypes: Record<string, string> = {
+    customer_photo: 'Customer Photo',
+    aadhar_front: 'Aadhar Front',
+    aadhar_back: 'Aadhar Back',
+    dl_front: 'DL Front',
+    dl_back: 'DL Back',
+  };
+
+  const setFileInputRef = (type: string, el: HTMLInputElement | null) => {
+    if (el) {
+      fileInputRefs.current[type] = el;
+    }
+  };
+
   const renderUploadSection = (type: keyof UploadedDocuments, label: string) => {
     const hasFile = documents[type];
     const hasTempPreview = tempPreviews[type];
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const cameraInputRef = React.useRef<HTMLInputElement>(null);
-    const [imageUrl, setImageUrl] = useState<string>('');
-
-    useEffect(() => {
-      if (hasFile && !hasTempPreview) {
-        getPublicUrl(documents[type]).then(url => setImageUrl(url));
-      }
-    }, [hasFile, documents[type], hasTempPreview]);
-
-    const handleCameraCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        handleFileUpload(file, type);
-      }
-    };
+    // Use placeholder image only if no document exists
+    const displayUrl = hasTempPreview ? tempPreviews[type] : (documentUrls[type] || (hasFile ? '' : '/placeholder-image.png'));
 
     if (loadingDocuments) {
       return (
@@ -211,25 +290,41 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         </label>
         <div className="relative group">
           <div className={`border-2 border-dashed rounded-lg p-4 h-40 flex flex-col items-center justify-center transition-colors ${hasFile || hasTempPreview ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'}`}>
-            {(hasFile || hasTempPreview) ? (
+            {(hasFile || hasTempPreview) && displayUrl ? (
               <>
                 <div className="relative w-full h-full">
-                  <img
-                    src={hasTempPreview ? tempPreviews[type] : imageUrl}
+                  <Image
+                    src={displayUrl}
                     alt={label}
-                    className="w-full h-full object-contain rounded"
+                    fill
+                    className="object-contain rounded"
+                    unoptimized={true}
                   />
                   {!uploading && (
                     <div className="absolute top-1 right-1 flex space-x-1">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleFileChange(e, type)}
+                        className="hidden"
+                        ref={(el) => setFileInputRef(`${type}_reupload`, el)}
+                      />
                       <button
-                        onClick={() => fileInputRef.current?.click()}
+                        type="button"
+                        onClick={() => {
+                          const input = fileInputRefs.current[`${type}_reupload`];
+                          if (input) {
+                            input.click();
+                          }
+                        }}
                         className="p-1 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors"
                         title="Reupload"
                       >
                         <RefreshCw className="h-4 w-4 text-blue-600" />
                       </button>
                       <button
-                        onClick={() => handleRemoveFile(type)}
+                        type="button"
+                        onClick={() => handleRemoveDocument(type)}
                         className="p-1 bg-red-100 rounded-full hover:bg-red-200 transition-colors"
                         title="Remove file"
                       >
@@ -247,35 +342,46 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
             ) : (
               <>
                 <input
-                  ref={fileInputRef}
                   type="file"
                   accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleFileUpload(file, type);
-                  }}
+                  onChange={(e) => handleFileChange(e, type)}
                   className="hidden"
+                  ref={(el) => setFileInputRef(type, el)}
+                  name={type}
                 />
                 <input
-                  ref={cameraInputRef}
                   type="file"
                   accept="image/*"
                   capture="environment"
-                  onChange={handleCameraCapture}
+                  onChange={(e) => handleFileChange(e, type)}
                   className="hidden"
+                  ref={(el) => setFileInputRef(`${type}_camera`, el)}
+                  name={`${type}_camera`}
                 />
                 <div className="flex flex-col items-center space-y-2">
                   <Upload className="h-8 w-8 text-gray-400" />
                   <p className="text-sm text-gray-500">Click to upload or drag and drop</p>
                   <div className="flex space-x-2">
                     <button
-                      onClick={() => fileInputRef.current?.click()}
+                      type="button"
+                      onClick={() => {
+                        const input = fileInputRefs.current[type];
+                        if (input) {
+                          input.click();
+                        }
+                      }}
                       className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
                     >
                       Browse Files
                     </button>
                     <button
-                      onClick={() => cameraInputRef.current?.click()}
+                      type="button"
+                      onClick={() => {
+                        const input = fileInputRefs.current[`${type}_camera`];
+                        if (input) {
+                          input.click();
+                        }
+                      }}
                       className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
                     >
                       Take Photo

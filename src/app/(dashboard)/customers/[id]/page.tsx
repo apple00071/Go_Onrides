@@ -117,19 +117,19 @@ const isValidUrl = (url: string | null | undefined): url is string => {
 };
 
 // Add this function at the top level
-const getPublicUrl = (fileName: string) => {
-  if (!fileName) return '';
-  
-  // If fileName already contains a path (e.g., GN125/file.jpg), use it as is
-  if (fileName.includes('/')) {
+const getPublicUrl = async (filePath: string) => {
+  if (!filePath) return '';
+  try {
     const supabase = getSupabaseClient();
-    const { data } = supabase.storage
+    const { data } = await supabase.storage
       .from('customer-documents')
-      .getPublicUrl(fileName);
-    return data?.publicUrl || '';
+      .createSignedUrl(filePath, 3600); // 1 hour expiry
+
+    return data?.signedUrl || '';
+  } catch (error) {
+    console.error('Error getting signed URL:', error);
+    return '';
   }
-  
-  return '';
 };
 
 export default function CustomerDetailsPage() {
@@ -180,7 +180,7 @@ export default function CustomerDetailsPage() {
           const processedDocuments: Record<string, string> = {};
           for (const [key, value] of Object.entries(customerData.documents)) {
             if (value && typeof value === 'string') {
-              processedDocuments[key] = getPublicUrl(value);
+              processedDocuments[key] = await getPublicUrl(value);
             }
           }
           customerData.documents = processedDocuments;
@@ -426,102 +426,68 @@ export default function CustomerDetailsPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {customer.documents ? (
                     <>
-                      {customer.documents.customer_photo && isValidUrl(customer.documents.customer_photo) && (
-                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                             onClick={() => handleImageClick(customer.documents.customer_photo, 'Customer Photo')}>
-                          <p className="text-sm font-medium text-gray-500 mb-2">Customer Photo</p>
-                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                            <Image
-                              src={customer.documents.customer_photo}
-                              alt="Customer Photo"
-                              fill
-                              className="object-cover"
-                            />
+                      {Object.entries(customer.documents).map(([key, path]) => {
+                        if (!path) return null;
+                        
+                        const documentLabel = {
+                          customer_photo: 'Customer Photo',
+                          aadhar_front: 'Aadhar Front',
+                          aadhar_back: 'Aadhar Back',
+                          dl_front: 'DL Front',
+                          dl_back: 'DL Back'
+                        }[key as keyof typeof customer.documents] || key;
+
+                        return (
+                          <div key={key} className="cursor-pointer hover:opacity-75 transition-opacity"
+                               onClick={() => path && handleImageClick(path, documentLabel)}>
+                            <p className="text-sm font-medium text-gray-500 mb-2">{documentLabel}</p>
+                            <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
+                              {path && (
+                                <Image
+                                  src={path}
+                                  alt={documentLabel || 'Document'}
+                                  fill
+                                  className="object-cover"
+                                />
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      )}
-                      {customer.documents.aadhar_front && isValidUrl(customer.documents.aadhar_front) && (
-                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                             onClick={() => handleImageClick(customer.documents.aadhar_front, 'Aadhar Front')}>
-                          <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Front</p>
-                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                            <Image
-                              src={customer.documents.aadhar_front}
-                              alt="Aadhar Front"
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        </div>
-                      )}
-                      {customer.documents.aadhar_back && isValidUrl(customer.documents.aadhar_back) && (
-                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                             onClick={() => handleImageClick(customer.documents.aadhar_back, 'Aadhar Back')}>
-                          <p className="text-sm font-medium text-gray-500 mb-2">Aadhar Back</p>
-                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                            <Image
-                              src={customer.documents.aadhar_back}
-                              alt="Aadhar Back"
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        </div>
-                      )}
-                      {customer.documents.dl_front && isValidUrl(customer.documents.dl_front) && (
-                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                             onClick={() => handleImageClick(customer.documents.dl_front, 'DL Front')}>
-                          <p className="text-sm font-medium text-gray-500 mb-2">DL Front</p>
-                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                            <Image
-                              src={customer.documents.dl_front}
-                              alt="DL Front"
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        </div>
-                      )}
-                      {customer.documents.dl_back && isValidUrl(customer.documents.dl_back) && (
-                        <div className="cursor-pointer hover:opacity-75 transition-opacity"
-                             onClick={() => handleImageClick(customer.documents.dl_back, 'DL Back')}>
-                          <p className="text-sm font-medium text-gray-500 mb-2">DL Back</p>
-                          <div className="w-full h-32 relative rounded-lg overflow-hidden border border-gray-200">
-                            <Image
-                              src={customer.documents.dl_back}
-                              alt="DL Back"
-                              fill
-                              className="object-cover"
-                            />
-                          </div>
-                        </div>
-                      )}
+                        );
+                      })}
                     </>
                   ) : (
-                    <p className="text-sm text-gray-500 col-span-full">No documents uploaded</p>
+                    <p className="text-gray-500">No documents uploaded</p>
                   )}
                 </div>
               </div>
 
-              {/* Latest Physical Documents Verification */}
+              {/* Submitted Documents Checklist */}
               <div>
-                <h3 className="text-md font-medium text-gray-900 mb-4">Latest Physical Documents Verification</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <h3 className="text-md font-medium text-gray-900 mb-4">Submitted Physical Documents</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {customer.submitted_documents ? (
-                    Object.entries(customer.submitted_documents).map(([key, value]) => (
-                      <div key={key} className="flex items-center space-x-2">
-                        {value ? (
-                          <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <XCircleIcon className="h-5 w-5 text-red-500" />
-                        )}
-                        <span className="text-sm text-gray-700">
-                          {key.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
-                        </span>
-                      </div>
-                    ))
+                    Object.entries(customer.submitted_documents).map(([key, value]) => {
+                      const documentLabel = {
+                        passport: 'Passport',
+                        voter_id: 'Voter ID',
+                        original_dl: 'Original DL',
+                        original_aadhar: 'Original Aadhar',
+                        other_document: 'Other Document'
+                      }[key as keyof typeof customer.submitted_documents] || key;
+
+                      return (
+                        <div key={key} className="flex items-center space-x-2">
+                          {value ? (
+                            <CheckCircleIcon className="h-5 w-5 text-green-500" />
+                          ) : (
+                            <XCircleIcon className="h-5 w-5 text-red-500" />
+                          )}
+                          <span className="text-sm text-gray-700">{documentLabel}</span>
+                        </div>
+                      );
+                    })
                   ) : (
-                    <p className="text-sm text-gray-500">No physical documents verification history</p>
+                    <p className="text-gray-500">No physical documents submitted</p>
                   )}
                 </div>
               </div>

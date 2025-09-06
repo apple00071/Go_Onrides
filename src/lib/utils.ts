@@ -177,14 +177,93 @@ export function formatDateTimeIST(date: string | Date): string {
   return `${day}/${month}/${year} ${displayHours}:${minutes.toString().padStart(2, '0')} ${ampm}`;
 }
 
-export function formatTime(timeStr: string): string {
+export function parseTime(timeStr: string | null | undefined): string {
   if (!timeStr) return '';
   
-  const date = new Date(`1970-01-01T${timeStr}`);
-  return date.toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-    timeZone: 'Asia/Kolkata'
-  });
+  try {
+    // Remove any leading/trailing whitespace
+    timeStr = timeStr.trim();
+    
+    // If time is in "HH:mm:ss" format, convert to "HH:mm"
+    const timeWithSeconds = timeStr.match(/^(\d{2}):(\d{2}):(\d{2})$/);
+    if (timeWithSeconds) {
+      const [_, hours, minutes] = timeWithSeconds;
+      return `${hours}:${minutes}`;
+    }
+    
+    // If time is in "HH:mm" format, return as is
+    if (/^\d{2}:\d{2}$/.test(timeStr)) {
+      return timeStr;
+    }
+    
+    // If time is in "H:mm am/pm" or "HH:mm am/pm" format
+    const match = timeStr.toLowerCase().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/);
+    if (match) {
+      let [_, hours, minutes, period] = match;
+      let hour = parseInt(hours);
+      
+      // Convert to 24-hour format
+      if (period === 'pm' && hour !== 12) {
+        hour += 12;
+      } else if (period === 'am' && hour === 12) {
+        hour = 0;
+      }
+      
+      return `${hour.toString().padStart(2, '0')}:${minutes}`;
+    }
+
+    // If time is in "H:mm" format (single digit hour)
+    const singleHourMatch = timeStr.match(/^(\d{1}):(\d{2})$/);
+    if (singleHourMatch) {
+      const [_, hour, minutes] = singleHourMatch;
+      return `${hour.padStart(2, '0')}:${minutes}`;
+    }
+    
+    console.warn('Unrecognized time format:', timeStr);
+    return timeStr; // Return original string if format not recognized
+  } catch (error) {
+    console.error('Error parsing time:', error);
+    return timeStr; // Return original string on error
+  }
+}
+
+export function formatTime(time: string | null | undefined): string {
+  if (!time) return '';
+  
+  try {
+    // Handle time with seconds first
+    const timeWithSeconds = time.match(/^(\d{2}):(\d{2}):(\d{2})$/);
+    if (timeWithSeconds) {
+      const [_, hours, minutes] = timeWithSeconds;
+      time = `${hours}:${minutes}`;
+    }
+
+    // If time is in HH:mm format
+    if (/^\d{2}:\d{2}$/.test(time)) {
+      const [hours, minutes] = time.split(':').map(Number);
+      const period = hours >= 12 ? 'pm' : 'am';
+      const displayHours = hours % 12 || 12;
+      return `${displayHours}:${minutes.toString().padStart(2, '0')} ${period}`;
+    }
+    
+    // If time is in H:mm format (single digit hour)
+    const singleHourMatch = time.match(/^(\d{1}):(\d{2})$/);
+    if (singleHourMatch) {
+      const [_, hour, minutes] = singleHourMatch;
+      const hours = parseInt(hour);
+      const period = hours >= 12 ? 'pm' : 'am';
+      const displayHours = hours % 12 || 12;
+      return `${displayHours}:${minutes} ${period}`;
+    }
+    
+    // If time already includes period (am/pm)
+    if (/^\d{1,2}:\d{2}\s*(am|pm)$/i.test(time)) {
+      return time.toLowerCase();
+    }
+    
+    return time; // Return original string if format not recognized
+  } catch (error) {
+    console.error('Error formatting time:', error);
+    return time; // Return original string on error
+  }
 } 

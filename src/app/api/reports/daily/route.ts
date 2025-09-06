@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { formatCurrency, formatDate, formatDateTime, formatDateTimeIST } from '@/lib/utils';
+import { formatCurrency, formatDate, formatDateTimeIST, formatDateForDisplay } from '@/lib/utils';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
@@ -16,17 +16,19 @@ interface BookingDetails {
   booking_amount: number;
   security_deposit_amount: number;
   paid_amount: number;
-  payment_status: string;
-  status: string;
-  created_at: string;
   damage_charges: number;
   late_fee: number;
   extension_fee: number;
+  payment_status: string;
+  status: string;
+  created_at: string;
   completed_at: string | null;
   completed_by: string | null;
   start_date: string;
   end_date: string;
-  payments: { amount: number }[];
+  pickup_time: string | null;
+  dropoff_time: string | null;
+  payments?: { amount: number }[];
 }
 
 interface PaymentDetails {
@@ -37,6 +39,7 @@ interface PaymentDetails {
   created_at: string;
   booking?: {
     id: string;
+    booking_id: string;
     customer_name: string;
     vehicle_details: {
       model: string;
@@ -73,7 +76,6 @@ const transporter = nodemailer.createTransport({
 export const dynamic = 'force-dynamic';
 
 async function generateDailyReport(forDate: Date) {
-  // Create authenticated Supabase client with service role
   const supabase = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -84,7 +86,7 @@ async function generateDailyReport(forDate: Date) {
       }
     }
   );
-
+  
   // Format the date as YYYY-MM-DD for database query
   const queryDate = forDate.toISOString().split('T')[0];
   
@@ -92,8 +94,8 @@ async function generateDailyReport(forDate: Date) {
   const startOfDay = new Date(queryDate + 'T00:00:00+05:30');
   const endOfDay = new Date(queryDate + 'T23:59:59.999+05:30');
 
-  // Get bookings for today
-  const { data: bookings, error: bookingsError } = await supabase
+  // Get new bookings for today (not completed)
+  const { data: newBookings, error: newBookingsError } = await supabase
     .from('bookings')
     .select(`
       id,
@@ -114,33 +116,55 @@ async function generateDailyReport(forDate: Date) {
       completed_by,
       start_date,
       end_date,
+      pickup_time,
+      dropoff_time,
       payments (
         amount
       )
     `)
     .eq('start_date', queryDate)
-    .returns<BookingDetails[]>();
+    .neq('status', 'completed');
 
-  if (bookingsError) {
-    console.error('Bookings query error:', bookingsError);
-    throw bookingsError;
+  if (newBookingsError) {
+    console.error('New bookings query error:', newBookingsError);
+    throw newBookingsError;
   }
 
   // Get completed bookings for today
-  const { data: completedInRange, error: completedError } = await supabase
+  const { data: completedBookings, error: completedError } = await supabase
     .from('bookings')
-    .select('*')
+    .select(`
+      id,
+      booking_id,
+      customer_name,
+      customer_contact,
+      vehicle_details,
+      booking_amount,
+      security_deposit_amount,
+      paid_amount,
+      damage_charges,
+      late_fee,
+      extension_fee,
+      payment_status,
+      status,
+      created_at,
+      completed_at,
+      completed_by,
+      start_date,
+      end_date,
+      pickup_time,
+      dropoff_time
+    `)
     .eq('status', 'completed')
     .gte('completed_at', startOfDay.toISOString())
-    .lt('completed_at', endOfDay.toISOString())
-    .returns<BookingDetails[]>();
+    .lt('completed_at', endOfDay.toISOString());
 
   if (completedError) {
     console.error('Error fetching completed bookings:', completedError);
     throw completedError;
   }
 
-  // Get payments received today with booking details
+  // Get payments for the specified day
   const { data: payments, error: paymentsError } = await supabase
     .from('payments')
     .select(`
@@ -165,11 +189,12 @@ async function generateDailyReport(forDate: Date) {
     throw paymentsError;
   }
 
-  const typedBookings = (bookings || []) as BookingDetails[];
-  const typedCompletedBookings = (completedInRange || []) as BookingDetails[];
+  const typedNewBookings = (newBookings || []) as BookingDetails[];
+  const typedCompletedBookings = (completedBookings || []) as BookingDetails[];
+  const typedPayments = (payments || []) as PaymentDetails[];
 
   // Calculate totals
-  const totalBookingAmount = typedBookings.reduce((sum, booking) => {
+  const totalBookingAmount = typedNewBookings.reduce((sum, booking) => {
     const amount = Number(booking.booking_amount || 0) +
                   Number(booking.damage_charges || 0) +
                   Number(booking.late_fee || 0) +
@@ -177,18 +202,18 @@ async function generateDailyReport(forDate: Date) {
     return sum + amount;
   }, 0);
 
-  const totalSecurityDeposit = typedBookings.reduce((sum, booking) => 
+  const totalSecurityDeposit = typedNewBookings.reduce((sum, booking) => 
     sum + Number(booking.security_deposit_amount || 0), 0);
 
-  const totalPayments = (payments || []).reduce((sum, payment) => 
+  const totalPayments = typedPayments.reduce((sum, payment) => 
     sum + Number(payment.amount || 0), 0);
 
   // Calculate pending payments
-  const totalPendingPayments = typedBookings.reduce((sum, booking) => {
+  const totalPendingPayments = typedNewBookings.reduce((sum, booking) => {
     const totalCharges = Number(booking.booking_amount || 0) +
-      Number(booking.security_deposit_amount || 0) +
-      Number(booking.damage_charges || 0) +
-      Number(booking.late_fee || 0) +
+                        Number(booking.security_deposit_amount || 0) +
+                        Number(booking.damage_charges || 0) +
+                        Number(booking.late_fee || 0) +
                         Number(booking.extension_fee || 0);
     const paid = Number(booking.paid_amount || 0);
     return sum + (totalCharges - paid);
@@ -200,7 +225,7 @@ async function generateDailyReport(forDate: Date) {
     
     <h3>Summary</h3>
     <ul>
-      <li>Total New Bookings: ${typedBookings.length}</li>
+      <li>Total New Bookings: ${typedNewBookings.length}</li>
       <li>Total Completed Bookings: ${typedCompletedBookings.length}</li>
       <li>Total Booking Amount (including charges): ${formatCurrency(totalBookingAmount)}</li>
       <li>Total Security Deposits: ${formatCurrency(totalSecurityDeposit)}</li>
@@ -221,7 +246,7 @@ async function generateDailyReport(forDate: Date) {
         <th>Paid Amount</th>
         <th>Status</th>
       </tr>
-      ${typedBookings.length ? typedBookings.map(booking => {
+      ${typedNewBookings.length ? typedNewBookings.map(booking => {
         const additionalCharges = (
           Number(booking.damage_charges || 0) +
           Number(booking.late_fee || 0) +
@@ -233,8 +258,8 @@ async function generateDailyReport(forDate: Date) {
           <td>${booking.customer_name}<br>${booking.customer_contact}</td>
           <td>${booking.vehicle_details.model}<br>${booking.vehicle_details.registration}</td>
           <td>
-            Pickup: ${formatDateTimeIST(booking.start_date)}<br>
-            Return: ${formatDateTimeIST(booking.end_date)}
+            Pickup: ${formatDateForDisplay(booking.start_date)} ${booking.pickup_time || ''}<br>
+            Return: ${formatDateForDisplay(booking.end_date)} ${booking.dropoff_time || ''}
           </td>
           <td>${formatCurrency(booking.booking_amount)}</td>
           <td>${formatCurrency(additionalCharges)}</td>
@@ -274,8 +299,8 @@ async function generateDailyReport(forDate: Date) {
           <td>${booking.customer_name}<br>${booking.customer_contact}</td>
           <td>${booking.vehicle_details.model}<br>${booking.vehicle_details.registration}</td>
           <td>
-            Pickup: ${formatDateTimeIST(booking.start_date)}<br>
-            Return: ${formatDateTimeIST(booking.end_date)}<br>
+            Pickup: ${formatDateForDisplay(booking.start_date)} ${booking.pickup_time || ''}<br>
+            Return: ${formatDateForDisplay(booking.end_date)} ${booking.dropoff_time || ''}<br>
             ${booking.completed_at ? `Actual Return: ${formatDateTimeIST(booking.completed_at)}` : ''}
           </td>
           <td>${formatCurrency(totalAmount)}</td>
@@ -300,7 +325,7 @@ async function generateDailyReport(forDate: Date) {
         <th>Amount</th>
         <th>Payment Mode</th>
       </tr>
-      ${payments?.length ? payments.map(payment => {
+      ${typedPayments.length ? typedPayments.map(payment => {
         const bookingData = Array.isArray(payment.booking) ? payment.booking[0] : payment.booking;
         return `
         <tr>

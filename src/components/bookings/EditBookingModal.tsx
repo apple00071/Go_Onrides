@@ -8,9 +8,8 @@ import { CurrencyInput } from '@/components/ui/currency-input';
 import { notifyBookingEvent } from '@/lib/notification';
 import DocumentUpload from '@/components/documents/DocumentUpload';
 import DocumentsChecklist from '@/components/documents/DocumentsChecklist';
-import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRotation';
 import type { UploadedDocuments, SubmittedDocuments, BookingDetails as GlobalBookingDetails } from '@/types/bookings';
-import { formatCurrency, formatDateForInput, formatDateForDisplay } from '@/lib/utils';
+import { formatCurrency, formatDateForInput, formatDateForDisplay, formatTime, parseTime as parseTimeUtil } from '@/lib/utils';
 
 interface OutstationDetails {
   destination: string;
@@ -45,53 +44,98 @@ interface FormData {
   date_of_birth: string;
   dl_number: string;
   dl_expiry_date: string;
-  start_date: string;
-  end_date: string;
-  pickup_time: string;
-  dropoff_time: string;
   temp_address: string;
   perm_address: string;
   vehicle_details: {
     model: string;
     registration: string;
   };
+  start_date: string;
+  end_date: string;
+  pickup_time: string;
+  dropoff_time: string;
   booking_amount: string;
   security_deposit_amount: string;
   total_amount: string;
-  payment_status: 'full' | 'partial' | 'pending';
   paid_amount: string;
   payment_mode: 'cash' | 'upi' | 'card' | 'bank_transfer';
+  payment_status: 'full' | 'partial' | 'pending';
   status: 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled';
   rental_purpose: 'local' | 'outstation';
   outstation_details: OutstationDetails;
-  signature: string;
   uploaded_documents: UploadedDocuments;
   submitted_documents: {
+    original_aadhar: boolean;
+    original_dl: boolean;
     passport: boolean;
     voter_id: boolean;
-    original_dl: boolean;
-    original_aadhar: boolean;
     other_document: boolean;
   };
 }
 
 type PaymentStatus = 'pending' | 'partial' | 'full';
 
-// Helper function to convert 24h to 12h format
-const formatTimeDisplay = (hour: number, minute: string) => {
+// Helper function to format time display
+const formatTimeDisplay = (hour: number, minute: string): string => {
   const period = hour >= 12 ? 'PM' : 'AM';
   const displayHour = hour % 12 || 12;
   return `${displayHour}:${minute} ${period}`;
 };
 
-// Generate time slots
-const timeSlots = Array.from({ length: 1440 }, (_, i) => {
-  const hour = Math.floor(i / 60);
-  const minute = i % 60;
-  const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
-  const label = formatTimeDisplay(hour, minute.toString().padStart(2, '0'));
-  return { value, label };
-});
+// Helper function to parse and format time
+const parseTime = (timeStr: string | null | undefined): string => {
+  if (!timeStr) return '';
+  
+  try {
+    // Remove any leading/trailing whitespace
+    timeStr = timeStr.trim();
+    
+    // If time is in "HH:mm" format, return as is
+    if (/^\d{2}:\d{2}$/.test(timeStr)) {
+      return timeStr;
+    }
+    
+    // If time is in "HH:mm am/pm" format
+    const match = timeStr.toLowerCase().match(/^(\d{1,2}):(\d{2})\s*(am|pm)$/);
+    if (match) {
+      let [_, hours, minutes, period] = match;
+      let hour = parseInt(hours);
+      
+      // Convert to 24-hour format
+      if (period === 'pm' && hour !== 12) {
+        hour += 12;
+      } else if (period === 'am' && hour === 12) {
+        hour = 0;
+      }
+      
+      return `${hour.toString().padStart(2, '0')}:${minutes}`;
+    }
+    
+    console.warn('Unrecognized time format:', timeStr);
+    return '';
+  } catch (error) {
+    console.error('Error parsing time:', error);
+    return '';
+  }
+};
+
+// Helper function to convert 12h time to 24h format
+const convertTo24Hour = (time: string): string => {
+  if (!time) return '';
+  // If already in 24h format, return as is
+  if (time.match(/^\d{2}:\d{2}$/)) return time;
+
+  const [timePart, period] = time.toLowerCase().split(' ');
+  let [hours, minutes] = timePart.split(':').map(Number);
+  
+  if (period === 'pm' && hours !== 12) {
+    hours += 12;
+  } else if (period === 'am' && hours === 12) {
+    hours = 0;
+  }
+  
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
 
 const STATUS_OPTIONS = ['pending', 'confirmed', 'in_use', 'completed', 'cancelled'] as const;
 const PAYMENT_STATUS_OPTIONS = ['full', 'partial', 'pending'] as const;
@@ -115,6 +159,107 @@ export default function EditBookingModal({
   const [error, setError] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<string | null>(null);
 
+  // Create form data from booking
+  const initialFormData = useMemo<FormData>(() => {
+    console.log('Creating initial form data from booking:', booking);
+    
+    // Parse pickup and dropoff times
+    const pickup_time = parseTimeUtil(booking?.pickup_time);
+    const dropoff_time = parseTimeUtil(booking?.dropoff_time);
+    
+    console.log('Parsed times:', { 
+      pickup_time, 
+      dropoff_time,
+      original: {
+        pickup: booking?.pickup_time,
+        dropoff: booking?.dropoff_time
+      }
+    });
+
+    return {
+      customer_name: booking?.customer_name || '',
+      customer_contact: booking?.customer_contact || '',
+      customer_email: booking?.customer_email || '',
+      alternative_phone: booking?.alternative_phone || '',
+      emergency_contact_phone: booking?.emergency_contact_phone || '',
+      emergency_contact_phone1: booking?.emergency_contact_phone1 || '',
+      colleague_phone: booking?.colleague_phone || '',
+      aadhar_number: booking?.aadhar_number || '',
+      date_of_birth: booking?.date_of_birth || '',
+      dl_number: booking?.dl_number || '',
+      dl_expiry_date: booking?.dl_expiry_date || '',
+      start_date: booking?.start_date || '',
+      end_date: booking?.end_date || '',
+      pickup_time,
+      dropoff_time,
+      temp_address: booking?.temp_address || '',
+      perm_address: booking?.perm_address || '',
+      vehicle_details: {
+        model: booking?.vehicle_details?.model || '',
+        registration: booking?.vehicle_details?.registration || ''
+      },
+      booking_amount: booking?.booking_amount?.toString() || '0',
+      security_deposit_amount: booking?.security_deposit_amount?.toString() || '0',
+      total_amount: (booking?.total_amount || 0).toString(),
+      payment_status: booking?.payment_status || 'pending',
+      paid_amount: booking?.paid_amount?.toString() || '0',
+      payment_mode: booking?.payment_mode || 'cash',
+      status: booking?.status || 'confirmed',
+      rental_purpose: booking?.rental_purpose || 'local',
+      outstation_details: booking?.outstation_details || {
+        destination: '',
+        estimated_kms: 0,
+        start_odo: 0,
+        end_odo: 0
+      },
+      uploaded_documents: booking?.uploaded_documents || {},
+      submitted_documents: booking?.submitted_documents || {
+        original_aadhar: false,
+        original_dl: false,
+        passport: false,
+        voter_id: false,
+        other_document: false
+      }
+    };
+  }, [booking]);
+
+  const [formData, setFormData] = useState<FormData>(initialFormData);
+
+  // Generate time slots with 15-minute intervals
+  const timeSlots = useMemo(() => {
+    const slots = [];
+    for (let hour = 0; hour < 24; hour++) {
+      for (let minute of [0, 15, 30, 45]) {
+        const value = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}`;
+        const label = formatTime(value);
+        slots.push({ value, label });
+      }
+    }
+    return slots;
+  }, []);
+
+  // Find the matching time slot for a given time
+  const findMatchingTimeSlot = (time: string | null | undefined) => {
+    if (!time) return '';
+    const parsedTime = parseTimeUtil(time);
+    return timeSlots.find(slot => slot.value === parsedTime)?.value || '';
+  };
+
+  // Add debug logging for time values
+  useEffect(() => {
+    console.log('Current time values:', {
+      pickup: formData.pickup_time,
+      dropoff: formData.dropoff_time,
+      originalPickup: booking?.pickup_time,
+      originalDropoff: booking?.dropoff_time,
+      parsedPickup: parseTimeUtil(booking?.pickup_time),
+      parsedDropoff: parseTimeUtil(booking?.dropoff_time),
+      matchingPickupSlot: findMatchingTimeSlot(booking?.pickup_time),
+      matchingDropoffSlot: findMatchingTimeSlot(booking?.dropoff_time),
+      availableSlots: timeSlots.map(slot => ({ value: slot.value, label: slot.label }))
+    });
+  }, [formData.pickup_time, formData.dropoff_time, booking?.pickup_time, booking?.dropoff_time, timeSlots]);
+
   useEffect(() => {
     const fetchUserRole = async () => {
       const supabase = getSupabaseClient();
@@ -132,55 +277,11 @@ export default function EditBookingModal({
     fetchUserRole();
   }, []);
 
-  // Create form data from booking
-  const initialFormData = useMemo<FormData>(() => ({
-    customer_name: booking?.customer_name || '',
-    customer_contact: booking?.customer_contact || '',
-    customer_email: booking?.customer_email || '',
-    alternative_phone: booking?.alternative_phone || '',
-    emergency_contact_phone: booking?.emergency_contact_phone || '',
-    emergency_contact_phone1: booking?.emergency_contact_phone1 || '',
-    colleague_phone: booking?.colleague_phone || '',
-    aadhar_number: booking?.aadhar_number || '',
-    date_of_birth: booking?.date_of_birth || '',
-    dl_number: booking?.dl_number || '',
-    dl_expiry_date: booking?.dl_expiry_date || '',
-    start_date: booking?.start_date || '',
-    end_date: booking?.end_date || '',
-    pickup_time: booking?.pickup_time || '',
-    dropoff_time: booking?.dropoff_time || '',
-    temp_address: booking?.temp_address || '',
-    perm_address: booking?.perm_address || '',
-    vehicle_details: {
-      model: booking?.vehicle_details?.model || '',
-      registration: booking?.vehicle_details?.registration || ''
-    },
-    booking_amount: booking?.booking_amount?.toString() || '',
-    security_deposit_amount: booking?.security_deposit_amount?.toString() || '',
-    total_amount: (booking?.booking_amount + booking?.security_deposit_amount)?.toString() || '',
-    payment_status: booking?.payment_status as 'full' | 'partial' | 'pending' || 'pending',
-    paid_amount: booking?.paid_amount?.toString() || '',
-    payment_mode: booking?.payment_mode as 'cash' | 'upi' | 'card' | 'bank_transfer' || 'cash',
-    status: booking?.status as 'pending' | 'confirmed' | 'in_use' | 'completed' | 'cancelled' || 'confirmed',
-    rental_purpose: booking?.rental_purpose || 'local',
-    outstation_details: booking?.outstation_details || {
-      destination: '',
-      estimated_kms: 0,
-      start_odo: 0,
-      end_odo: 0
-    },
-    signature: booking?.signature || '',
-    uploaded_documents: booking?.uploaded_documents || {},
-    submitted_documents: booking?.submitted_documents || {
-      original_aadhar: false,
-      original_dl: false,
-      passport: false,
-      voter_id: false,
-      other_document: false
-    }
-  }), [booking]);
-
-  const [formData, setFormData] = useState<FormData>(initialFormData);
+  // Add debug logging
+  useEffect(() => {
+    console.log('Initial form data:', initialFormData);
+    console.log('Booking data:', booking);
+  }, [initialFormData, booking]);
 
   // Calculate total amount when booking amount or security deposit changes
   useEffect(() => {
@@ -202,6 +303,7 @@ export default function EditBookingModal({
   // Reset form when modal opens/closes or booking changes
   useEffect(() => {
     if (isOpen && booking) {
+      console.log('Resetting form data with:', booking);
       setFormData(initialFormData);
       setError(null);
     }
@@ -496,9 +598,12 @@ export default function EditBookingModal({
   };
 
   const handleDocumentsChange = (documents: UploadedDocuments) => {
+    console.log('Documents updated:', documents);
     setFormData(prev => ({
       ...prev,
-      uploaded_documents: documents
+      uploaded_documents: {
+        ...documents
+      }
     }));
   };
 
@@ -573,7 +678,6 @@ export default function EditBookingModal({
         status: formData.status,
         rental_purpose: formData.rental_purpose,
         outstation_details: formData.outstation_details,
-        signature: formData.signature,
         uploaded_documents: formData.uploaded_documents,
         submitted_documents: formData.submitted_documents,
         updated_at: new Date().toISOString(),
@@ -654,12 +758,11 @@ export default function EditBookingModal({
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Customer Email *
+                      Customer Email
                     </label>
                     <input
                       type="email"
                       name="customer_email"
-                      required
                       value={formData.customer_email}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
@@ -896,9 +999,6 @@ export default function EditBookingModal({
                         booking.status === 'in_use' || booking.status === 'completed' ? 'opacity-50 cursor-not-allowed' : ''
                       }`}
                     />
-                    <div className="mt-1 text-sm text-gray-500">
-                      Selected: {formData.start_date ? formatDateForDisplay(formData.start_date) : 'Not selected'}
-                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -914,9 +1014,6 @@ export default function EditBookingModal({
                       max={formatDateForInput(maxEndDate)}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     />
-                    <div className="mt-1 text-sm text-gray-500">
-                      Selected: {formData.end_date ? formatDateForDisplay(formData.end_date) : 'Not selected'}
-                    </div>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
@@ -925,7 +1022,7 @@ export default function EditBookingModal({
                     <select
                       name="pickup_time"
                       required
-                      value={formData.pickup_time}
+                      value={findMatchingTimeSlot(formData.pickup_time)}
                       onChange={handleInputChange}
                       disabled={booking.status === 'in_use' || booking.status === 'completed'}
                       className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${
@@ -942,12 +1039,11 @@ export default function EditBookingModal({
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Drop-off Time *
+                      Drop-off Time
                     </label>
                     <select
                       name="dropoff_time"
-                      required
-                      value={formData.dropoff_time}
+                      value={findMatchingTimeSlot(formData.dropoff_time)}
                       onChange={handleInputChange}
                       className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     >
@@ -1136,7 +1232,7 @@ export default function EditBookingModal({
                 <DocumentUpload
                   bookingId={booking.id}
                   onDocumentsUploaded={handleDocumentsChange}
-                  existingDocuments={formData.uploaded_documents}
+                  existingDocuments={booking.customer?.documents || booking.uploaded_documents || {}}
                 />
               </div>
 
@@ -1155,14 +1251,7 @@ export default function EditBookingModal({
                 />
               </div>
 
-              {/* Signature Section */}
-              <div className="space-y-6 border-t pt-6">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">Signature</h3>
-                <SignaturePadWithRotation
-                  initialSignature={formData.signature}
-                  onSignatureChange={(signature) => setFormData(prev => ({ ...prev, signature }))}
-                />
-              </div>
+              {/* Remove Signature Section */}
 
               <div className="flex justify-end space-x-4">
                 <button
