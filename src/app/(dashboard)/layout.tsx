@@ -66,18 +66,8 @@ export default function DashboardLayout({
         const currentPath = window.location.pathname;
         console.log('Current path:', currentPath);
 
-        // Only redirect if we're on the exact /dashboard path
-        if (currentPath === '/dashboard') {
-          if (profile.role === 'admin') {
-            console.log('Redirecting admin to admin dashboard...');
-            router.replace('/dashboard/admin');
-            return;
-          } else if (profile.role === 'worker') {
-            console.log('Redirecting worker to worker dashboard...');
-            router.replace('/dashboard/workers');
-            return;
-          }
-        } else if (profile.role === 'worker' && currentPath.startsWith('/dashboard/admin')) {
+        // Handle role-based access control
+        if (profile.role === 'worker' && currentPath.startsWith('/dashboard/admin')) {
           // Prevent workers from accessing admin routes
           console.log('Worker attempting to access admin route, redirecting...');
           router.replace('/dashboard/workers');

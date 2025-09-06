@@ -539,32 +539,38 @@ export default function BookingDetailsPage() {
               </div>
 
               {/* Status Information */}
-              <div className="text-sm space-y-1 text-gray-600">
+              <div className="text-sm space-y-2 text-gray-600">
                 {booking?.created_by_user && (
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium text-gray-700 min-w-[85px]">Created by</span>
-                    <span className="text-gray-900">{booking.created_by_user.email}</span>
-                    <span className="text-gray-500">
-                      on {formatDateTime(booking.created_at)}
-                    </span>
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                    <span className="font-medium text-gray-700 sm:min-w-[85px]">Created by</span>
+                    <div className="flex flex-col sm:flex-row sm:gap-2">
+                      <span className="text-gray-900">{booking.created_by_user.email}</span>
+                      <span className="text-gray-500 text-xs sm:text-sm">
+                        on {formatDateTime(booking.created_at)}
+                      </span>
+                    </div>
                   </div>
                 )}
                 {booking.status === 'completed' && booking.completed_by_user && (
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium text-gray-700 min-w-[85px]">Completed by</span>
-                    <span className="text-gray-900">{booking.completed_by_user.email}</span>
-                    <span className="text-gray-500">
-                      on {formatDateTime(booking.completed_at || '')}
-                    </span>
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                    <span className="font-medium text-gray-700 sm:min-w-[85px]">Completed by</span>
+                    <div className="flex flex-col sm:flex-row sm:gap-2">
+                      <span className="text-gray-900">{booking.completed_by_user.email}</span>
+                      <span className="text-gray-500 text-xs sm:text-sm">
+                        on {formatDateTime(booking.completed_at || '')}
+                      </span>
+                    </div>
                   </div>
                 )}
                 {booking.updated_at && booking.updated_by_user && booking.updated_at !== booking.created_at && (
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-medium text-gray-700 min-w-[85px]">Updated by</span>
-                    <span className="text-gray-900">{booking.updated_by_user.email}</span>
-                    <span className="text-gray-500">
-                      on {formatDateTime(booking.updated_at)}
-                    </span>
+                  <div className="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2">
+                    <span className="font-medium text-gray-700 sm:min-w-[85px]">Updated by</span>
+                    <div className="flex flex-col sm:flex-row sm:gap-2">
+                      <span className="text-gray-900">{booking.updated_by_user.email}</span>
+                      <span className="text-gray-500 text-xs sm:text-sm">
+                        on {formatDateTime(booking.updated_at)}
+                      </span>
+                    </div>
                   </div>
                 )}
               </div>

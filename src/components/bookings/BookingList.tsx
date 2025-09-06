@@ -189,13 +189,13 @@ export default function BookingList({ bookings }: BookingListProps) {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="font-medium text-gray-900">{booking.customer_name}</div>
-                  <div className="text-sm text-gray-500">{booking.customer_contact}</div>
+                  <div className="font-medium text-gray-900">{booking.customer_name || 'N/A'}</div>
+                  <div className="text-sm text-gray-500">{booking.customer_contact || 'N/A'}</div>
                   <div className="text-xs text-gray-400">Customer</div>
                 </div>
                 <div>
-                  <div className="font-medium text-gray-900">{booking.vehicle_details.model}</div>
-                  <div className="text-sm text-gray-500">{booking.vehicle_details.registration}</div>
+                  <div className="font-medium text-gray-900">{booking.vehicle_details?.model || 'N/A'}</div>
+                  <div className="text-sm text-gray-500">{booking.vehicle_details?.registration || 'N/A'}</div>
                   <div className="text-xs text-gray-400">Vehicle</div>
                 </div>
               </div>
