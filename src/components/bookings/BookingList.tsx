@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, formatDateForDisplay, formatTime } from '@/lib/utils';
 
@@ -32,6 +32,18 @@ interface BookingListProps {
 
 export default function BookingList({ bookings }: BookingListProps) {
   const router = useRouter();
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkScreenSize = () => {
+      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+    };
+
+    checkScreenSize();
+    window.addEventListener('resize', checkScreenSize);
+
+    return () => window.removeEventListener('resize', checkScreenSize);
+  }, []);
 
   const statusColors = {
     pending: 'bg-yellow-100 text-yellow-800',
@@ -62,8 +74,9 @@ export default function BookingList({ bookings }: BookingListProps) {
 
   return (
     <>
-      {/* Desktop table view - hidden on mobile */}
-      <div className="hidden md:block overflow-x-auto">
+      {/* Desktop table view */}
+      {!isMobile && (
+        <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200">
           <thead className="bg-gray-50">
             <tr>
@@ -166,10 +179,12 @@ export default function BookingList({ bookings }: BookingListProps) {
             ))}
           </tbody>
         </table>
-      </div>
+        </div>
+      )}
 
-      {/* Mobile card view - visible only on mobile */}
-      <div className="md:hidden space-y-4">
+      {/* Mobile card view */}
+      {isMobile && (
+        <div className="space-y-4">
         {bookings.map((booking) => (
           <div
             key={booking.id}
@@ -230,7 +245,8 @@ export default function BookingList({ bookings }: BookingListProps) {
             </div>
           </div>
         ))}
-      </div>
+        </div>
+      )}
     </>
   );
 }
