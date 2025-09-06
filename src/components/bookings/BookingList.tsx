@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatCurrency, formatDateForDisplay, formatTime } from '@/lib/utils';
+import { ResponsiveTable, ResponsiveCard, ResponsiveCardList } from '@/components/ui/responsive-table';
 
 interface Booking {
   id: string;
@@ -62,36 +63,38 @@ export default function BookingList({ bookings }: BookingListProps) {
 
   return (
     <>
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-gray-200">
-          <thead className="bg-gray-50">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Booking ID
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Customer
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Vehicle
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Duration
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Amount
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Payment
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Status
-              </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                Actions
-              </th>
-            </tr>
-          </thead>
+      {/* Desktop table view */}
+      <ResponsiveTable>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-gray-200">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Booking ID
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Customer
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Vehicle
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Duration
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Amount
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Payment
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Status
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Actions
+                </th>
+              </tr>
+            </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {bookings.map((booking) => (
               <tr
@@ -165,7 +168,74 @@ export default function BookingList({ bookings }: BookingListProps) {
             ))}
           </tbody>
         </table>
-      </div>
+        </div>
+      </ResponsiveTable>
+
+      {/* Mobile card view */}
+      <ResponsiveCardList>
+        {bookings.map((booking) => (
+          <ResponsiveCard
+            key={booking.id}
+            data={[
+              { label: 'Booking ID', value: booking.booking_id || booking.id },
+              {
+                label: 'Customer',
+                value: (
+                  <div>
+                    <div className="font-medium">{booking.customer_name}</div>
+                    <div className="text-sm text-gray-500">{booking.customer_contact}</div>
+                  </div>
+                )
+              },
+              {
+                label: 'Vehicle',
+                value: (
+                  <div>
+                    <div className="font-medium">{booking.vehicle_details.model}</div>
+                    <div className="text-sm text-gray-500">{booking.vehicle_details.registration}</div>
+                  </div>
+                )
+              },
+              {
+                label: 'Duration',
+                value: (
+                  <div>
+                    <div>{formatDateForDisplay(booking.start_date)} {formatTime(booking.pickup_time)}</div>
+                    <div className="text-sm text-gray-500">to {formatDateForDisplay(booking.end_date)} {formatTime(booking.dropoff_time)}</div>
+                  </div>
+                )
+              },
+              {
+                label: 'Amount',
+                value: formatCurrency(booking.booking_amount + booking.security_deposit_amount)
+              },
+              {
+                label: 'Payment',
+                value: (
+                  <span className={`inline-flex text-xs leading-5 font-semibold rounded-full px-2 py-1 ${
+                    getPaymentStatusDisplay(booking) === 'full'
+                      ? 'bg-green-100 text-green-800'
+                      : getPaymentStatusDisplay(booking) === 'partial'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {getPaymentStatusDisplay(booking)}
+                  </span>
+                )
+              },
+              {
+                label: 'Status',
+                value: (
+                  <span className={`inline-flex text-xs leading-5 font-semibold rounded-full px-2 py-1 ${statusColors[booking.status as keyof typeof statusColors]}`}>
+                    {booking.status}
+                  </span>
+                )
+              }
+            ]}
+            onClick={() => handleBookingClick(booking)}
+          />
+        ))}
+      </ResponsiveCardList>
     </>
   );
-} 
+}

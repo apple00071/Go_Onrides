@@ -307,17 +307,14 @@ export default function BookingDetailsPage() {
     setSelectedImageLabel(label);
   };
 
-  const handleEditComplete = async () => {
-    setLoading(true);
+  const handleEditComplete = async (updatedBooking?: BookingDetailsData) => {
     try {
+      // Always refetch to get complete data with customer info, profiles, and extensions
       await fetchBookingDetails();
-      toast.success('Booking updated successfully');
+      // Don't show toast here as the modal already shows it
     } catch (error) {
       console.error('Error refreshing booking data:', error);
       toast.error('Failed to refresh booking data');
-    } finally {
-      setLoading(false);
-      setShowEditModal(false);
     }
   };
 

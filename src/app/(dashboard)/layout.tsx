@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { getSupabaseClient } from '@/lib/supabase';
 import Sidebar from '@/components/dashboard/Sidebar';
 import Header from '@/components/dashboard/Header';
+import InstallPrompt from '@/components/pwa/InstallPrompt';
 import type { UserProfile } from '@/types/database';
 import type { AuthChangeEvent } from '@supabase/supabase-js';
 
@@ -197,6 +198,9 @@ export default function DashboardLayout({
           {children}
         </main>
       </div>
+
+      {/* PWA Install Prompt */}
+      <InstallPrompt />
     </div>
   );
 } 

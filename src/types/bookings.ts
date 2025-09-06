@@ -11,8 +11,17 @@ export interface VehicleDetails {
 export interface BookingRecord {
   id: string;
   booking_id: string;
+  customer_id?: string;
   customer_name: string;
   customer_contact: string;
+  customer_email?: string;
+  emergency_contact_phone?: string;
+  aadhar_number?: string;
+  date_of_birth?: string;
+  dl_number?: string;
+  dl_expiry_date?: string;
+  temp_address?: string;
+  perm_address?: string;
   vehicle_details: VehicleDetails;
   booking_amount: number;
   security_deposit_amount: number;
@@ -27,10 +36,18 @@ export interface BookingRecord {
   completed_by: string | null;
   start_date: string;
   end_date: string;
+  pickup_time?: string;
   dropoff_time: string;
+  rental_purpose?: RentalPurpose;
+  outstation_details?: OutstationDetails;
+  uploaded_documents?: any;
+  submitted_documents?: any;
+  payment_mode?: PaymentMode;
   payments: PaymentRecord[];
   refund_amount: number;
   total_amount: number;
+  updated_at?: string;
+  updated_by?: string;
 }
 
 export interface PaymentRecord {

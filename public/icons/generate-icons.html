@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate PWA Icons</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        button { padding: 10px 20px; background: #2563eb; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button:hover { background: #1d4ed8; }
+        .icon-preview { display: inline-block; margin: 10px; text-align: center; }
+        .icon-preview canvas { border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>PWA Icon Generator for Go-On Rides</h1>
+    <p>Click the button below to generate all required PWA icons:</p>
+    <button onclick="generateAllIcons()">Generate All Icons</button>
+    <div id="output"></div>
+
+    <script>
+        function generateAllIcons() {
+            const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+            const output = document.getElementById('output');
+            output.innerHTML = '<h2>Generated Icons:</h2>';
+
+            sizes.forEach(size => {
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+
+                // Create gradient background
+                const gradient = ctx.createLinearGradient(0, 0, size, size);
+                gradient.addColorStop(0, '#2563eb');
+                gradient.addColorStop(1, '#1d4ed8');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, size, size);
+
+                // Add rounded corners effect
+                ctx.globalCompositeOperation = 'destination-in';
+                ctx.beginPath();
+                ctx.roundRect(0, 0, size, size, size * 0.1);
+                ctx.fill();
+                ctx.globalCompositeOperation = 'source-over';
+
+                // Add text
+                ctx.fillStyle = 'white';
+                ctx.font = `bold ${size * 0.3}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('GR', size / 2, size / 2);
+
+                // Create preview
+                const preview = document.createElement('div');
+                preview.className = 'icon-preview';
+                
+                const previewCanvas = canvas.cloneNode();
+                const previewCtx = previewCanvas.getContext('2d');
+                previewCtx.drawImage(canvas, 0, 0);
+                
+                preview.appendChild(previewCanvas);
+                preview.innerHTML += `<br><small>${size}x${size}</small>`;
+                
+                // Create download link
+                canvas.toBlob(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `icon-${size}x${size}.png`;
+                    a.textContent = `Download ${size}x${size}`;
+                    a.style.display = 'block';
+                    a.style.marginTop = '5px';
+                    preview.appendChild(a);
+                });
+
+                output.appendChild(preview);
+            });
+
+            // Add instructions
+            const instructions = document.createElement('div');
+            instructions.innerHTML = `
+                <h3>Instructions:</h3>
+                <ol>
+                    <li>Download all the generated icons above</li>
+                    <li>Save them in the <code>public/icons/</code> directory</li>
+                    <li>The PWA will automatically use these icons</li>
+                </ol>
+                <p><strong>Note:</strong> For production, consider using a professional logo design tool to create higher quality icons.</p>
+            `;
+            output.appendChild(instructions);
+        }
+
+        // Polyfill for roundRect if not available
+        if (!CanvasRenderingContext2D.prototype.roundRect) {
+            CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+                this.beginPath();
+                this.moveTo(x + radius, y);
+                this.lineTo(x + width - radius, y);
+                this.quadraticCurveTo(x + width, y, x + width, y + radius);
+                this.lineTo(x + width, y + height - radius);
+                this.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+                this.lineTo(x + radius, y + height);
+                this.quadraticCurveTo(x, y + height, x, y + height - radius);
+                this.lineTo(x, y + radius);
+                this.quadraticCurveTo(x, y, x + radius, y);
+                this.closePath();
+            };
+        }
+    </script>
+</body>
+</html>

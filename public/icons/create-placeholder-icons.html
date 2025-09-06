@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Generate PWA Icons</title>
+</head>
+<body>
+    <h1>PWA Icon Generator</h1>
+    <p>This will generate placeholder icons for development. Replace with actual icons for production.</p>
+    <button onclick="generateIcons()">Generate Icons</button>
+    <div id="output"></div>
+
+    <script>
+        function generateIcons() {
+            const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+            const output = document.getElementById('output');
+            output.innerHTML = '';
+
+            sizes.forEach(size => {
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+
+                // Create gradient background
+                const gradient = ctx.createLinearGradient(0, 0, size, size);
+                gradient.addColorStop(0, '#2563eb');
+                gradient.addColorStop(1, '#1d4ed8');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, size, size);
+
+                // Add text
+                ctx.fillStyle = 'white';
+                ctx.font = `bold ${size * 0.3}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('GR', size / 2, size / 2);
+
+                // Convert to blob and create download link
+                canvas.toBlob(blob => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `icon-${size}x${size}.png`;
+                    a.textContent = `Download icon-${size}x${size}.png`;
+                    a.style.display = 'block';
+                    a.style.margin = '5px 0';
+                    output.appendChild(a);
+                });
+            });
+        }
+    </script>
+</body>
+</html>

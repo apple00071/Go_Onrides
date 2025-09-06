@@ -28,7 +28,7 @@ interface BookingDetails extends Omit<GlobalBookingDetails, 'signatures'> {
 interface EditBookingModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onBookingUpdated: (updatedBooking: BookingDetails) => void;
+  onBookingUpdated: (updatedBooking: BookingDetails) => Promise<void>;
   booking: BookingDetails;
 }
 
@@ -262,15 +262,19 @@ export default function EditBookingModal({
 
   useEffect(() => {
     const fetchUserRole = async () => {
-      const supabase = getSupabaseClient();
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', session.user.id)
-          .single();
-        setUserRole(profile?.role || null);
+      try {
+        const supabase = getSupabaseClient();
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', session.user.id)
+            .single();
+          setUserRole(profile?.role || null);
+        }
+      } catch (error) {
+        console.error('Error fetching user role:', error);
       }
     };
 
@@ -635,7 +639,7 @@ export default function EditBookingModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     // Check if user has admin role
     if (userRole !== 'admin') {
       setError('Unauthorized - Only administrators can modify bookings');
@@ -649,15 +653,12 @@ export default function EditBookingModal({
       const supabase = getSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
 
-      // Prepare update data
+      // Prepare update data - only include fields that exist in the bookings table
       const updateData = {
         customer_name: formData.customer_name,
         customer_contact: formData.customer_contact,
         customer_email: formData.customer_email,
-        alternative_phone: formData.alternative_phone,
         emergency_contact_phone: formData.emergency_contact_phone,
-        emergency_contact_phone1: formData.emergency_contact_phone1,
-        colleague_phone: formData.colleague_phone,
         aadhar_number: formData.aadhar_number,
         date_of_birth: formData.date_of_birth,
         dl_number: formData.dl_number,
@@ -695,6 +696,32 @@ export default function EditBookingModal({
       if (updateError) throw updateError;
       if (!updatedBooking) throw new Error('Failed to update booking');
 
+      // Update customer information if customer_id exists
+      if (booking.customer_id) {
+        const customerUpdateData = {
+          name: formData.customer_name,
+          phone: formData.customer_contact,
+          email: formData.customer_email,
+          alternative_phone: formData.alternative_phone,
+          emergency_contact_phone: formData.emergency_contact_phone,
+          emergency_contact_phone1: formData.emergency_contact_phone1,
+          aadhar_number: formData.aadhar_number,
+          dob: formData.date_of_birth,
+          dl_number: formData.dl_number,
+          dl_expiry_date: formData.dl_expiry_date
+        };
+
+        const { error: customerUpdateError } = await supabase
+          .from('customers')
+          .update(customerUpdateData)
+          .eq('id', booking.customer_id);
+
+        if (customerUpdateError) {
+          console.warn('Failed to update customer information:', customerUpdateError);
+          // Don't throw error for customer update failure, just log it
+        }
+      }
+
       // Send notification about the booking update
       if (booking.status !== updatedBooking.status) {
         await notifyBookingEvent(
@@ -710,7 +737,7 @@ export default function EditBookingModal({
       }
 
       toast.success('Booking updated successfully!');
-      onBookingUpdated(updatedBooking);
+      await onBookingUpdated(updatedBooking);
       onClose();
     } catch (error) {
       console.error('Error updating booking:', error);
@@ -736,6 +763,11 @@ export default function EditBookingModal({
           </div>
 
           <div className="flex-1 overflow-y-auto p-4">
+            {error && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                {error}
+              </div>
+            )}
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Customer Information */}
               <div className="space-y-6">
