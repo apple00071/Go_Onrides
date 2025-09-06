@@ -9,8 +9,8 @@ import { Database, BookingRecord, PaymentRecord } from '@/types/bookings';
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'goonriders6@gmail.com',
-    pass: 'xzqu ujms cmak scfw'
+    user: process.env.EMAIL_USER || 'goonriders6@gmail.com',
+    pass: process.env.EMAIL_PASSWORD || 'xzqu ujms cmak scfw'
   }
 });
 
@@ -373,8 +373,8 @@ export async function POST(request: Request) {
 
     // Send email
     await transporter.sendMail({
-      from: 'goonriders6@gmail.com',
-      to: 'goonriders6@gmail.com',
+      from: process.env.EMAIL_USER || 'goonriders6@gmail.com',
+      to: process.env.ADMIN_EMAIL || 'goonriders6@gmail.com',
       subject: `Report - ${formatDate(start)} to ${formatDate(end)}`,
       html: reportHtml
     });
