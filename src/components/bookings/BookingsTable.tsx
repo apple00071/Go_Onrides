@@ -126,7 +126,7 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                 tabIndex={0}
                 role="button"
               >
-                <td className="whitespace-nowrap px-6 py-4">
+                <td className="whitespace-nowrap px-6 py-4 align-top">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-gray-900">
                       #{booking.booking_id || booking.id.slice(0, 8)}
@@ -135,9 +135,34 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                       <User className="h-3 w-3" />
                       <span>{booking.created_by_user?.username || 'Unknown'}</span>
                     </div>
+
+                    {/* Mobile-only expanded details */}
+                    <div className="mt-2 space-y-1 md:hidden text-xs text-gray-600">
+                      <div>
+                        <span className="font-medium text-gray-700">Customer:</span>
+                        <span className="ml-1">{booking.customer_name}</span>
+                        {booking.customer_contact ? <span className="ml-1 text-gray-500">• {booking.customer_contact}</span> : null}
+                      </div>
+                      <div>
+                        <span className="font-medium text-gray-700">Vehicle:</span>
+                        <span className="ml-1">{booking.vehicle_details.model}</span>
+                        <span className="ml-1 text-gray-500">• {booking.vehicle_details.registration}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Clock className="h-3 w-3 text-gray-500" />
+                        <span>
+                          {formatDate(booking.start_date)} {formatTime(booking.pickup_time || '')}
+                          <span className="mx-1 text-gray-500">to</span>
+                          {formatDate(booking.end_date)} {formatTime(booking.dropoff_time || '')}
+                        </span>
+                      </div>
+                      {typeof booking.paid_amount !== 'undefined' && (
+                        <div className="text-gray-500">Paid: {formatCurrency(booking.paid_amount || 0)}</div>
+                      )}
+                    </div>
                   </div>
                 </td>
-                <td className="px-6 py-4 hidden md:table-cell">
+                <td className="px-6 py-4 hidden md:table-cell align-top">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-gray-900">
                       {booking.customer_name}
@@ -147,7 +172,7 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
                     </span>
                   </div>
                 </td>
-                <td className="px-6 py-4 hidden md:table-cell">
+                <td className="px-6 py-4 hidden md:table-cell align-top">
                   <div className="flex flex-col">
                     <span className="text-sm font-medium text-gray-900">
                       {booking.vehicle_details.model}
