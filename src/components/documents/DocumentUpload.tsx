@@ -179,19 +179,25 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
 
   const handleRemoveDocument = async (type: keyof UploadedDocuments) => {
     try {
+      console.log('Removing document:', type, 'Current documents:', documents);
       setUploading(true);
 
       // If there's an existing file, delete it from storage
       if (documents[type]) {
+        console.log('Deleting from storage:', documents[type]);
         const { error } = await supabase.storage
           .from(STORAGE_BUCKET)
           .remove([documents[type]!]);
 
-        if (error) throw error;
+        if (error) {
+          console.error('Storage deletion error:', error);
+          throw error;
+        }
 
         // Update state
         const newDocuments = { ...documents };
         delete newDocuments[type];
+        console.log('New documents after removal:', newDocuments);
         setDocuments(newDocuments);
 
         // Reset file inputs
@@ -219,9 +225,13 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         });
 
         // Notify parent component with updated documents
+        console.log('Notifying parent with updated documents:', newDocuments);
         onDocumentsUploaded(newDocuments);
 
         toast.success('Document removed successfully');
+      } else {
+        console.log('No document to remove for type:', type);
+        toast.info('No document to remove');
       }
     } catch (error) {
       console.error('Error removing file:', error);
@@ -309,22 +319,34 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                       />
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('Reupload button clicked for:', type);
                           const input = fileInputRefs.current[`${type}_reupload`];
                           if (input) {
                             input.click();
+                          } else {
+                            console.error('Reupload input not found for:', type);
                           }
                         }}
                         className="p-1 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors"
                         title="Reupload"
+                        disabled={uploading}
                       >
                         <RefreshCw className="h-4 w-4 text-blue-600" />
                       </button>
                       <button
                         type="button"
-                        onClick={() => handleRemoveDocument(type)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('Remove button clicked for:', type);
+                          handleRemoveDocument(type);
+                        }}
                         className="p-1 bg-red-100 rounded-full hover:bg-red-200 transition-colors"
                         title="Remove file"
+                        disabled={uploading}
                       >
                         <X className="h-4 w-4 text-red-600" />
                       </button>
