@@ -33,10 +33,16 @@ interface BookingListProps {
 export default function BookingList({ bookings }: BookingListProps) {
   const router = useRouter();
   const [isMobile, setIsMobile] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   useEffect(() => {
+    // Set client-side flag to prevent hydration mismatch
+    setIsClient(true);
+
     const checkScreenSize = () => {
-      setIsMobile(window.innerWidth < 1024); // lg breakpoint
+      const mobile = window.innerWidth < 1024; // lg breakpoint
+      console.log('Screen width:', window.innerWidth, 'isMobile:', mobile);
+      setIsMobile(mobile);
     };
 
     checkScreenSize();
@@ -72,8 +78,26 @@ export default function BookingList({ bookings }: BookingListProps) {
     return paidAmount >= totalRequired ? 'full' : paidAmount > 0 ? 'partial' : 'pending';
   };
 
+  // Don't render anything until client-side hydration is complete
+  if (!isClient) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <div className="text-gray-500">Loading...</div>
+      </div>
+    );
+  }
+
+  console.log('Rendering BookingList - isMobile:', isMobile, 'isClient:', isClient);
+
   return (
     <>
+      {/* Debug info - remove in production */}
+      <div className="mb-2 p-2 bg-yellow-100 text-xs text-yellow-800 rounded">
+        Debug: Screen width: {typeof window !== 'undefined' ? window.innerWidth : 'N/A'}px |
+        isMobile: {isMobile.toString()} |
+        View: {isMobile ? 'Mobile Cards' : 'Desktop Table'}
+      </div>
+
       {/* Desktop table view */}
       {!isMobile && (
         <div className="overflow-x-auto">
