@@ -177,26 +177,31 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadedDocuments) => {
+    // Prevent any form submission
+    event.preventDefault();
+    event.stopPropagation();
+
     const file = event.target.files?.[0];
+
     if (file) {
       handleFileUpload(file, type);
     }
+
+    // Clear the input value to allow re-selecting the same file
+    event.target.value = '';
   };
 
   const handleRemoveDocument = async (type: keyof UploadedDocuments) => {
     try {
-      console.log('Removing document:', type, 'Current documents:', documents);
       setUploading(true);
 
       // If there's an existing file, delete it from storage
       if (documents[type]) {
-        console.log('Deleting from storage:', documents[type]);
         const { error } = await supabase.storage
           .from(STORAGE_BUCKET)
           .remove([documents[type]!]);
 
         if (error) {
-          console.error('Storage deletion error:', error);
           throw error;
         }
 
@@ -433,7 +438,6 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                   onChange={(e) => handleFileChange(e, type)}
                   className="hidden"
                   ref={(el) => setFileInputRef(type, el)}
-                  name={type}
                 />
                 <input
                   type="file"
@@ -442,7 +446,6 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                   onChange={(e) => handleFileChange(e, type)}
                   className="hidden"
                   ref={(el) => setFileInputRef(`${type}_camera`, el)}
-                  name={`${type}_camera`}
                 />
                 <div className="flex flex-col items-center space-y-2">
                   <Upload className="h-8 w-8 text-gray-400" />
@@ -450,10 +453,15 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                   <div className="flex space-x-2">
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Browse files clicked for:', type);
                         const input = fileInputRefs.current[type];
                         if (input) {
                           input.click();
+                        } else {
+                          console.error('File input not found for:', type);
                         }
                       }}
                       className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
@@ -462,10 +470,15 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('Take photo clicked for:', type);
                         const input = fileInputRefs.current[`${type}_camera`];
                         if (input) {
                           input.click();
+                        } else {
+                          console.error('Camera input not found for:', type);
                         }
                       }}
                       className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"

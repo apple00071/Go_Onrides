@@ -37,17 +37,23 @@ export default function DashboardLayout({
 
     const checkSession = async () => {
       try {
-        console.log('🔍 Dashboard Layout: Checking session...');
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🔍 Dashboard Layout: Checking session...');
+        }
         setLoading(true); // Ensure loading is set to true at start
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError) {
-          console.error('❌ Dashboard Layout: Session error:', sessionError);
+          if (process.env.NODE_ENV === 'development') {
+            console.error('❌ Dashboard Layout: Session error:', sessionError);
+          }
           throw sessionError;
         }
 
         if (!session) {
-          console.log('❌ Dashboard Layout: No session found, redirecting to login...');
+          if (process.env.NODE_ENV === 'development') {
+            console.log('❌ Dashboard Layout: No session found, redirecting to login...');
+          }
           if (mounted) {
             setLoading(false);
             router.replace('/login');

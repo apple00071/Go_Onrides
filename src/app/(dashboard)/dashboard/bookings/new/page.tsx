@@ -487,6 +487,33 @@ export default function NewBookingPage() {
     }
   }, [formData.payment_status, formData.total_amount]);
 
+  // Simple form persistence for app switching
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Page is being hidden (user switching apps) - save form data
+        const hasData = formData.customer_name || formData.customer_contact || formData.vehicle_details.model;
+        if (hasData) {
+          sessionStorage.setItem('booking_form_backup', JSON.stringify(formData));
+        }
+      } else {
+        // Page is visible again - restore if needed
+        try {
+          const backup = sessionStorage.getItem('booking_form_backup');
+          if (backup) {
+            const parsed = JSON.parse(backup);
+            setFormData(prev => ({ ...prev, ...parsed }));
+          }
+        } catch (error) {
+          // Ignore restore errors
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [formData]);
+
   // Update the checkExistingCustomer function
   const checkExistingCustomer = async (aadharNumber: string) => {
     if (!aadharNumber || aadharNumber.length !== 12) return;
@@ -622,7 +649,6 @@ export default function NewBookingPage() {
   };
 
   const handleDocumentsUploaded = (documents: UploadedDocuments) => {
-    console.log('handleDocumentsUploaded called with:', documents);
     setFormData(prev => {
       // Use the documents object directly from DocumentUpload component
       // It already has the correct state (with removals handled)
@@ -638,11 +664,7 @@ export default function NewBookingPage() {
         // If value is null/undefined/empty, don't add it (effectively removing it)
       });
 
-      console.log('Updating documents:', {
-        received: documents,
-        processed: updatedDocs,
-        tempBookingId
-      });
+
 
       return {
         ...prev,
@@ -735,9 +757,15 @@ export default function NewBookingPage() {
   };
 
   // Update the handleSubmit function
-  const handleSubmit = async (e?: FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) => {
+  const handleSubmit = async (e?: FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>, isIntentional = false) => {
     if (e) {
       e.preventDefault();
+      e.stopPropagation();
+    }
+
+    // Prevent accidental form submissions (like from file uploads)
+    if (!isIntentional && e && e.type === 'submit') {
+      return;
     }
     setSubmitting(true);
     setError(null);
@@ -908,6 +936,9 @@ export default function NewBookingPage() {
         }
       }
 
+      // Clear backup data on successful submission
+      sessionStorage.removeItem('booking_form_backup');
+
       // Show success toast and redirect
       toast.success('Booking created successfully!');
       router.push('/dashboard/bookings');
@@ -954,7 +985,28 @@ export default function NewBookingPage() {
       setTempBookingId(id);
     };
     generateTempId();
-  }, []);
+
+    // Prevent accidental page refresh/navigation when form has data
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Check if form has any meaningful data
+      const hasData = formData.customer_name ||
+                     formData.customer_contact ||
+                     formData.vehicle_details.model ||
+                     Object.keys(formData.uploaded_documents || {}).length > 0;
+
+      if (hasData && !submitting) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return 'You have unsaved changes. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [formData, submitting]);
 
   // Add useEffect to get user data
   useEffect(() => {
@@ -1043,7 +1095,15 @@ export default function NewBookingPage() {
   // Add a new handler for button clicks
   const handleButtonClick: React.MouseEventHandler<HTMLButtonElement> = (e) => {
     e.preventDefault();
-    handleSubmit();
+    e.stopPropagation();
+    handleSubmit(e, true); // Pass true for intentional submission
+  };
+
+  // Form submission handler that prevents accidental submissions
+  const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Don't call handleSubmit here - only allow button clicks
   };
 
   return (
@@ -1066,7 +1126,7 @@ export default function NewBookingPage() {
             </h1>
           </div>
 
-          <form onSubmit={handleSubmit} className="p-6">
+          <form onSubmit={handleFormSubmit} className="p-6">
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md mb-6">
                 {error}
