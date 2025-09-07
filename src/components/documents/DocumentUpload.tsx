@@ -231,7 +231,7 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         toast.success('Document removed successfully');
       } else {
         console.log('No document to remove for type:', type);
-        toast.info('No document to remove');
+        toast('No document to remove');
       }
     } catch (error) {
       console.error('Error removing file:', error);
