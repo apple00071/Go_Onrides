@@ -234,10 +234,14 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         });
 
         // Notify parent component with updated documents
-        console.log('Notifying parent with updated documents:', newDocuments);
-        onDocumentsUploaded(newDocuments);
+        console.log('Document removed successfully. Notifying parent with updated documents:', newDocuments);
+        if (onDocumentsUploaded) {
+          onDocumentsUploaded(newDocuments);
+        } else {
+          console.error('onDocumentsUploaded callback is not provided');
+        }
 
-        toast.success('Document removed successfully');
+        toast.success(`${formatDocumentType(type)} removed successfully`);
       } else {
         console.log('No document to remove for type:', type);
         toast('No document to remove');

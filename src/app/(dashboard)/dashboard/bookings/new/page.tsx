@@ -622,31 +622,25 @@ export default function NewBookingPage() {
   };
 
   const handleDocumentsUploaded = (documents: UploadedDocuments) => {
+    console.log('handleDocumentsUploaded called with:', documents);
     setFormData(prev => {
-      // Start with existing documents or empty object
-      const existingDocs = prev.uploaded_documents || {};
-      
-      // Create a new object with both existing and new documents
-      const updatedDocs = {
-        ...existingDocs
-      };
+      // Use the documents object directly from DocumentUpload component
+      // It already has the correct state (with removals handled)
+      const updatedDocs: UploadedDocuments = {};
 
-      // Update or add new documents
+      // Process each document in the received documents object
       Object.entries(documents).forEach(([key, value]) => {
         if (value) {
           // If the value doesn't include a path, prepend the booking ID
           const documentPath = value.includes('/') ? value : `${tempBookingId}/${value}`;
           updatedDocs[key as keyof UploadedDocuments] = documentPath;
-        } else {
-          // If the value is null/undefined/empty, remove the document
-          delete updatedDocs[key as keyof UploadedDocuments];
         }
+        // If value is null/undefined/empty, don't add it (effectively removing it)
       });
 
       console.log('Updating documents:', {
-        existing: existingDocs,
-        new: documents,
-        merged: updatedDocs,
+        received: documents,
+        processed: updatedDocs,
         tempBookingId
       });
 
