@@ -81,8 +81,9 @@ const BookingsTable: React.FC<BookingsTableProps> = ({ bookings }) => {
   return (
     <div className="relative overflow-hidden rounded-lg border border-gray-200 bg-white">
       {/* Debug indicator - remove in production */}
-      <div className="md:hidden bg-yellow-100 text-yellow-800 text-xs p-2 text-center">
-        📱 Mobile View Active - Extended details should show below booking IDs
+      <div className="bg-yellow-100 text-yellow-800 text-xs p-2 text-center border-b">
+        📱 DEBUG: Screen width: {typeof window !== 'undefined' ? window.innerWidth : 'SSR'}px |
+        Mobile details: {typeof window !== 'undefined' && window.innerWidth < 768 ? 'SHOULD SHOW' : 'HIDDEN'}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full divide-y divide-gray-200">

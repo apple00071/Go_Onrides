@@ -126,8 +126,11 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
       if (fileInputRefs.current[`${type}_camera`]) {
         fileInputRefs.current[`${type}_camera`]!.value = '';
       }
-      if (fileInputRefs.current[`${type}_reupload`]) {
-        fileInputRefs.current[`${type}_reupload`]!.value = '';
+      if (fileInputRefs.current[`${type}_reupload_gallery`]) {
+        fileInputRefs.current[`${type}_reupload_gallery`]!.value = '';
+      }
+      if (fileInputRefs.current[`${type}_reupload_camera`]) {
+        fileInputRefs.current[`${type}_reupload_camera`]!.value = '';
       }
 
       // Clean up preview URL only after public URL is available
@@ -162,8 +165,11 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
       if (fileInputRefs.current[`${type}_camera`]) {
         fileInputRefs.current[`${type}_camera`]!.value = '';
       }
-      if (fileInputRefs.current[`${type}_reupload`]) {
-        fileInputRefs.current[`${type}_reupload`]!.value = '';
+      if (fileInputRefs.current[`${type}_reupload_gallery`]) {
+        fileInputRefs.current[`${type}_reupload_gallery`]!.value = '';
+      }
+      if (fileInputRefs.current[`${type}_reupload_camera`]) {
+        fileInputRefs.current[`${type}_reupload_camera`]!.value = '';
       }
     } finally {
       setUploading(false);
@@ -207,8 +213,11 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         if (fileInputRefs.current[`${type}_camera`]) {
           fileInputRefs.current[`${type}_camera`]!.value = '';
         }
-        if (fileInputRefs.current[`${type}_reupload`]) {
-          fileInputRefs.current[`${type}_reupload`]!.value = '';
+        if (fileInputRefs.current[`${type}_reupload_gallery`]) {
+          fileInputRefs.current[`${type}_reupload_gallery`]!.value = '';
+        }
+        if (fileInputRefs.current[`${type}_reupload_camera`]) {
+          fileInputRefs.current[`${type}_reupload_camera`]!.value = '';
         }
 
         // Remove from URLs and previews
@@ -310,32 +319,64 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                   />
                   {!uploading && (
                     <div className="absolute top-1 right-1 flex space-x-1">
+                      {/* Gallery upload input */}
                       <input
                         type="file"
                         accept="image/*"
                         onChange={(e) => handleFileChange(e, type)}
                         className="hidden"
-                        ref={(el) => setFileInputRef(`${type}_reupload`, el)}
+                        ref={(el) => setFileInputRef(`${type}_reupload_gallery`, el)}
                       />
+                      {/* Camera upload input */}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={(e) => handleFileChange(e, type)}
+                        className="hidden"
+                        ref={(el) => setFileInputRef(`${type}_reupload_camera`, el)}
+                      />
+                      {/* Camera button */}
                       <button
                         type="button"
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
-                          console.log('Reupload button clicked for:', type);
-                          const input = fileInputRefs.current[`${type}_reupload`];
+                          console.log('Camera reupload clicked for:', type);
+                          const input = fileInputRefs.current[`${type}_reupload_camera`];
                           if (input) {
                             input.click();
                           } else {
-                            console.error('Reupload input not found for:', type);
+                            console.error('Camera reupload input not found for:', type);
+                          }
+                        }}
+                        className="p-1 bg-green-100 rounded-full hover:bg-green-200 transition-colors"
+                        title="Take new photo"
+                        disabled={uploading}
+                      >
+                        <Camera className="h-4 w-4 text-green-600" />
+                      </button>
+                      {/* Gallery button */}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          console.log('Gallery reupload clicked for:', type);
+                          const input = fileInputRefs.current[`${type}_reupload_gallery`];
+                          if (input) {
+                            input.click();
+                          } else {
+                            console.error('Gallery reupload input not found for:', type);
                           }
                         }}
                         className="p-1 bg-blue-100 rounded-full hover:bg-blue-200 transition-colors"
-                        title="Reupload"
+                        title="Choose from gallery"
                         disabled={uploading}
                       >
-                        <RefreshCw className="h-4 w-4 text-blue-600" />
+                        <Upload className="h-4 w-4 text-blue-600" />
                       </button>
+                      {/* Remove button */}
                       <button
                         type="button"
                         onClick={(e) => {
