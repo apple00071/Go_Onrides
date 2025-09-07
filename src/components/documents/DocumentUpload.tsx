@@ -206,6 +206,23 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         console.log('New documents after removal:', newDocuments);
         setDocuments(newDocuments);
 
+        // Clear the document URL cache for this type
+        setDocumentUrls(prev => {
+          const newUrls = { ...prev };
+          delete newUrls[type];
+          return newUrls;
+        });
+
+        // Clear any temporary preview for this type
+        setTempPreviews(prev => {
+          const newPreviews = { ...prev };
+          if (newPreviews[type]) {
+            URL.revokeObjectURL(newPreviews[type]!);
+            delete newPreviews[type];
+          }
+          return newPreviews;
+        });
+
         // Reset file inputs
         if (fileInputRefs.current[type]) {
           fileInputRefs.current[type]!.value = '';
@@ -289,8 +306,12 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
   const renderUploadSection = (type: keyof UploadedDocuments, label: string) => {
     const hasFile = documents[type];
     const hasTempPreview = tempPreviews[type];
-    // Use placeholder image only if no document exists
-    const displayUrl = hasTempPreview ? tempPreviews[type] : (documentUrls[type] || (hasFile ? '' : '/placeholder-image.png'));
+    const hasAnyDocument = hasFile || hasTempPreview;
+
+    // Only show document URL if we actually have a document
+    const displayUrl = hasTempPreview ? tempPreviews[type] : (hasFile ? documentUrls[type] : null);
+
+    console.log(`Rendering ${type}:`, { hasFile, hasTempPreview, hasAnyDocument, displayUrl });
 
     if (loadingDocuments) {
       return (
@@ -310,8 +331,8 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
           {hasFile && <span className="ml-2 text-green-600 text-xs">(Document exists)</span>}
         </label>
         <div className="relative group">
-          <div className={`border-2 border-dashed rounded-lg p-4 h-40 flex flex-col items-center justify-center transition-colors ${hasFile || hasTempPreview ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'}`}>
-            {(hasFile || hasTempPreview) && displayUrl ? (
+          <div className={`border-2 border-dashed rounded-lg p-4 h-40 flex flex-col items-center justify-center transition-colors ${hasAnyDocument ? 'border-green-500 bg-green-50' : 'border-gray-300 hover:border-blue-500 hover:bg-blue-50'}`}>
+            {hasAnyDocument && displayUrl ? (
               <>
                 <div className="relative w-full h-full">
                   <Image
