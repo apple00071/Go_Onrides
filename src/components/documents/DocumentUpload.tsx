@@ -190,11 +190,9 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
         if (error) throw error;
 
         // Update state
-        setDocuments(prev => {
-          const newDocs = { ...prev };
-          delete newDocs[type];
-          return newDocs;
-        });
+        const newDocuments = { ...documents };
+        delete newDocuments[type];
+        setDocuments(newDocuments);
 
         // Reset file inputs
         if (fileInputRefs.current[type]) {
@@ -220,8 +218,8 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
           return newPreviews;
         });
 
-        // Notify parent component
-        onDocumentsUploaded({ ...documents });
+        // Notify parent component with updated documents
+        onDocumentsUploaded(newDocuments);
 
         toast.success('Document removed successfully');
       }
