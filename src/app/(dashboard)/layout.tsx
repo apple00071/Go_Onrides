@@ -23,28 +23,45 @@ export default function DashboardLayout({
 
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
     const supabase = getSupabaseClient();
+
+    // Safety timeout to prevent infinite loading
+    const safetyTimeout = setTimeout(() => {
+      if (mounted && loading) {
+        console.log('⚠️ Dashboard Layout: Safety timeout triggered, clearing loading state');
+        setLoading(false);
+        setError('Loading timeout - please refresh the page');
+      }
+    }, 10000); // 10 second timeout
 
     const checkSession = async () => {
       try {
-        console.log('Checking session...');
+        console.log('🔍 Dashboard Layout: Checking session...');
+        setLoading(true); // Ensure loading is set to true at start
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
         if (sessionError) {
-          console.error('Session error:', sessionError);
+          console.error('❌ Dashboard Layout: Session error:', sessionError);
           throw sessionError;
         }
 
         if (!session) {
-          console.log('No session found, redirecting to login...');
-          router.replace('/login');
+          console.log('❌ Dashboard Layout: No session found, redirecting to login...');
+          if (mounted) {
+            setLoading(false);
+            router.replace('/login');
+          }
           return;
         }
 
         // Only proceed if component is still mounted
-        if (!mounted) return;
+        if (!mounted) {
+          console.log('🚫 Dashboard Layout: Component unmounted, stopping...');
+          return;
+        }
 
-        console.log('Session found, fetching profile...');
+        console.log('✅ Dashboard Layout: Session found, fetching profile...');
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -52,13 +69,16 @@ export default function DashboardLayout({
           .single();
 
         if (profileError) {
-          console.error('Profile error:', profileError);
+          console.error('❌ Dashboard Layout: Profile error:', profileError);
           throw profileError;
         }
 
         if (!profile) {
-          console.log('No profile found, redirecting to login...');
-          router.replace('/login');
+          console.log('❌ Dashboard Layout: No profile found, redirecting to login...');
+          if (mounted) {
+            setLoading(false);
+            router.replace('/login');
+          }
           return;
         }
 
@@ -69,30 +89,41 @@ export default function DashboardLayout({
         // Handle role-based access control
         if (profile.role === 'worker' && currentPath.startsWith('/dashboard/admin')) {
           // Prevent workers from accessing admin routes
-          console.log('Worker attempting to access admin route, redirecting...');
-          router.replace('/dashboard/workers');
+          console.log('🔄 Dashboard Layout: Worker attempting to access admin route, redirecting...');
+          if (mounted) {
+            setLoading(false);
+            router.replace('/dashboard/workers');
+          }
           return;
         }
 
         // Only update state if component is still mounted
         if (mounted) {
-          console.log('Setting user profile:', profile);
+          console.log('✅ Dashboard Layout: Setting user profile and clearing loading:', profile);
+          clearTimeout(safetyTimeout); // Clear safety timeout since we succeeded
           setUser(profile);
           setError(null);
           setLoading(false); // Set loading to false here
+        } else {
+          console.log('🚫 Dashboard Layout: Component unmounted, not setting state');
         }
       } catch (error) {
-        console.error('Error in checkSession:', error);
+        console.error('❌ Dashboard Layout: Error in checkSession:', error);
         if (mounted) {
+          clearTimeout(safetyTimeout); // Clear safety timeout on error
           setError(error instanceof Error ? error.message : 'An error occurred');
           setLoading(false); // Make sure to set loading to false even on error
-          
+
           if (retryCount >= 2) {
+            console.log('🔄 Dashboard Layout: Max retries reached, redirecting to login');
             router.replace('/login');
           } else {
+            console.log(`🔄 Dashboard Layout: Retrying... (${retryCount + 1}/3)`);
             setRetryCount(prev => prev + 1);
             setTimeout(checkSession, 1000);
           }
+        } else {
+          console.log('🚫 Dashboard Layout: Component unmounted during error handling');
         }
       }
     };
@@ -112,7 +143,9 @@ export default function DashboardLayout({
 
     // Cleanup function
     return () => {
+      console.log('🧹 Dashboard Layout: Cleaning up...');
       mounted = false;
+      clearTimeout(safetyTimeout);
       subscription.unsubscribe();
     };
   }, [router, retryCount]);
@@ -124,6 +157,10 @@ export default function DashboardLayout({
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-sm text-gray-600">Loading your dashboard...</p>
+          <p className="mt-2 text-xs text-gray-400">Checking authentication...</p>
+          {retryCount > 0 && (
+            <p className="mt-1 text-xs text-orange-500">Retry {retryCount}/3</p>
+          )}
         </div>
       </div>
     );
