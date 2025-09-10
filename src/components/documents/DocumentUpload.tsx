@@ -183,6 +183,9 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
     event.nativeEvent.preventDefault();
     event.nativeEvent.stopImmediatePropagation();
 
+    // Mark that we're processing a camera upload
+    document.body.setAttribute('data-camera-upload-active', 'true');
+
     const file = event.target.files?.[0];
 
     if (file) {
@@ -192,6 +195,11 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
 
     // Clear the input value to prevent re-triggering
     event.target.value = '';
+
+    // Clear the camera upload flag after a delay
+    setTimeout(() => {
+      document.body.removeAttribute('data-camera-upload-active');
+    }, 3000);
 
     // Prevent any bubbling or default actions
     return false;

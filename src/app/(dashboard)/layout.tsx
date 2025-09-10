@@ -20,6 +20,7 @@ export default function DashboardLayout({
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isFileUploadActive, setIsFileUploadActive] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -134,30 +135,102 @@ export default function DashboardLayout({
       }
     };
 
-    // Set up auth state change listener
+    // Monitor file upload activity to prevent auth checks during camera workflow
+    const checkFileUploadActivity = () => {
+      // Check for camera upload flag (most reliable indicator)
+      if (document.body.hasAttribute('data-camera-upload-active')) {
+        setIsFileUploadActive(true);
+        return true;
+      }
+
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      let hasActiveUploads = false;
+
+      for (let i = 0; i < fileInputs.length; i++) {
+        const input = fileInputs[i] as HTMLInputElement;
+        if (input.files && input.files.length > 0) {
+          hasActiveUploads = true;
+          break;
+        }
+      }
+
+      // Also check for upload indicators
+      const uploadIndicators = document.querySelectorAll('[data-uploading="true"], .uploading, [class*="upload"]');
+      if (uploadIndicators.length > 0) {
+        hasActiveUploads = true;
+      }
+
+      setIsFileUploadActive(hasActiveUploads);
+      return hasActiveUploads;
+    };
+
+    // Set up auth state change listener with file upload protection
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent) => {
-      console.log('Auth state changed:', event);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Auth state changed:', event);
+      }
+
+      // Check if we're in the middle of a file upload workflow
+      const isUploadActive = checkFileUploadActivity();
+
+      if (isUploadActive) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('🚫 Ignoring auth state change during file upload:', event);
+        }
+        return; // Don't process auth changes during file uploads
+      }
+
       if (event === 'SIGNED_OUT') {
         router.replace('/login');
       } else if (event === 'SIGNED_IN' && mounted) {
-        checkSession();
+        // Add a small delay to ensure file upload is complete
+        setTimeout(() => {
+          if (!checkFileUploadActivity()) {
+            checkSession();
+          }
+        }, 1000);
       }
     });
 
-    // Initial session check
-    checkSession();
+    // Set up file upload monitoring
+    const handleFileInputChange = () => {
+      checkFileUploadActivity();
+    };
+
+    const handleVisibilityChange = () => {
+      // When page becomes visible again (e.g., returning from camera app)
+      if (!document.hidden) {
+        // Check if we have file uploads in progress
+        setTimeout(() => {
+          checkFileUploadActivity();
+        }, 500);
+      }
+    };
+
+    // Listen for file input changes and visibility changes
+    document.addEventListener('change', handleFileInputChange);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // Initial session check (only if no file uploads are active)
+    if (!checkFileUploadActivity()) {
+      checkSession();
+    }
 
     // Cleanup function
     return () => {
-      console.log('🧹 Dashboard Layout: Cleaning up...');
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🧹 Dashboard Layout: Cleaning up...');
+      }
       mounted = false;
       clearTimeout(safetyTimeout);
+      document.removeEventListener('change', handleFileInputChange);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       subscription.unsubscribe();
     };
   }, [router, retryCount]);
 
-  // Show loading spinner while checking session
-  if (loading) {
+  // Show loading spinner while checking session (but not during file uploads)
+  if (loading && !isFileUploadActive) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="text-center">
