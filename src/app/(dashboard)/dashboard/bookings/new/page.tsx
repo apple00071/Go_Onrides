@@ -1065,8 +1065,9 @@ export default function NewBookingPage() {
     const preventNavigation = (e: BeforeUnloadEvent) => {
       // Check if we're in the middle of a file upload
       const fileInputs = document.querySelectorAll('input[type="file"]');
-      for (const input of fileInputs) {
-        if ((input as HTMLInputElement).files && (input as HTMLInputElement).files!.length > 0) {
+      for (let i = 0; i < fileInputs.length; i++) {
+        const input = fileInputs[i] as HTMLInputElement;
+        if (input.files && input.files.length > 0) {
           e.preventDefault();
           e.returnValue = '';
           return '';
