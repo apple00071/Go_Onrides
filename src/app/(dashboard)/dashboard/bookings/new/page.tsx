@@ -487,32 +487,75 @@ export default function NewBookingPage() {
     }
   }, [formData.payment_status, formData.total_amount]);
 
-  // Simple form persistence for app switching
+  // Enhanced form persistence for camera photo workflow
   useEffect(() => {
-    const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Page is being hidden (user switching apps) - save form data
-        const hasData = formData.customer_name || formData.customer_contact || formData.vehicle_details.model;
-        if (hasData) {
-          sessionStorage.setItem('booking_form_backup', JSON.stringify(formData));
-        }
-      } else {
-        // Page is visible again - restore if needed
-        try {
-          const backup = sessionStorage.getItem('booking_form_backup');
-          if (backup) {
-            const parsed = JSON.parse(backup);
-            setFormData(prev => ({ ...prev, ...parsed }));
-          }
-        } catch (error) {
-          // Ignore restore errors
-        }
+    // Save form data before any potential page refresh
+    const saveFormData = () => {
+      const hasData = formData.customer_name || formData.customer_contact || formData.vehicle_details.model;
+      if (hasData) {
+        sessionStorage.setItem('booking_form_backup', JSON.stringify(formData));
+        localStorage.setItem('booking_form_backup', JSON.stringify(formData)); // Double backup
       }
     };
 
+    // Save on visibility change (app switching)
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        saveFormData();
+      }
+    };
+
+    // Save before page unload
+    const handleBeforeUnload = () => {
+      saveFormData();
+    };
+
+    // Save on focus loss (additional safety)
+    const handleBlur = () => {
+      saveFormData();
+    };
+
+    // Auto-save every 10 seconds if form has data
+    const autoSaveInterval = setInterval(() => {
+      const hasData = formData.customer_name || formData.customer_contact || formData.vehicle_details.model;
+      if (hasData) {
+        saveFormData();
+      }
+    }, 10000);
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      window.removeEventListener('blur', handleBlur);
+      clearInterval(autoSaveInterval);
+    };
   }, [formData]);
+
+  // Restore form data on component mount
+  useEffect(() => {
+    const restoreFormData = () => {
+      try {
+        // Try sessionStorage first, then localStorage
+        let backup = sessionStorage.getItem('booking_form_backup') || localStorage.getItem('booking_form_backup');
+        if (backup) {
+          const parsed = JSON.parse(backup);
+          setFormData(prev => ({ ...prev, ...parsed }));
+          // Show a brief notification that data was restored
+          setTimeout(() => {
+            toast.success('Form data restored from previous session');
+          }, 1000);
+        }
+      } catch (error) {
+        // Ignore restore errors
+      }
+    };
+
+    restoreFormData();
+  }, []); // Only run on mount
 
   // Update the checkExistingCustomer function
   const checkExistingCustomer = async (aadharNumber: string) => {
@@ -938,6 +981,7 @@ export default function NewBookingPage() {
 
       // Clear backup data on successful submission
       sessionStorage.removeItem('booking_form_backup');
+      localStorage.removeItem('booking_form_backup');
 
       // Show success toast and redirect
       toast.success('Booking created successfully!');
@@ -1003,8 +1047,25 @@ export default function NewBookingPage() {
 
     window.addEventListener('beforeunload', handleBeforeUnload);
 
+    // Global form submission prevention
+    const preventFormSubmission = (e: Event) => {
+      if (e.target && (e.target as HTMLElement).tagName === 'FORM') {
+        const form = e.target as HTMLFormElement;
+        // Check if this form contains file inputs
+        const fileInputs = form.querySelectorAll('input[type="file"]');
+        if (fileInputs.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        }
+      }
+    };
+
+    document.addEventListener('submit', preventFormSubmission, true);
+
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('submit', preventFormSubmission, true);
     };
   }, [formData, submitting]);
 
@@ -1099,11 +1160,22 @@ export default function NewBookingPage() {
     handleSubmit(e, true); // Pass true for intentional submission
   };
 
-  // Form submission handler that prevents accidental submissions
+  // Enhanced form submission handler that prevents ALL accidental submissions
   const handleFormSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     e.stopPropagation();
+
+    // Additional safety: check if this was triggered by a file input
+    const target = e.target as HTMLFormElement;
+    const activeElement = document.activeElement;
+
+    if (activeElement && activeElement.tagName === 'INPUT' && (activeElement as HTMLInputElement).type === 'file') {
+      // This was triggered by a file input - absolutely prevent it
+      return false;
+    }
+
     // Don't call handleSubmit here - only allow button clicks
+    return false;
   };
 
   return (

@@ -176,19 +176,25 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
     }
   };
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadedDocuments) => {
-    // Prevent any form submission
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadedDocuments) => {
+    // Prevent any form submission or page refresh
     event.preventDefault();
     event.stopPropagation();
 
     const file = event.target.files?.[0];
 
     if (file) {
-      handleFileUpload(file, type);
+      // Use setTimeout to ensure the file handling doesn't interfere with page navigation
+      setTimeout(() => {
+        handleFileUpload(file, type);
+      }, 100);
     }
 
-    // Clear the input value to allow re-selecting the same file
+    // Clear the input value immediately to prevent any form submission
     event.target.value = '';
+
+    // Return false to prevent any default behavior
+    return false;
   };
 
   const handleRemoveDocument = async (type: keyof UploadedDocuments) => {
