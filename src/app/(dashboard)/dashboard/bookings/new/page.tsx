@@ -1061,11 +1061,37 @@ export default function NewBookingPage() {
       }
     };
 
+    // Prevent any navigation during file upload
+    const preventNavigation = (e: BeforeUnloadEvent) => {
+      // Check if we're in the middle of a file upload
+      const fileInputs = document.querySelectorAll('input[type="file"]');
+      for (const input of fileInputs) {
+        if ((input as HTMLInputElement).files && (input as HTMLInputElement).files!.length > 0) {
+          e.preventDefault();
+          e.returnValue = '';
+          return '';
+        }
+      }
+    };
+
+    // Prevent page refresh during camera workflow
+    const preventRefresh = (e: KeyboardEvent) => {
+      // Prevent F5, Ctrl+R, Cmd+R
+      if (e.key === 'F5' || (e.ctrlKey && e.key === 'r') || (e.metaKey && e.key === 'r')) {
+        e.preventDefault();
+        return false;
+      }
+    };
+
     document.addEventListener('submit', preventFormSubmission, true);
+    window.addEventListener('beforeunload', preventNavigation);
+    document.addEventListener('keydown', preventRefresh);
 
     return () => {
       window.removeEventListener('beforeunload', handleBeforeUnload);
       document.removeEventListener('submit', preventFormSubmission, true);
+      window.removeEventListener('beforeunload', preventNavigation);
+      document.removeEventListener('keydown', preventRefresh);
     };
   }, [formData, submitting]);
 
@@ -1198,7 +1224,19 @@ export default function NewBookingPage() {
             </h1>
           </div>
 
-          <form onSubmit={handleFormSubmit} className="p-6">
+          <form
+            onSubmit={handleFormSubmit}
+            className="p-6"
+            noValidate
+            autoComplete="off"
+            onKeyDown={(e) => {
+              // Prevent Enter key from submitting form
+              if (e.key === 'Enter' && e.target !== e.currentTarget) {
+                e.preventDefault();
+                return false;
+              }
+            }}
+          >
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-md mb-6">
                 {error}
@@ -1754,11 +1792,25 @@ export default function NewBookingPage() {
               <div>
                 <h3 className="text-lg font-medium text-gray-900 mb-4">Documents</h3>
                 {tempBookingId && (
-                  <DocumentUpload
-                    bookingId={tempBookingId}
-                    onDocumentsUploaded={handleDocumentsUploaded}
-                    existingDocuments={formData.uploaded_documents}
-                  />
+                  <div
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      return false;
+                    }}
+                    onClick={(e) => {
+                      // Prevent any click events from bubbling up to form
+                      if ((e.target as HTMLElement).tagName === 'INPUT' && (e.target as HTMLInputElement).type === 'file') {
+                        e.stopPropagation();
+                      }
+                    }}
+                  >
+                    <DocumentUpload
+                      bookingId={tempBookingId}
+                      onDocumentsUploaded={handleDocumentsUploaded}
+                      existingDocuments={formData.uploaded_documents}
+                    />
+                  </div>
                 )}
               </div>
 

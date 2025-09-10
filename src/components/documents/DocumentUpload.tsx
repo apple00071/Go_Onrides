@@ -176,24 +176,24 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
     }
   };
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadedDocuments) => {
-    // Prevent any form submission or page refresh
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>, type: keyof UploadedDocuments) => {
+    // Immediately prevent any default behavior
     event.preventDefault();
     event.stopPropagation();
+    event.nativeEvent.preventDefault();
+    event.nativeEvent.stopImmediatePropagation();
 
     const file = event.target.files?.[0];
 
     if (file) {
-      // Use setTimeout to ensure the file handling doesn't interfere with page navigation
-      setTimeout(() => {
-        handleFileUpload(file, type);
-      }, 100);
+      // Process file immediately but prevent any navigation
+      handleFileUpload(file, type);
     }
 
-    // Clear the input value immediately to prevent any form submission
+    // Clear the input value to prevent re-triggering
     event.target.value = '';
 
-    // Return false to prevent any default behavior
+    // Prevent any bubbling or default actions
     return false;
   };
 
@@ -444,6 +444,8 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                   onChange={(e) => handleFileChange(e, type)}
                   className="hidden"
                   ref={(el) => setFileInputRef(type, el)}
+                  form=""
+                  data-no-submit="true"
                 />
                 <input
                   type="file"
@@ -452,6 +454,8 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                   onChange={(e) => handleFileChange(e, type)}
                   className="hidden"
                   ref={(el) => setFileInputRef(`${type}_camera`, el)}
+                  form=""
+                  data-no-submit="true"
                 />
                 <div className="flex flex-col items-center space-y-2">
                   <Upload className="h-8 w-8 text-gray-400" />
@@ -462,13 +466,14 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Browse files clicked for:', type);
+                        e.nativeEvent.preventDefault();
+                        e.nativeEvent.stopImmediatePropagation();
+
                         const input = fileInputRefs.current[type];
                         if (input) {
                           input.click();
-                        } else {
-                          console.error('File input not found for:', type);
                         }
+                        return false;
                       }}
                       className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
                     >
@@ -479,13 +484,14 @@ export default function DocumentUpload({ bookingId, onDocumentsUploaded, existin
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.log('Take photo clicked for:', type);
+                        e.nativeEvent.preventDefault();
+                        e.nativeEvent.stopImmediatePropagation();
+
                         const input = fileInputRefs.current[`${type}_camera`];
                         if (input) {
                           input.click();
-                        } else {
-                          console.error('Camera input not found for:', type);
                         }
+                        return false;
                       }}
                       className="px-3 py-1 text-sm text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100"
                     >
