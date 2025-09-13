@@ -17,7 +17,7 @@ import { type FormEvent } from 'react';
 import { RefreshCw, Upload, Camera, X } from 'lucide-react';
 import { generateInvoice } from '@/lib/generateInvoice';
 import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
-import OTPVerification from '@/components/OTPVerification';
+// OTP disabled: verification component removed
 
 interface BookingFormData {
   customer_name: string;
@@ -864,10 +864,7 @@ export default function NewBookingPage() {
         throw new Error('Valid 10-digit emergency contact (Father) phone number is required');
       }
 
-      // Check if OTP is verified
-      if (!otpVerified) {
-        throw new Error('Please verify your phone number before submitting');
-      }
+      // OTP disabled: skip phone verification
 
       const supabase = getSupabaseClient();
 
@@ -1891,32 +1888,7 @@ export default function NewBookingPage() {
                 </div>
               </div>
 
-              {/* Phone Verification Section */}
-              {isFormValid && !otpVerified && (
-                <div className="space-y-6">
-                  <h3 className="text-lg font-medium text-gray-900">Phone Verification</h3>
-                  <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
-                    <p className="text-sm text-yellow-800">
-                      Please verify your phone number to complete the booking process. After verification, the phone number cannot be changed.
-                    </p>
-                  </div>
-                  <div>
-                    <OTPVerification
-                      phoneNumber={formData.customer_contact}
-                      onSuccess={(data) => {
-                        console.log('Verification successful:', data);
-                        setOtpVerified(true);
-                        setOtpError(null);
-                      }}
-                      onFailure={(error) => {
-                        console.error('Verification failed:', error);
-                        setOtpVerified(false);
-                        setOtpError('Failed to verify phone number. Please try again.');
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
+              {/* OTP disabled: no phone verification UI */}
 
               {/* Submit and Clear Buttons */}
               <div className="flex justify-between items-center space-x-4">
@@ -1930,7 +1902,7 @@ export default function NewBookingPage() {
                 <button
                   type="button"
                   onClick={handleButtonClick}
-                  disabled={!isFormValid || !otpVerified || submitting}
+                  disabled={!isFormValid || submitting}
                   className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
                 >
                   {submitting ? 'Processing...' : 'Create Booking'}

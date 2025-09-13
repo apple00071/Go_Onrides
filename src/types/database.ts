@@ -1,53 +1,22 @@
-export type Permission = {
-  // Booking related permissions
-  createBooking: boolean;
-  viewBookings: boolean;
-  manageBookings: boolean;  // Edit/cancel bookings
-  
-  // Customer related permissions
-  createCustomer: boolean;
-  viewCustomers: boolean;
-  manageCustomers: boolean;  // Edit/delete customers
-  
-  // Vehicle related permissions
-  createVehicle: boolean;
-  viewVehicles: boolean;
-  manageVehicles: boolean;  // Edit/delete vehicles
-  
-  // Maintenance related permissions
-  createMaintenance: boolean;
-  viewMaintenance: boolean;
-  manageMaintenance: boolean;  // Edit/delete maintenance records
-  
-  // Invoice and payment related permissions
-  createInvoice: boolean;
-  viewInvoices: boolean;
-  managePayments: boolean;
-  
-  // Report related permissions
-  accessReports: boolean;
-  exportReports: boolean;
-  
-  // Return related permissions
-  manageReturns: boolean;
-  viewReturns: boolean;
-  
-  // Notification related permissions
-  manageNotifications: boolean;
-  viewNotifications: boolean;
-  
-  // Settings related permissions
-  manageSettings: boolean;
-};
+export interface Permission {
+  can_create_bookings: boolean;
+  can_view_bookings: boolean;
+  can_edit_bookings: boolean;
+  can_delete_bookings: boolean;
+  can_manage_users: boolean;
+  can_view_reports: boolean;
+}
 
-export type UserProfile = {
+export interface UserProfile {
   id: string;
   email: string;
+  username: string;
   role: 'admin' | 'worker';
   permissions: Permission;
   created_at?: string;
   updated_at?: string;
-};
+  created_by?: string;
+}
 
 export type Customer = {
   id: string;

@@ -34,45 +34,12 @@ export default function CreateUserModal({
     password: '',
     role: 'worker',
     permissions: {
-      // Booking permissions
-      createBooking: false,
-      viewBookings: true,
-      manageBookings: false,
-
-      // Customer permissions
-      createCustomer: false,
-      viewCustomers: true,
-      manageCustomers: false,
-
-      // Vehicle permissions
-      createVehicle: false,
-      viewVehicles: true,
-      manageVehicles: false,
-
-      // Maintenance permissions
-      createMaintenance: false,
-      viewMaintenance: true,
-      manageMaintenance: false,
-
-      // Invoice and payment permissions
-      createInvoice: false,
-      viewInvoices: true,
-      managePayments: false,
-
-      // Report permissions
-      accessReports: false,
-      exportReports: false,
-
-      // Return permissions
-      manageReturns: false,
-      viewReturns: true,
-
-      // Notification permissions
-      manageNotifications: false,
-      viewNotifications: true,
-
-      // Settings permissions
-      manageSettings: false
+      can_create_bookings: false,
+      can_view_bookings: true,
+      can_edit_bookings: false,
+      can_delete_bookings: false,
+      can_manage_users: false,
+      can_view_reports: false
     }
   });
 
@@ -272,52 +239,18 @@ export default function CreateUserModal({
             </label>
             <div className="space-y-2">
               {renderPermissionSection("Booking Permissions", [
-                { key: "createBooking", label: "Create Booking" },
-                { key: "viewBookings", label: "View Bookings" },
-                { key: "manageBookings", label: "Manage Bookings" }
+                { key: "can_create_bookings", label: "Create Booking" },
+                { key: "can_view_bookings", label: "View Bookings" },
+                { key: "can_edit_bookings", label: "Edit Bookings" },
+                { key: "can_delete_bookings", label: "Delete Bookings" }
               ])}
               
-              {renderPermissionSection("Customer Permissions", [
-                { key: "createCustomer", label: "Create Customer" },
-                { key: "viewCustomers", label: "View Customers" },
-                { key: "manageCustomers", label: "Manage Customers" }
+              {renderPermissionSection("User Management", [
+                { key: "can_manage_users", label: "Manage Users" }
               ])}
               
-              {renderPermissionSection("Vehicle Permissions", [
-                { key: "createVehicle", label: "Create Vehicle" },
-                { key: "viewVehicles", label: "View Vehicles" },
-                { key: "manageVehicles", label: "Manage Vehicles" }
-              ])}
-              
-              {renderPermissionSection("Maintenance Permissions", [
-                { key: "createMaintenance", label: "Create Maintenance Record" },
-                { key: "viewMaintenance", label: "View Maintenance Records" },
-                { key: "manageMaintenance", label: "Manage Maintenance Records" }
-              ])}
-              
-              {renderPermissionSection("Invoice & Payment Permissions", [
-                { key: "createInvoice", label: "Create Invoice" },
-                { key: "viewInvoices", label: "View Invoices" },
-                { key: "managePayments", label: "Manage Payments" }
-              ])}
-              
-              {renderPermissionSection("Report Permissions", [
-                { key: "accessReports", label: "Access Reports" },
-                { key: "exportReports", label: "Export Reports" }
-              ])}
-              
-              {renderPermissionSection("Return Permissions", [
-                { key: "manageReturns", label: "Manage Returns" },
-                { key: "viewReturns", label: "View Returns" }
-              ])}
-              
-              {renderPermissionSection("Notification Permissions", [
-                { key: "manageNotifications", label: "Manage Notifications" },
-                { key: "viewNotifications", label: "View Notifications" }
-              ])}
-              
-              {renderPermissionSection("Settings Permissions", [
-                { key: "manageSettings", label: "Manage Settings" }
+              {renderPermissionSection("Report Access", [
+                { key: "can_view_reports", label: "View Reports" }
               ])}
             </div>
           </div>

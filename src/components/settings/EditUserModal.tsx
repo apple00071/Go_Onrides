@@ -15,44 +15,16 @@ interface EditUserModalProps {
 // Group permissions by category
 const permissionGroups: Record<string, Array<{ key: keyof Permission; label: string }>> = {
   'Booking Permissions': [
-    { key: 'createBooking', label: 'Create Booking' },
-    { key: 'viewBookings', label: 'View Bookings' },
-    { key: 'manageBookings', label: 'Manage Bookings' }
+    { key: 'can_create_bookings', label: 'Create Bookings' },
+    { key: 'can_view_bookings', label: 'View Bookings' },
+    { key: 'can_edit_bookings', label: 'Edit Bookings' },
+    { key: 'can_delete_bookings', label: 'Delete Bookings' }
   ],
-  'Customer Permissions': [
-    { key: 'createCustomer', label: 'Create Customer' },
-    { key: 'viewCustomers', label: 'View Customers' },
-    { key: 'manageCustomers', label: 'Manage Customers' }
+  'User Management': [
+    { key: 'can_manage_users', label: 'Manage Users' }
   ],
-  'Vehicle Permissions': [
-    { key: 'createVehicle', label: 'Create Vehicle' },
-    { key: 'viewVehicles', label: 'View Vehicles' },
-    { key: 'manageVehicles', label: 'Manage Vehicles' }
-  ],
-  'Maintenance Permissions': [
-    { key: 'createMaintenance', label: 'Create Maintenance' },
-    { key: 'viewMaintenance', label: 'View Maintenance' },
-    { key: 'manageMaintenance', label: 'Manage Maintenance' }
-  ],
-  'Invoice & Payment Permissions': [
-    { key: 'createInvoice', label: 'Create Invoice' },
-    { key: 'viewInvoices', label: 'View Invoices' },
-    { key: 'managePayments', label: 'Manage Payments' }
-  ],
-  'Report Permissions': [
-    { key: 'accessReports', label: 'Access Reports' },
-    { key: 'exportReports', label: 'Export Reports' }
-  ],
-  'Return Permissions': [
-    { key: 'manageReturns', label: 'Manage Returns' },
-    { key: 'viewReturns', label: 'View Returns' }
-  ],
-  'Notification Permissions': [
-    { key: 'manageNotifications', label: 'Manage Notifications' },
-    { key: 'viewNotifications', label: 'View Notifications' }
-  ],
-  'Settings Permissions': [
-    { key: 'manageSettings', label: 'Manage Settings' }
+  'Report Access': [
+    { key: 'can_view_reports', label: 'View Reports' }
   ]
 };
 
@@ -63,10 +35,23 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
   const [error, setError] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
+  // Initialize form data with user's current values
   useEffect(() => {
     if (isOpen) {
-      setRole(user.role);
-      setPermissions(user.permissions || {});
+      setFormData({
+        email: user.email,
+        username: user.username,
+        password: '',
+        role: user.role,
+        permissions: {
+          can_create_bookings: user.permissions?.can_create_bookings ?? false,
+          can_view_bookings: user.permissions?.can_view_bookings ?? true,
+          can_edit_bookings: user.permissions?.can_edit_bookings ?? false,
+          can_delete_bookings: user.permissions?.can_delete_bookings ?? false,
+          can_manage_users: user.permissions?.can_manage_users ?? false,
+          can_view_reports: user.permissions?.can_view_reports ?? false
+        }
+      });
       setError(null);
       setExpandedSection(null);
     }
@@ -125,7 +110,7 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
 
     try {
       const response = await fetch(`/api/users/${user.id}`, {
-        method: 'PATCH',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
@@ -133,12 +118,19 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
           role,
           permissions,
         }),
+        // Add cache control headers
+        cache: 'no-cache',
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (err) {
+        throw new Error('Failed to parse server response');
+      }
 
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to update user');
+        throw new Error(data?.error || `Failed to update user: ${response.statusText}`);
       }
 
       toast.success('User updated successfully');
@@ -160,6 +152,7 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
         <div className="flex justify-between items-center p-4 border-b">
           <h2 className="text-lg font-semibold">Edit User</h2>
           <button
+            type="button"
             onClick={onClose}
             className="text-gray-400 hover:text-gray-500"
           >
@@ -206,7 +199,7 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
           </div>
         </form>
 
-        <div className="flex justify-end gap-3 p-4 border-t">
+        <div className="flex justify-end gap-3 p-4 border-t mt-4">
             <button
               type="button"
               onClick={onClose}
@@ -216,7 +209,6 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
             </button>
           <button
             type="submit"
-            onClick={handleSubmit}
             disabled={isSubmitting}
             className="px-4 py-2 text-sm font-medium text-white bg-blue-600 border border-transparent rounded-md shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
           >

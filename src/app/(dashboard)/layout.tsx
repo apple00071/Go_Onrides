@@ -31,18 +31,36 @@ export default function DashboardLayout({
         setLoading(true);
         
         // Get current session
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+          throw new Error('Failed to get session');
+        }
+
         if (!session) {
           router.replace('/login');
           return;
         }
 
-        // Get user profile once
-        const { data: profile } = await supabase
+        // Get user profile with better error handling
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', session.user.id)
           .single();
+
+        if (profileError) {
+          console.error('Profile error:', profileError);
+          // Check for specific error types
+          if (profileError.code === '42P17') {
+            throw new Error('Database policy error - please contact support');
+          } else if (profileError.code === 'PGRST116') {
+            throw new Error('Profile not found');
+          } else {
+            throw new Error(`Failed to load profile: ${profileError.message}`);
+          }
+        }
 
         if (mounted) {
           setUser(profile);
@@ -50,10 +68,17 @@ export default function DashboardLayout({
           setLoading(false);
         }
       } catch (error) {
-        console.error('Error fetching user profile:', error);
+        console.error('Error in fetchUserProfile:', error);
         if (mounted) {
-          setError(error instanceof Error ? error.message : 'Failed to load user profile');
+          setError(error instanceof Error ? error.message : 'An unexpected error occurred');
           setLoading(false);
+          
+          // Redirect to login after a delay if error persists
+          setTimeout(() => {
+            if (mounted && error) {
+              router.replace('/login');
+            }
+          }, 3000);
         }
       }
     };

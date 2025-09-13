@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import { getSupabaseClient } from '@/lib/supabase';
 import { calculateReturnFees } from '@/lib/fee-calculator';
 import { CurrencyInput } from '@/components/ui/currency-input';
-import OTPVerification from '@/components/OTPVerification';
 import { sendBookingUpdateMessage } from '@/lib/whatsapp';
 
 interface BookingDetails {
@@ -41,124 +40,12 @@ interface FormData {
   notes: string;
 }
 
-const SKIP_AUTH_CHECK = true; // Skip redundant auth checks on this form page
-
 export default function CompleteBookingPage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingDetails | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  
-  // Initialize verification state from storage
-  const [isVerified, setIsVerified] = useState(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem(`booking_otp_verified_${params.id}`) === 'true';
-    }
-    return false;
-  });
-
-  // Add this effect to handle OTP verification persistence
-  useEffect(() => {
-    if (isVerified) {
-      localStorage.setItem(`booking_otp_verified_${params.id}`, 'true');
-    }
-  }, [isVerified, params.id]);
-
-  // Modify your existing useEffect to be more efficient
-  useEffect(() => {
-    let mounted = true;
-    const supabase = getSupabaseClient();
-
-    const fetchBookingDetails = async () => {
-      try {
-        setLoading(true);
-
-        // Only do a lightweight session check
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) {
-          router.replace('/login');
-          return;
-        }
-
-        // Fetch booking details
-        const { data: bookingData, error: bookingError } = await supabase
-          .from('bookings')
-          .select(`
-            *,
-            customer:customer_id (
-              contact,
-              phone
-            )
-          `)
-          .eq('booking_id', params.id)
-          .single();
-
-        if (bookingError) throw bookingError;
-        if (!bookingData) throw new Error('Booking not found');
-
-        // Use customer contact from the customer record
-        const customerContact = bookingData.customer?.contact || bookingData.customer?.phone;
-        if (!customerContact) {
-          throw new Error('Customer contact information not found');
-        }
-
-        if (mounted) {
-          setBooking({
-            ...bookingData,
-            customer_contact: customerContact
-          });
-
-          // Calculate fees
-          const actualReturnTime = new Date();
-          const expectedReturnTime = new Date(`${bookingData.end_date}T${bookingData.dropoff_time}`);
-          const fees = await calculateReturnFees(actualReturnTime, expectedReturnTime);
-          
-          setFormData(prev => ({
-            ...prev,
-            lateFee: fees.lateFee.toString(),
-            extensionFee: fees.extensionFee.toString(),
-            paymentAmount: fees.totalFees.toString()
-          }));
-
-          // Check admin status once
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', session.user.id)
-            .single();
-          
-          setIsAdmin(profile?.role === 'admin');
-        }
-      } catch (error) {
-        console.error('Error fetching booking details:', error);
-        if (mounted) {
-          setError(error instanceof Error ? error.message : 'Failed to fetch booking details');
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    fetchBookingDetails();
-
-    return () => {
-      mounted = false;
-    };
-  }, [params.id, router]);
-
-  // Add cleanup effect
-  useEffect(() => {
-    return () => {
-      // Clean up stored verification state when leaving the page
-      if (!isVerified) {
-        localStorage.removeItem(`booking_otp_verified_${params.id}`);
-      }
-    };
-  }, [params.id, isVerified]);
-
   const [formData, setFormData] = useState<FormData>({
     damageCharges: '0',
     damageDescription: '',
@@ -273,11 +160,6 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
   // Modify your handleSubmit function to handle OTP state
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isVerified) {
-      setError('Please verify your phone number to complete the booking');
-      return;
-    }
-
     setLoading(true);
     setError(null);
 
@@ -687,35 +569,20 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
               </div>
             </div>
 
-            {/* Phone Verification */}
+            {/* Terms and Conditions */}
             <div className="space-y-4 rounded-lg bg-gray-50 p-4">
-              <h3 className="font-medium">Phone Verification</h3>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+              <h3 className="font-medium">Terms and Conditions</h3>
+              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
                 <p className="text-sm text-yellow-800">
                   {termsAndConditions}
                 </p>
               </div>
-              {booking?.customer_contact ? (
-                <OTPVerification
-                  phoneNumber={booking.customer_contact}
-                  onSuccess={() => setIsVerified(true)}
-                  onFailure={(error) => {
-                    console.error('Verification failed:', error);
-                    setIsVerified(false);
-                    setError('Failed to verify phone number. Please try again.');
-                  }}
-                />
-              ) : (
-                <div className="text-sm text-red-600">
-                  Customer contact information not found. Please update the booking with valid contact information.
-                </div>
-              )}
             </div>
 
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={loading || !isVerified}
+                disabled={loading}
                 className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
               >
                 {loading ? 'Processing...' : 'Complete Booking'}

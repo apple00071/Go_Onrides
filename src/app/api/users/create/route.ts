@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic';
 export async function POST(request: Request) {
   try {
     const requestData = await request.json();
-    const { email, username, password, role, permissions } = requestData;
+    let { email, username, password, role } = requestData;
 
+    // Validate required fields
     if (!username || !password || !role) {
       return NextResponse.json(
         { error: 'Username, password and role are required' },
@@ -17,12 +18,20 @@ export async function POST(request: Request) {
       );
     }
 
-    // First check if the requesting user is an admin using the normal client
-    const supabase = createRouteHandlerClient({ cookies });
-    
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    // Generate email if not provided
+    if (!email) {
+      email = `${username.toLowerCase()}@goonriders.com`;
+    }
+
+    // Create admin client
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Get the current user's session
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const { data: { session } } = await supabase.auth.getSession();
 
     if (!session) {
       return NextResponse.json(
@@ -31,96 +40,102 @@ export async function POST(request: Request) {
       );
     }
 
-    // Verify admin status
-    const { data: adminCheck, error: adminCheckError } = await supabase
+    // Check if the current user is an admin
+    const { data: adminProfile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', session.user.id)
       .single();
 
-    if (adminCheckError || adminCheck?.role !== 'admin') {
+    if (!adminProfile || adminProfile.role !== 'admin') {
       return NextResponse.json(
-        { error: 'Not authorized' },
+        { error: 'Not authorized - only admins can create users' },
         { status: 403 }
       );
     }
 
-    // Check if username already exists
-    const { data: existingUser, error: existingUserError } = await supabase
-      .from('profiles')
-      .select('username')
-      .eq('username', username)
-      .single();
+    // Create auth user
+    console.log('Creating auth user:', { email, username });
+    
+    const { data: authData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
 
-    if (existingUser) {
+    if (createError) {
+      console.error('Auth creation error:', createError);
       return NextResponse.json(
-        { error: 'Username already exists' },
-        { status: 400 }
+        { error: 'Failed to create user account' },
+        { status: 500 }
       );
     }
 
-    // Create a new Supabase client with the service role key for admin operations
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
-    );
-
-    // Create the user using the admin client
-    const { data: userData, error: createUserError } = await supabaseAdmin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        role,
-        username
-      }
-    });
-
-    if (createUserError) {
-      throw createUserError;
+    if (!authData?.user) {
+      return NextResponse.json(
+        { error: 'Failed to create user - no user data returned' },
+        { status: 500 }
+      );
     }
 
-    if (!userData.user) {
-      throw new Error('Failed to create user');
-    }
+    // Set default permissions
+    const defaultPermissions = {
+      can_create_bookings: role === 'admin',
+      can_view_bookings: true,
+      can_edit_bookings: role === 'admin',
+      can_delete_bookings: role === 'admin',
+      can_manage_users: role === 'admin',
+      can_view_reports: role === 'admin'
+    };
 
-    // Create the user's profile using the admin client
+    // Create profile
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert({
-        id: userData.user.id,
-        email,
+      .insert([{
+        id: authData.user.id,
+        email: authData.user.email,
         username,
         role,
-        permissions
-      });
+        permissions: defaultPermissions,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        created_by: session.user.id
+      }]);
 
     if (profileError) {
-      // If profile creation fails, try to delete the auth user
-      await supabaseAdmin.auth.admin.deleteUser(userData.user.id);
-      throw profileError;
+      console.error('Profile creation error:', profileError);
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return NextResponse.json(
+        { error: 'Failed to create user profile' },
+        { status: 500 }
+      );
+    }
+
+    // Update user metadata
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+      authData.user.id,
+      { user_metadata: { username, role } }
+    );
+
+    if (updateError) {
+      console.error('Failed to update user metadata:', updateError);
     }
 
     return NextResponse.json({ 
       message: 'User created successfully',
       user: {
-        id: userData.user.id,
+        id: authData.user.id,
+        email: authData.user.email,
         username,
-        role
+        role,
+        permissions: defaultPermissions
       }
     });
+
   } catch (error) {
-    console.error('Error creating user:', error);
+    console.error('Error in user creation:', error);
     return NextResponse.json(
-      { 
-        error: error instanceof Error ? error.message : 'Failed to create user'
-      },
+      { error: 'An unexpected error occurred' },
       { status: 500 }
     );
   }
