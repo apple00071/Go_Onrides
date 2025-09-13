@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 
 interface OTPVerificationProps {
@@ -8,59 +8,77 @@ interface OTPVerificationProps {
 }
 
 export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: OTPVerificationProps) {
+  // Initialize states with persisted values
   const [loading, setLoading] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
+  const [otpSent, setOtpSent] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem(`otp_sent_${phoneNumber}`) === 'true';
+    }
+    return false;
+  });
   const [otpValue, setOtpValue] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isVerified, setIsVerified] = useState(false);
-  const [currentPhoneNumber, setCurrentPhoneNumber] = useState(phoneNumber);
-  const [showPhoneInput, setShowPhoneInput] = useState(false);
-  const [requestId, setRequestId] = useState<string>('');
+  const [isVerified, setIsVerified] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem(`otp_verified_${phoneNumber}`) === 'true';
+    }
+    return false;
+  });
+  const [currentPhoneNumber] = useState(phoneNumber);
+  const [requestId, setRequestId] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return sessionStorage.getItem(`otp_request_id_${phoneNumber}`) || '';
+    }
+    return '';
+  });
 
-  // Format phone number to ensure it's valid for India
-  const formatPhoneNumber = useCallback((phone: string) => {
-    // Remove all non-digit characters
-    const cleaned = phone.replace(/\D/g, '');
-    let formattedPhone = cleaned;
-    
-    // If number starts with 91 and is longer than 10 digits, check if removing 91 gives a valid number
-    if (cleaned.length > 10 && cleaned.startsWith('91')) {
-      const withoutCountryCode = cleaned.slice(2);
-      // Only remove 91 if the remaining number is exactly 10 digits
-      if (withoutCountryCode.length === 10) {
-        formattedPhone = withoutCountryCode;
+  // Persist states in sessionStorage
+  useEffect(() => {
+    if (otpSent) {
+      sessionStorage.setItem(`otp_sent_${phoneNumber}`, 'true');
+    } else {
+      sessionStorage.removeItem(`otp_sent_${phoneNumber}`);
+    }
+  }, [otpSent, phoneNumber]);
+
+  useEffect(() => {
+    if (isVerified) {
+      sessionStorage.setItem(`otp_verified_${phoneNumber}`, 'true');
+    }
+  }, [isVerified, phoneNumber]);
+
+  useEffect(() => {
+    if (requestId) {
+      sessionStorage.setItem(`otp_request_id_${phoneNumber}`, requestId);
+    }
+  }, [requestId, phoneNumber]);
+
+  // Cleanup function
+  useEffect(() => {
+    return () => {
+      if (!isVerified) {
+        sessionStorage.removeItem(`otp_sent_${phoneNumber}`);
+        sessionStorage.removeItem(`otp_verified_${phoneNumber}`);
+        sessionStorage.removeItem(`otp_request_id_${phoneNumber}`);
       }
-    }
-    
-    // Check if the number is valid (exactly 10 digits)
-    if (formattedPhone.length !== 10) {
-      return null;
-    }
-    
-    return formattedPhone;
-  }, []);
+    };
+  }, [phoneNumber, isVerified]);
 
   const handleSendOTP = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault(); // Prevent form submission
-    e.stopPropagation(); // Stop event propagation
+    e.preventDefault();
+    e.stopPropagation();
     
     try {
       setLoading(true);
-      setOtpSent(false);
       setOtpValue('');
       setErrorMessage(null);
-
-      const formattedPhone = formatPhoneNumber(currentPhoneNumber);
-      if (!formattedPhone) {
-        throw new Error('Please enter a valid 10-digit phone number');
-      }
 
       const response = await fetch('/api/otp/send', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ phone_number: formattedPhone })
+        body: JSON.stringify({ phone_number: currentPhoneNumber })
       });
 
       const data = await response.json();
@@ -73,7 +91,6 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
         setOtpSent(true);
         setRequestId(data.request_id);
         setErrorMessage(null);
-        setShowPhoneInput(false);
       } else {
         throw new Error(data.error || 'Failed to send OTP');
       }
@@ -87,8 +104,8 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
   };
 
   const handleVerifyOTP = async (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.preventDefault(); // Prevent form submission
-    e.stopPropagation(); // Stop event propagation
+    e.preventDefault();
+    e.stopPropagation();
     
     try {
       setLoading(true);
@@ -135,13 +152,8 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
     }
   };
 
-  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault(); // Prevent form submission
-    setCurrentPhoneNumber(e.target.value);
-  };
-
   const handleOTPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault(); // Prevent form submission
+    e.preventDefault();
     setOtpValue(e.target.value.replace(/\D/g, ''));
   };
 
@@ -171,22 +183,6 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
               <p className="text-sm font-medium text-red-800">{errorMessage}</p>
             </div>
           </div>
-        </div>
-      )}
-
-      {showPhoneInput && (
-        <div className="mt-1">
-          <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
-            Enter alternative phone number
-          </label>
-          <input
-            type="tel"
-            id="phone"
-            value={currentPhoneNumber}
-            onChange={handlePhoneChange}
-            placeholder="Enter 10-digit mobile number"
-            className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
-          />
         </div>
       )}
 
