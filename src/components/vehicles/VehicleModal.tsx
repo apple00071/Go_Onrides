@@ -49,8 +49,8 @@ export default function VehicleModal({ isOpen, onClose, onVehicleUpdated, vehicl
     e.preventDefault();
     
     // Check if user has appropriate permissions
-    const canCreate = hasPermission('createVehicle');
-    const canUpdate = hasPermission('manageVehicles');
+    const canCreate = hasPermission('can_create_bookings');
+    const canUpdate = hasPermission('can_edit_bookings');
     
     if (vehicle && !canUpdate) {
       setError('Unauthorized - You do not have permission to modify vehicles');
