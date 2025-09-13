@@ -1,11 +1,12 @@
 'use client';
 
+import React from 'react';
 import { useEffect, useState } from 'react';
 import { getSupabaseClient } from '@/lib/supabase';
 import { format } from 'date-fns';
+import BookingsTable from '@/components/bookings/BookingsTable';
 import { Search, Filter, Plus } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import BookingsTable from '@/components/bookings/BookingsTable';
 import { useRouter } from 'next/navigation';
 
 interface Booking {

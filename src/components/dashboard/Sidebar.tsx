@@ -51,13 +51,12 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home, showAlways: true },
     { name: 'Bookings', href: '/dashboard/bookings', icon: CalendarRange, showAlways: true },
-    { name: "Today's Bookings", href: '/dashboard/bookings/today', icon: CalendarRange, showAlways: true },
-    { name: "Today's Returns", href: '/dashboard/returns/today', icon: Clock, showAlways: true },
+    { name: "Today's Bookings", href: '/dashboard/bookings/today', icon: CalendarRange, adminOnly: true },
     { name: 'Customers', href: '/dashboard/customers', icon: Users, showAlways: true },
     { name: 'Vehicles', href: '/dashboard/vehicles', icon: Car, showAlways: true },
     { name: 'Maintenance', href: '/dashboard/maintenance', icon: Wrench, showAlways: true },
     { name: 'Payments', href: '/dashboard/payments', icon: IndianRupee, showAlways: true },
-    { name: "Today's Payments", href: '/dashboard/payments/today', icon: IndianRupee, showAlways: true },
+    { name: "Today's Payments", href: '/dashboard/payments/today', icon: IndianRupee, adminOnly: true },
     { name: 'Invoices', href: '/dashboard/invoices', icon: Receipt, showAlways: true },
     { name: 'Reports', href: '/dashboard/reports', icon: FileText, adminOnly: true },
     { name: 'Notifications', href: '/dashboard/notifications', icon: Bell, showAlways: true },
@@ -65,10 +64,29 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
   ];
 
   const isActive = (href: string) => {
+    // Handle exact matches
+    if (pathname === href) return true;
+    
+    // Handle dashboard home
     if (href === '/dashboard') {
-      return pathname === href || pathname === '/dashboard/';
+      return pathname === '/' || pathname === '/dashboard';
     }
-    return pathname.startsWith(href + '/') || pathname === href;
+    
+    // For other routes, check if the current path starts with the href
+    // but not if it's a parent of a more specific active route
+    if (pathname.startsWith(href + '/')) {
+      // Special handling for 'today' routes
+      if (href.endsWith('/today')) {
+        return pathname === href;
+      }
+      // Don't highlight parent if a child is active (e.g., don't highlight /bookings when on /bookings/today)
+      if (pathname.includes('/today') && !href.endsWith('/today')) {
+        return false;
+      }
+      return true;
+    }
+    
+    return false;
   };
 
   const handleSignOut = async () => {
@@ -77,9 +95,13 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
     window.location.href = '/login';
   };
 
-  const filteredNavigation = navigation.filter(item => 
-    item.showAlways || (item.adminOnly && userRole === 'admin')
-  );
+  const filteredNavigation = navigation.filter(item => {
+    // Always show items with showAlways: true
+    if (item.showAlways) return true;
+    // Show adminOnly items only if user is admin
+    if (item.adminOnly && userRole === 'admin') return true;
+    return false;
+  });
 
   return (
     <aside 
@@ -119,7 +141,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
                 onClick={() => onClose && window.innerWidth < 768 ? onClose() : null}
                 className={`
                   group flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium transition-colors touch-manipulation
-                  ${active
+                  ${isActive(item.href)
                     ? 'bg-primary-blue/10 text-primary-blue'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                   }
