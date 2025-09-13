@@ -121,13 +121,6 @@ export default function NewBookingPage() {
   const [createdBookingData, setCreatedBookingData] = useState<{ id: string; bookingId: string; invoicePdfBlob?: Blob } | null>(null);
   const [userData, setUserData] = useState<{ id: string } | null>(null);
   
-  // Add OTP related state
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpVerified, setOtpVerified] = useState(false);
-  const [otpRequestId, setOtpRequestId] = useState<string>('');
-  const [otpCode, setOtpCode] = useState('');
-  const [verifyingOtp, setVerifyingOtp] = useState(false);
-  const [otpError, setOtpError] = useState<string | null>(null);
 
   const supabase = getSupabaseClient();
 
@@ -188,8 +181,6 @@ export default function NewBookingPage() {
     // Clear stored backups
     sessionStorage.removeItem('booking_form_backup');
     localStorage.removeItem('booking_form_backup');
-    // Reset OTP verification
-    setOtpVerified(false);
     // Generate new booking ID
     const newId = await generateBookingId(supabase);
     setTempBookingId(newId);
@@ -753,81 +744,7 @@ export default function NewBookingPage() {
     }));
   };
 
-  // Add OTP handling functions
-  const handleSendOTP = async () => {
-    try {
-      setLoading(true);
-      setOtpError(null);
-
-      if (!formData.customer_contact) {
-        setOtpError('Please enter a valid phone number');
-        return;
-      }
-
-      const response = await fetch('/api/otp/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          phone_number: formData.customer_contact 
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to send OTP');
-      }
-
-      setOtpRequestId(data.request_id);
-      setOtpSent(true);
-      setOtpError(null);
-    } catch (error) {
-      console.error('Error sending OTP:', error);
-      setOtpError(error instanceof Error ? error.message : 'Failed to send OTP');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyOTP = async () => {
-    try {
-      setVerifyingOtp(true);
-      setOtpError(null);
-
-      if (!otpCode) {
-        setOtpError('Please enter the OTP');
-        return;
-      }
-
-      const response = await fetch('/api/otp/verify', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          phone_number: formData.customer_contact,
-          otp: otpCode,
-          request_id: otpRequestId
-        })
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to verify OTP');
-      }
-
-      setOtpVerified(true);
-      setOtpError(null);
-    } catch (error) {
-      console.error('Error verifying OTP:', error);
-      setOtpError(error instanceof Error ? error.message : 'Failed to verify OTP');
-    } finally {
-      setVerifyingOtp(false);
-    }
-  };
+  // Phone verification is now disabled
 
   // Update the handleSubmit function
   const handleSubmit = async (e?: FormEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>, isIntentional = false) => {
@@ -864,7 +781,6 @@ export default function NewBookingPage() {
         throw new Error('Valid 10-digit emergency contact (Father) phone number is required');
       }
 
-      // OTP disabled: skip phone verification
 
       const supabase = getSupabaseClient();
 
@@ -1327,23 +1243,12 @@ export default function NewBookingPage() {
                         required
                         value={formData.customer_contact}
                         onChange={handleInputChange}
-                        disabled={otpVerified}
-                        className={`block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm ${
-                          otpVerified ? 'bg-gray-100' : ''
-                        }`}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                         aria-required="true"
                         maxLength={12}
                         inputMode="numeric"
                       />
-                      {otpVerified && (
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                          <CheckCircleIcon className="h-5 w-5 text-green-500" />
-                        </div>
-                      )}
                     </div>
-                    {otpVerified && (
-                      <p className="mt-1 text-sm text-green-600">Phone number verified</p>
-                    )}
                   </div>
 
                   <div>
@@ -1888,7 +1793,6 @@ export default function NewBookingPage() {
                 </div>
               </div>
 
-              {/* OTP disabled: no phone verification UI */}
 
               {/* Submit and Clear Buttons */}
               <div className="flex justify-between items-center space-x-4">

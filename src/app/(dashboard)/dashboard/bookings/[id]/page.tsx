@@ -474,7 +474,7 @@ export default function BookingDetailsPage() {
         </div>
         
         <div className="flex flex-wrap gap-2">
-          {booking?.status === 'in_use' && hasPermission('manageBookings') && (
+          {booking?.status === 'in_use' && hasPermission('can_edit_bookings') && (
             <button
               onClick={() => router.push(`/dashboard/bookings/${encodeURIComponent(booking.booking_id)}/complete`)}
               className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
@@ -482,7 +482,7 @@ export default function BookingDetailsPage() {
               Complete Booking
             </button>
           )}
-          {userRole === 'admin' && hasPermission('manageBookings') && (
+          {userRole === 'admin' && hasPermission('can_edit_bookings') && (
             <button
               onClick={() => setShowEditModal(true)}
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -491,7 +491,7 @@ export default function BookingDetailsPage() {
               Edit
             </button>
           )}
-          {(booking?.status === 'confirmed' || booking?.status === 'in_use') && hasPermission('manageBookings') && (
+          {(booking?.status === 'confirmed' || booking?.status === 'in_use') && hasPermission('can_edit_bookings') && (
             <button
               onClick={() => setShowExtendModal(true)}
               className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -516,7 +516,7 @@ export default function BookingDetailsPage() {
                   <span className={`inline-flex rounded-full px-3 py-1 text-sm font-medium capitalize ${STATUS_COLORS[booking?.status || 'pending']}`}>
                     {booking?.status}
                   </span>
-                  {hasPermission('manageBookings') && booking.status !== 'completed' && booking.status !== 'cancelled' && (
+                  {hasPermission('can_edit_bookings') && booking.status !== 'completed' && booking.status !== 'cancelled' && (
                     <select
                       value={booking.status}
                       onChange={(e) => handleStatusChange(e.target.value as BookingStatus)}
