@@ -76,9 +76,25 @@ export const generateInvoice = async (data: InvoiceData): Promise<Blob> => {
   doc.text('Due in', 145, detailsY);
   doc.text('Payment Method', 210, detailsY);
 
+  // Format dates for display
+  const formatDisplayDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr; // Return original if invalid
+      return date.toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return dateStr;
+    }
+  };
+
   doc.setFont('helvetica', 'bold');
   doc.text(data.invoiceNumber, 15, detailsY + 7);
-  doc.text(data.invoiceDate, 80, detailsY + 7);
+  doc.text(formatDisplayDate(data.invoiceDate), 80, detailsY + 7);
   doc.text('0 days', 145, detailsY + 7);
   doc.text(data.paymentMethod, 210, detailsY + 7);
   doc.setFont('helvetica', 'normal');
