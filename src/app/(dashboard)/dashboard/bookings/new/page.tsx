@@ -182,7 +182,7 @@ export default function NewBookingPage() {
   const [formData, setFormData] = useState<BookingFormData>(initialFormData);
 
   // Function to clear form and stored data
-  const handleClearForm = () => {
+  const handleClearForm = async () => {
     // Clear form data
     setFormData(initialFormData);
     // Clear stored backups
@@ -190,8 +190,9 @@ export default function NewBookingPage() {
     localStorage.removeItem('booking_form_backup');
     // Reset OTP verification
     setOtpVerified(false);
-    // Reset temporary booking ID
-    generateTempId();
+    // Generate new booking ID
+    const newId = await generateBookingId(supabase);
+    setTempBookingId(newId);
     // Show success message
     toast.success('Form cleared successfully');
   };
