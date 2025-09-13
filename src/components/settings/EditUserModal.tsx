@@ -5,6 +5,14 @@ import type { Permission, UserProfile } from '@/types/database';
 
 type Role = 'admin' | 'worker';
 
+interface FormData {
+  email: string;
+  username: string;
+  password: string;
+  role: Role;
+  permissions: Permission;
+}
+
 interface EditUserModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -29,20 +37,33 @@ const permissionGroups: Record<string, Array<{ key: keyof Permission; label: str
 };
 
 const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalProps) => {
-  const [role, setRole] = useState<Role>(user.role);
-  const [permissions, setPermissions] = useState<Permission>(user.permissions || {});
+  const [formData, setFormData] = useState<FormData>({
+    email: user.email,
+    username: user.username,
+    password: '',
+    role: user.role as Role,
+    permissions: {
+      can_create_bookings: user.permissions?.can_create_bookings ?? false,
+      can_view_bookings: user.permissions?.can_view_bookings ?? true,
+      can_edit_bookings: user.permissions?.can_edit_bookings ?? false,
+      can_delete_bookings: user.permissions?.can_delete_bookings ?? false,
+      can_manage_users: user.permissions?.can_manage_users ?? false,
+      can_view_reports: user.permissions?.can_view_reports ?? false
+    }
+  });
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
-  // Initialize form data with user's current values
+  // Reset form when user changes
   useEffect(() => {
     if (isOpen) {
       setFormData({
         email: user.email,
         username: user.username,
         password: '',
-        role: user.role,
+        role: user.role as Role,
         permissions: {
           can_create_bookings: user.permissions?.can_create_bookings ?? false,
           can_view_bookings: user.permissions?.can_view_bookings ?? true,
@@ -57,10 +78,13 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
     }
   }, [isOpen, user]);
 
-  const handlePermissionChange = (key: keyof Permission, value: boolean) => {
-    setPermissions(prev => ({
+  const handlePermissionChange = (key: keyof Permission, checked: boolean) => {
+    setFormData(prev => ({
       ...prev,
-      [key]: value,
+      permissions: {
+        ...prev.permissions,
+        [key]: checked
+      }
     }));
   };
 
@@ -90,7 +114,7 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
               <label key={key} className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={!!permissions[key]}
+                  checked={!!formData.permissions[key]}
                   onChange={(e) => handlePermissionChange(key, e.target.checked)}
                   className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                 />
@@ -115,8 +139,8 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          role,
-          permissions,
+          role: formData.role,
+          permissions: formData.permissions,
         }),
         // Add cache control headers
         cache: 'no-cache',
@@ -180,8 +204,11 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700">Role</label>
             <select
-              value={role}
-              onChange={(e) => setRole(e.target.value as Role)}
+              value={formData.role}
+              onChange={(e) => setFormData(prev => ({
+                ...prev,
+                role: e.target.value as Role
+              }))}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
             >
               <option value="worker">Worker</option>
