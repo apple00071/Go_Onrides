@@ -181,6 +181,21 @@ export default function NewBookingPage() {
 
   const [formData, setFormData] = useState<BookingFormData>(initialFormData);
 
+  // Function to clear form and stored data
+  const handleClearForm = () => {
+    // Clear form data
+    setFormData(initialFormData);
+    // Clear stored backups
+    sessionStorage.removeItem('booking_form_backup');
+    localStorage.removeItem('booking_form_backup');
+    // Reset OTP verification
+    setOtpVerified(false);
+    // Reset temporary booking ID
+    generateTempId();
+    // Show success message
+    toast.success('Form cleared successfully');
+  };
+
   const getCurrentTime = () => {
     const now = new Date();
     const hours = now.getHours();
@@ -493,8 +508,12 @@ export default function NewBookingPage() {
     const saveFormData = () => {
       const hasData = formData.customer_name || formData.customer_contact || formData.vehicle_details.model;
       if (hasData) {
-        sessionStorage.setItem('booking_form_backup', JSON.stringify(formData));
-        localStorage.setItem('booking_form_backup', JSON.stringify(formData)); // Double backup
+        const dataToSave = {
+          ...formData,
+          lastSaved: new Date().toISOString()
+        };
+        sessionStorage.setItem('booking_form_backup', JSON.stringify(dataToSave));
+        localStorage.setItem('booking_form_backup', JSON.stringify(dataToSave)); // Double backup
       }
     };
 
@@ -515,13 +534,13 @@ export default function NewBookingPage() {
       saveFormData();
     };
 
-    // Auto-save every 10 seconds if form has data
+    // Auto-save every 5 seconds if form has data
     const autoSaveInterval = setInterval(() => {
       const hasData = formData.customer_name || formData.customer_contact || formData.vehicle_details.model;
       if (hasData) {
         saveFormData();
       }
-    }, 10000);
+    }, 5000);
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('beforeunload', handleBeforeUnload);
@@ -543,14 +562,24 @@ export default function NewBookingPage() {
         let backup = sessionStorage.getItem('booking_form_backup') || localStorage.getItem('booking_form_backup');
         if (backup) {
           const parsed = JSON.parse(backup);
-          setFormData(prev => ({ ...prev, ...parsed }));
-          // Show a brief notification that data was restored
-          setTimeout(() => {
+          // Only restore if data is less than 1 hour old
+          const lastSaved = new Date(parsed.lastSaved);
+          const now = new Date();
+          const hoursDiff = (now.getTime() - lastSaved.getTime()) / (1000 * 60 * 60);
+          
+          if (hoursDiff < 1) {
+            setFormData(prev => ({ ...prev, ...parsed }));
+            // Show a brief notification that data was restored
             toast.success('Form data restored from previous session');
-          }, 1000);
+          } else {
+            // Clear old backup data
+            sessionStorage.removeItem('booking_form_backup');
+            localStorage.removeItem('booking_form_backup');
+          }
         }
       } catch (error) {
         // Ignore restore errors
+        console.error('Error restoring form data:', error);
       }
     };
 
@@ -1606,40 +1635,48 @@ export default function NewBookingPage() {
                     <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
                       Start Date *
                     </label>
-                    <input
-                      id="start_date"
-                      type="date"
-                      name="start_date"
-                      required
-                      min={formatDateForInput(new Date())}
-                      max={formatDateForInput(maxStartDate)}
-                      value={formData.start_date}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                    <div className="mt-1 text-sm text-gray-500">
-                      {formData.start_date ? formatDateForDisplay(formData.start_date) : 'Not selected'}
+                    <div className="relative">
+                      <input
+                        id="start_date"
+                        type="date"
+                        name="start_date"
+                        required
+                        min={formatDateForInput(new Date())}
+                        max={formatDateForInput(maxStartDate)}
+                        value={formData.start_date}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                      {formData.start_date && (
+                        <div className="absolute right-0 top-0 h-full flex items-center pr-2">
+                          <span className="text-xs text-gray-500">{formatDateForDisplay(formData.start_date)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div>
                     <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
                       End Date *
                     </label>
-                    <input
-                      id="end_date"
-                      type="date"
-                      name="end_date"
-                      required
-                      min={formatDateForInput(minEndDate)}
-                      max={formatDateForInput(maxEndDate)}
-                      value={formData.end_date}
-                      onChange={handleInputChange}
-                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      aria-required="true"
-                    />
-                    <div className="mt-1 text-sm text-gray-500">
-                      {formData.end_date ? formatDateForDisplay(formData.end_date) : 'Not selected'}
+                    <div className="relative">
+                      <input
+                        id="end_date"
+                        type="date"
+                        name="end_date"
+                        required
+                        min={formatDateForInput(minEndDate)}
+                        max={formatDateForInput(maxEndDate)}
+                        value={formData.end_date}
+                        onChange={handleInputChange}
+                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        aria-required="true"
+                      />
+                      {formData.end_date && (
+                        <div className="absolute right-0 top-0 h-full flex items-center pr-2">
+                          <span className="text-xs text-gray-500">{formatDateForDisplay(formData.end_date)}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div>
@@ -1880,13 +1917,20 @@ export default function NewBookingPage() {
                 </div>
               )}
 
-              {/* Submit Button */}
-              <div className="flex justify-end">
+              {/* Submit and Clear Buttons */}
+              <div className="flex justify-between items-center space-x-4">
+                <button
+                  type="button"
+                  onClick={handleClearForm}
+                  className="flex-1 bg-gray-100 text-gray-700 px-4 py-2 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 border border-gray-300"
+                >
+                  Clear Form
+                </button>
                 <button
                   type="button"
                   onClick={handleButtonClick}
-                  disabled={!isFormValid || !otpVerified}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+                  disabled={!isFormValid || !otpVerified || submitting}
+                  className="flex-1 bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
                 >
                   {submitting ? 'Processing...' : 'Create Booking'}
                 </button>

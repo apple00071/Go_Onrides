@@ -27,24 +27,35 @@ export async function POST(request: Request) {
     );
 
     // Try to find user by username or email
-    const { data: profile, error: profileError } = await supabase
+    let { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('*')
-      .or(`username.eq.${username},email.eq.${username}`)
+      .select()
+      .eq('username', username)
       .single();
 
     if (profileError || !profile) {
-      console.error('Profile lookup error:', profileError);
-      return NextResponse.json(
-        { error: 'Invalid username or password' },
-        { status: 401 }
-      );
+      // If not found by username, try email
+      const { data: emailProfile, error: emailError } = await supabase
+        .from('profiles')
+        .select()
+        .eq('email', username)
+        .single();
+
+      if (emailError || !emailProfile) {
+        console.error('Profile lookup error:', profileError || emailError);
+        return NextResponse.json(
+          { error: 'Invalid username or password' },
+          { status: 401 }
+        );
+      }
+
+      profile = emailProfile;
     }
 
-    // Attempt to sign in
+    // Attempt to sign in with the found email
     const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: profile.email,
-      password: password
+      email: profile.email || `${username}@goonriders.com`, // Fallback to constructed email if not found
+      password
     });
 
     if (authError) {
@@ -60,7 +71,8 @@ export async function POST(request: Request) {
           user_email: profile.email,
           details: {
             login_method: 'password',
-            success: false
+            success: false,
+            error: authError.message
           }
         });
 

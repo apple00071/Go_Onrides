@@ -40,7 +40,8 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
     return formattedPhone;
   };
 
-  const handleSendOTP = async () => {
+  const handleSendOTP = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent form submission
     try {
       setLoading(true);
       setOtpSent(false);
@@ -51,8 +52,6 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
       if (!formattedPhone) {
         throw new Error('Please enter a valid 10-digit phone number');
       }
-
-      console.log('Attempting to send OTP to:', formattedPhone);
 
       const response = await fetch('/api/otp/send', {
         method: 'POST',
@@ -85,7 +84,8 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
     }
   };
 
-  const handleVerifyOTP = async () => {
+  const handleVerifyOTP = async (e: React.MouseEvent) => {
+    e.preventDefault(); // Prevent form submission
     try {
       setLoading(true);
       setErrorMessage(null);

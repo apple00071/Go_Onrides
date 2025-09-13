@@ -1,10 +1,17 @@
-import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+﻿import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
-  const supabase = createMiddlewareClient({ req, res });
+  
+  // Explicitly pass environment variables
+  const supabase = createMiddlewareClient({ 
+    req, 
+    res,
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  });
 
   try {
     // Refresh session if expired - required for Server Components
@@ -112,4 +119,4 @@ export const config = {
     '/dashboard/:path*',
     '/customers/:path*'
   ],
-}; 
+};

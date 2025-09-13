@@ -27,6 +27,11 @@ self.addEventListener('install', (event) => {
 
 // Fetch event - serve from cache when offline
 self.addEventListener('fetch', (event) => {
+  // Only handle GET requests for caching
+  if (event.request.method !== 'GET') {
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
@@ -76,50 +81,47 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// Background sync for offline actions
+// Handle background sync
 self.addEventListener('sync', (event) => {
   if (event.tag === 'background-sync') {
-    event.waitUntil(doBackgroundSync());
+    event.waitUntil(
+      // Handle background sync tasks
+      console.log('Background sync triggered')
+    );
   }
 });
 
-function doBackgroundSync() {
-  // Handle offline actions when connection is restored
-  return new Promise((resolve) => {
-    // This would sync any offline data
-    console.log('Background sync triggered');
-    resolve();
-  });
-}
-
-// Push notifications (optional)
+// Handle push notifications
 self.addEventListener('push', (event) => {
-  const options = {
-    body: event.data ? event.data.text() : 'New notification from Go-On Rides',
-    icon: '/icons/icon-192x192.png',
-    badge: '/icons/icon-72x72.png',
-    vibrate: [100, 50, 100],
-    data: {
-      dateOfArrival: Date.now(),
-      primaryKey: 1
-    },
-    actions: [
-      {
-        action: 'explore',
-        title: 'View Details',
-        icon: '/icons/icon-96x96.png'
+  if (event.data) {
+    const data = event.data.json();
+    const options = {
+      body: data.body,
+      icon: '/icon-192x192.png',
+      badge: '/icon-72x72.png',
+      vibrate: [100, 50, 100],
+      data: {
+        dateOfArrival: Date.now(),
+        primaryKey: 1
       },
-      {
-        action: 'close',
-        title: 'Close',
-        icon: '/icons/icon-96x96.png'
-      }
-    ]
-  };
+      actions: [
+        {
+          action: 'explore',
+          title: 'Go to Dashboard',
+          icon: '/icon-192x192.png'
+        },
+        {
+          action: 'close',
+          title: 'Close',
+          icon: '/icon-192x192.png'
+        }
+      ]
+    };
 
-  event.waitUntil(
-    self.registration.showNotification('Go-On Rides', options)
-  );
+    event.waitUntil(
+      self.registration.showNotification(data.title, options)
+    );
+  }
 });
 
 // Handle notification clicks
