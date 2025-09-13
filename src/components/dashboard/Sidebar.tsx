@@ -51,11 +51,13 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
   const navigation = [
     { name: 'Dashboard', href: '/dashboard', icon: Home, showAlways: true },
     { name: 'Bookings', href: '/dashboard/bookings', icon: CalendarRange, showAlways: true },
+    { name: "Today's Bookings", href: '/dashboard/bookings/today', icon: CalendarRange, showAlways: true },
     { name: "Today's Returns", href: '/dashboard/returns/today', icon: Clock, showAlways: true },
     { name: 'Customers', href: '/dashboard/customers', icon: Users, showAlways: true },
     { name: 'Vehicles', href: '/dashboard/vehicles', icon: Car, showAlways: true },
     { name: 'Maintenance', href: '/dashboard/maintenance', icon: Wrench, showAlways: true },
     { name: 'Payments', href: '/dashboard/payments', icon: IndianRupee, showAlways: true },
+    { name: "Today's Payments", href: '/dashboard/payments/today', icon: IndianRupee, showAlways: true },
     { name: 'Invoices', href: '/dashboard/invoices', icon: Receipt, showAlways: true },
     { name: 'Reports', href: '/dashboard/reports', icon: FileText, adminOnly: true },
     { name: 'Notifications', href: '/dashboard/notifications', icon: Bell, showAlways: true },
@@ -107,12 +109,12 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
       </div>
       
       <div className="flex flex-col h-[calc(100dvh-4rem)] overflow-y-auto">
-        <nav className="flex-1 space-y-1 px-3 py-4">
+        <nav className="flex-1 px-3 py-4 space-y-1">
           {filteredNavigation.map((item) => {
             const active = isActive(item.href);
             return (
               <Link
-                key={item.name}
+                key={item.href}
                 href={item.href}
                 onClick={() => onClose && window.innerWidth < 768 ? onClose() : null}
                 className={`
