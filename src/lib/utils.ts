@@ -125,23 +125,47 @@ export function formatPercentage(number: number): string {
 }
 
 // Format date for display (DD/MM/YYYY)
-export function formatDateForDisplay(date: string | Date): string {
+export function formatDateForDisplay(date: string | Date | null | undefined): string {
+  if (!date) return '';
+  
   const d = new Date(date);
-  return new Intl.DateTimeFormat('en-IN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    timeZone: 'Asia/Kolkata'
-  }).format(d);
+  if (isNaN(d.getTime())) {
+    console.error('Invalid date provided to formatDateForDisplay:', date);
+    return '';
+  }
+  
+  try {
+    return new Intl.DateTimeFormat('en-IN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    }).format(d);
+  } catch (error) {
+    console.error('Error formatting date for display:', error);
+    return '';
+  }
 }
 
 // Format date for input fields (YYYY-MM-DD)
-export function formatDateForInput(date: string | Date): string {
+export function formatDateForInput(date: string | Date | null | undefined): string {
+  if (!date) return '';
+  
   const d = new Date(date);
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
+  if (isNaN(d.getTime())) {
+    console.error('Invalid date provided to formatDateForInput:', date);
+    return '';
+  }
+  
+  try {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error('Error formatting date for input:', error);
+    return '';
+  }
 }
 
 // Parse date from display format (DD/MM/YYYY) to ISO format

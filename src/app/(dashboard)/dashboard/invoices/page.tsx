@@ -30,18 +30,27 @@ interface InvoiceFormData {
 
 export default function InvoicesPage() {
   const [loading, setLoading] = useState(false);
+  // Helper function to get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [formData, setFormData] = useState<InvoiceFormData>({
     customerName: '',
     gstNumber: '',
     invoiceNumber: `INV${Math.floor(Math.random() * 1000000)}`,
-    invoiceDate: formatDateForDisplay(new Date()),
+    invoiceDate: getTodayDate(),
     paymentMethod: 'Bank Transfer',
     vehicleDetails: {
       model: '',
       registration: ''
     },
-    pickupDate: formatDateForDisplay(new Date()),
-    dropoffDate: formatDateForDisplay(new Date()),
+    pickupDate: getTodayDate(),
+    dropoffDate: getTodayDate(),
     items: [
       {
         description: '',
@@ -52,20 +61,12 @@ export default function InvoicesPage() {
     ]
   });
 
-  // Helper function to convert date format for input
-  const handleDateChange = (field: string, value: string) => {
-    try {
-      const date = new Date(value);
-      setFormData(prev => ({
-        ...prev,
-        [field]: formatDateForDisplay(date)
-      }));
-    } catch {
-      setFormData(prev => ({
-        ...prev,
-        [field]: ''
-      }));
-    }
+  // Helper function to handle date changes
+  const handleDateChange = (field: 'invoiceDate' | 'pickupDate' | 'dropoffDate', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value || getTodayDate() // Fallback to today's date if empty
+    }));
   };
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -213,7 +214,7 @@ export default function InvoicesPage() {
                   <input
                     type="date"
                     required
-                    value={formatDateForInput(formData.invoiceDate)}
+                    value={formData.invoiceDate}
                     onChange={(e) => handleDateChange('invoiceDate', e.target.value)}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
@@ -265,7 +266,7 @@ export default function InvoicesPage() {
                   <input
                     type="date"
                     required
-                    value={formatDateForInput(formData.pickupDate)}
+                    value={formData.pickupDate}
                     onChange={(e) => handleDateChange('pickupDate', e.target.value)}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
@@ -281,7 +282,7 @@ export default function InvoicesPage() {
                   <input
                     type="date"
                     required
-                    value={formatDateForInput(formData.dropoffDate)}
+                    value={formData.dropoffDate}
                     onChange={(e) => handleDateChange('dropoffDate', e.target.value)}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
