@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { CheckCircleIcon } from '@heroicons/react/24/solid';
 
 interface OTPVerificationProps {
@@ -18,7 +18,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
   const [requestId, setRequestId] = useState<string>('');
 
   // Format phone number to ensure it's valid for India
-  const formatPhoneNumber = (phone: string) => {
+  const formatPhoneNumber = useCallback((phone: string) => {
     // Remove all non-digit characters
     const cleaned = phone.replace(/\D/g, '');
     let formattedPhone = cleaned;
@@ -38,10 +38,12 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
     }
     
     return formattedPhone;
-  };
+  }, []);
 
-  const handleSendOTP = async (e: React.MouseEvent) => {
+  const handleSendOTP = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault(); // Prevent form submission
+    e.stopPropagation(); // Stop event propagation
+    
     try {
       setLoading(true);
       setOtpSent(false);
@@ -84,8 +86,10 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
     }
   };
 
-  const handleVerifyOTP = async (e: React.MouseEvent) => {
+  const handleVerifyOTP = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault(); // Prevent form submission
+    e.stopPropagation(); // Stop event propagation
+    
     try {
       setLoading(true);
       setErrorMessage(null);
@@ -132,7 +136,13 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault(); // Prevent form submission
     setCurrentPhoneNumber(e.target.value);
+  };
+
+  const handleOTPChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault(); // Prevent form submission
+    setOtpValue(e.target.value.replace(/\D/g, ''));
   };
 
   if (isVerified) {
@@ -153,7 +163,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onClick={(e) => e.stopPropagation()}>
       {errorMessage && (
         <div className="rounded-md bg-red-50 p-4">
           <div className="flex">
@@ -202,7 +212,7 @@ export default function OTPVerification({ phoneNumber, onSuccess, onFailure }: O
               id="otp"
               maxLength={6}
               value={otpValue}
-              onChange={(e) => setOtpValue(e.target.value.replace(/\D/g, ''))}
+              onChange={handleOTPChange}
               placeholder="Enter 6-digit OTP"
               className="mt-1 shadow-sm focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm border-gray-300 rounded-md"
             />
