@@ -1,9 +1,24 @@
 ﻿'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, User, Shield, UserCheck } from 'lucide-react';
+import { Plus, Edit, Trash2, User, Shield, UserCheck, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import type { UserProfile } from '@/types/database';
+import type { UserProfile, Permission } from '@/types/database';
+import { permissionGroups, defaultPermissions } from '@/lib/permissions';
+
+interface CreateUserForm {
+  email: string;
+  username: string;
+  password: string;
+  role: 'admin' | 'worker' | 'manager';
+  permissions: Permission;
+}
+
+interface EditUserForm {
+  username: string;
+  role: 'admin' | 'worker' | 'manager';
+  permissions: Permission;
+}
 
 export default function UserManagement() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -11,6 +26,24 @@ export default function UserManagement() {
   const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  
+  // Form states
+  const [createForm, setCreateForm] = useState<CreateUserForm>({
+    email: '',
+    username: '',
+    password: '',
+    role: 'worker',
+    permissions: { ...defaultPermissions }
+  });
+  
+  const [editForm, setEditForm] = useState<EditUserForm>({
+    username: '',
+    role: 'worker',
+    permissions: { ...defaultPermissions }
+  });
+
+  const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -36,24 +69,89 @@ export default function UserManagement() {
     fetchUsers();
   }, []);
 
-  const handleUserCreated = () => {
-    fetchUsers();
-    setIsCreateModalOpen(false);
+  const resetCreateForm = () => {
+    setCreateForm({
+      email: '',
+      username: '',
+      password: '',
+      role: 'worker',
+      permissions: { ...defaultPermissions }
+    });
   };
 
-  const handleUserUpdated = () => {
-    fetchUsers();
-    setEditingUser(null);
+  const handleCreateUser = async () => {
+    if (!createForm.email || !createForm.username || !createForm.password) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const response = await fetch('/api/users', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(createForm),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to create user');
+      }
+
+      toast.success('User created successfully');
+      setIsCreateModalOpen(false);
+      resetCreateForm();
+      fetchUsers();
+    } catch (err) {
+      console.error('Error creating user:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to create user');
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
+  const handleUpdateUser = async () => {
+    if (!editingUser || !editForm.username) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      const response = await fetch(`/api/users/${editingUser.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(editForm),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update user');
+      }
+
+      toast.success('User updated successfully');
+      setEditingUser(null);
+      fetchUsers();
+    } catch (err) {
+      console.error('Error updating user:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to update user');
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleDeleteUser = async (userId: string, userEmail: string) => {
-    const confirmMessage = 'Are you sure you want to delete user ' + userEmail + '? This action cannot be undone.';
+    const confirmMessage = `Are you sure you want to delete user ${userEmail}? This action cannot be undone.`;
     if (!confirm(confirmMessage)) {
       return;
     }
 
     try {
-      const response = await fetch('/api/users/' + userId, {
+      const response = await fetch(`/api/users/${userId}`, {
         method: 'DELETE',
       });
 
@@ -68,6 +166,131 @@ export default function UserManagement() {
       console.error('Error deleting user:', err);
       toast.error(err instanceof Error ? err.message : 'Failed to delete user');
     }
+  };
+
+  const handleEditUser = (user: UserProfile) => {
+    setEditForm({
+      username: user.username || '',
+      role: user.role,
+      permissions: user.permissions || { ...defaultPermissions }
+    });
+    setEditingUser(user);
+  };
+
+  const handleRoleChange = (role: 'admin' | 'worker' | 'manager', isCreate: boolean = true) => {
+    const adminPermissions: Permission = {
+      // Booking Permissions
+      createBooking: true,
+      viewBookings: true,
+      editBookings: true,
+      deleteBookings: true,
+      manageBookings: true, // Added for booking completion
+      
+      // Customer Permissions
+      createCustomer: true,
+      viewCustomers: true,
+      editCustomers: true,
+      deleteCustomers: true,
+      
+      // Vehicle Permissions
+      createVehicle: true,
+      viewVehicles: true,
+      editVehicles: true,
+      deleteVehicles: true,
+      
+      // Maintenance Permissions
+      createMaintenance: true,
+      viewMaintenance: true,
+      editMaintenance: true,
+      deleteMaintenance: true,
+      
+      // Invoice & Payments
+      createInvoice: true,
+      viewInvoices: true,
+      editInvoices: true,
+      managePayments: true,
+      
+      // Reports
+      viewReports: true,
+      exportReports: true,
+      
+      // System
+      manageUsers: true,
+      manageSettings: true,
+      viewAuditLogs: true
+    };
+
+    const workerPermissions: Permission = {
+      ...defaultPermissions
+    };
+
+    const newPermissions = role === 'admin' ? adminPermissions : workerPermissions;
+
+    if (isCreate) {
+      setCreateForm(prev => ({
+        ...prev,
+        role,
+        permissions: newPermissions
+      }));
+    } else {
+      setEditForm(prev => ({
+        ...prev,
+        role,
+        permissions: newPermissions
+      }));
+    }
+  };
+
+  const handlePermissionChange = (
+    permissionKey: keyof Permission, 
+    value: boolean, 
+    isCreate: boolean = true
+  ) => {
+    if (isCreate) {
+      setCreateForm(prev => ({
+        ...prev,
+        permissions: {
+          ...prev.permissions,
+          [permissionKey]: value
+        }
+      }));
+    } else {
+      setEditForm(prev => ({
+        ...prev,
+        permissions: {
+          ...prev.permissions,
+          [permissionKey]: value
+        }
+      }));
+    }
+  };
+
+  const renderPermissionGroups = (permissions: Permission, isCreate: boolean = true) => {
+    return (
+      <div className="space-y-4">
+        <h4 className="text-sm font-medium text-gray-900">Permissions</h4>
+        <div className="space-y-3">
+          {Object.entries(permissionGroups).map(([groupName, groupPermissions]) => (
+            <div key={groupName} className="border border-gray-200 rounded-lg p-3">
+              <h5 className="text-xs font-medium text-gray-700 mb-2">{groupName}</h5>
+              <div className="grid grid-cols-2 gap-2">
+                {groupPermissions.map((permission) => (
+                  <label key={permission.key} className="flex items-center space-x-2 text-xs">
+                    <input
+                      type="checkbox"
+                      checked={permissions[permission.key] || false}
+                      onChange={(e) => handlePermissionChange(permission.key, e.target.checked, isCreate)}
+                      className="h-3 w-3 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                    />
+                    <span className="text-gray-700">{permission.label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   };
 
   const getRoleIcon = (role: string) => {
@@ -197,7 +420,7 @@ export default function UserManagement() {
                       <td className='px-6 py-4 whitespace-nowrap'>
                         <div className='flex items-center'>
                           {getRoleIcon(user.role)}
-                          <span className={'ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ' + getRoleBadgeColor(user.role)}>
+                          <span className={`ml-2 inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getRoleBadgeColor(user.role)}`}>
                             {user.role}
                           </span>
                         </div>
@@ -212,7 +435,7 @@ export default function UserManagement() {
                                 key={key}
                                 className='inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full'
                               >
-                                {key.replace(/([A-Z])/g, ' ').replace(/^./, str => str.toUpperCase())}
+                                {key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                               </span>
                             ))}
                           {user.permissions && Object.values(user.permissions).filter(Boolean).length > 3 && (
@@ -226,14 +449,14 @@ export default function UserManagement() {
                         {user.created_at ? formatDate(user.created_at) : 'N/A'}
                       </td>
                       <td className='px-6 py-4 whitespace-nowrap'>
-                        <span className={'inline-flex px-2 py-1 text-xs font-semibold rounded-full ' + (user.is_active !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800')}>
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${user.is_active !== false ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
                           {user.is_active !== false ? 'Active' : 'Inactive'}
                         </span>
                       </td>
                       <td className='px-6 py-4 whitespace-nowrap text-sm font-medium'>
                         <div className='flex space-x-2'>
                           <button
-                            onClick={() => setEditingUser(user)}
+                            onClick={() => handleEditUser(user)}
                             className='text-blue-600 hover:text-blue-900'
                             title='Edit user'
                           >
@@ -260,56 +483,90 @@ export default function UserManagement() {
       {/* Create User Modal */}
       {isCreateModalOpen && (
         <div className='fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50'>
-          <div className='bg-white rounded-lg p-6 max-w-md w-full'>
-            <h3 className='text-lg font-medium mb-4'>Create New User</h3>
-            <div className='space-y-4'>
-              <div>
-                <label className='block text-sm font-medium text-gray-700'>Email</label>
-                <input
-                  type='email'
-                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                  placeholder='user@example.com'
-                />
+          <div className='bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto'>
+            <div className='flex justify-between items-center mb-4'>
+              <h3 className='text-lg font-medium'>Create New User</h3>
+              <button
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  resetCreateForm();
+                }}
+                className='text-gray-400 hover:text-gray-600'
+              >
+                <X className='h-5 w-5' />
+              </button>
+            </div>
+            
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+              {/* Basic Information */}
+              <div className='space-y-4'>
+                <h4 className='text-sm font-medium text-gray-900'>Basic Information</h4>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700'>Email *</label>
+                  <input
+                    type='email'
+                    value={createForm.email}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+                    className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                    placeholder='user@example.com'
+                  />
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700'>Username *</label>
+                  <input
+                    type='text'
+                    value={createForm.username}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, username: e.target.value }))}
+                    className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                    placeholder='username'
+                  />
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700'>Password *</label>
+                  <input
+                    type='password'
+                    value={createForm.password}
+                    onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+                    className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                    placeholder='password'
+                  />
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700'>Role *</label>
+                  <select 
+                    value={createForm.role}
+                    onChange={(e) => handleRoleChange(e.target.value as 'admin' | 'worker' | 'manager', true)}
+                    className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                  >
+                    <option value='worker'>Worker</option>
+                    <option value='admin'>Admin</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className='block text-sm font-medium text-gray-700'>Username</label>
-                <input
-                  type='text'
-                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                  placeholder='username'
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium text-gray-700'>Password</label>
-                <input
-                  type='password'
-                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                  placeholder='password'
-                />
-              </div>
-              <div>
-                <label className='block text-sm font-medium text-gray-700'>Role</label>
-                <select className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'>
-                  <option value='worker'>Worker</option>
-                  <option value='admin'>Admin</option>
-                </select>
+
+              {/* Permissions */}
+              <div className='max-h-96 overflow-y-auto'>
+                {renderPermissionGroups(createForm.permissions, true)}
               </div>
             </div>
+            
             <div className='mt-6 flex space-x-3'>
               <button
-                onClick={() => setIsCreateModalOpen(false)}
+                onClick={() => {
+                  setIsCreateModalOpen(false);
+                  resetCreateForm();
+                }}
                 className='flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400'
+                disabled={isCreating}
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  toast.success('User creation functionality will be implemented');
-                  setIsCreateModalOpen(false);
-                }}
-                className='flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700'
+                onClick={handleCreateUser}
+                disabled={isCreating}
+                className='flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                Create User
+                {isCreating ? 'Creating...' : 'Create User'}
               </button>
             </div>
           </div>
@@ -319,43 +576,73 @@ export default function UserManagement() {
       {/* Edit User Modal */}
       {editingUser && (
         <div className='fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50'>
-          <div className='bg-white rounded-lg p-6 max-w-md w-full'>
-            <h3 className='text-lg font-medium mb-4'>Edit User: {editingUser.email}</h3>
-            <div className='space-y-4'>
-              <div>
-                <label className='block text-sm font-medium text-gray-700'>Username</label>
-                <input
-                  type='text'
-                  defaultValue={editingUser.username || ''}
-                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                />
+          <div className='bg-white rounded-lg p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto'>
+            <div className='flex justify-between items-center mb-4'>
+              <h3 className='text-lg font-medium'>Edit User: {editingUser.email}</h3>
+              <button
+                onClick={() => setEditingUser(null)}
+                className='text-gray-400 hover:text-gray-600'
+              >
+                <X className='h-5 w-5' />
+              </button>
+            </div>
+            
+            <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
+              {/* Basic Information */}
+              <div className='space-y-4'>
+                <h4 className='text-sm font-medium text-gray-900'>Basic Information</h4>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700'>Email</label>
+                  <input
+                    type='email'
+                    value={editingUser.email}
+                    disabled
+                    className='mt-1 block w-full rounded-md border-gray-300 bg-gray-50 shadow-sm sm:text-sm'
+                  />
+                  <p className='mt-1 text-xs text-gray-500'>Email cannot be changed</p>
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700'>Username *</label>
+                  <input
+                    type='text'
+                    value={editForm.username}
+                    onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                    className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                  />
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700'>Role *</label>
+                  <select 
+                    value={editForm.role}
+                    onChange={(e) => handleRoleChange(e.target.value as 'admin' | 'worker' | 'manager', false)}
+                    className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                  >
+                    <option value='worker'>Worker</option>
+                    <option value='admin'>Admin</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className='block text-sm font-medium text-gray-700'>Role</label>
-                <select 
-                  defaultValue={editingUser.role}
-                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                >
-                  <option value='worker'>Worker</option>
-                  <option value='admin'>Admin</option>
-                </select>
+
+              {/* Permissions */}
+              <div className='max-h-96 overflow-y-auto'>
+                {renderPermissionGroups(editForm.permissions, false)}
               </div>
             </div>
+            
             <div className='mt-6 flex space-x-3'>
               <button
                 onClick={() => setEditingUser(null)}
                 className='flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400'
+                disabled={isUpdating}
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  toast.success('User update functionality will be implemented');
-                  setEditingUser(null);
-                }}
-                className='flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700'
+                onClick={handleUpdateUser}
+                disabled={isUpdating}
+                className='flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
               >
-                Update User
+                {isUpdating ? 'Updating...' : 'Update User'}
               </button>
             </div>
           </div>

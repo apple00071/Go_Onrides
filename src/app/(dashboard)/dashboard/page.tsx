@@ -17,7 +17,7 @@ interface DashboardStats {
 
 interface UserProfile {
   id: string;
-  role: 'admin' | 'worker';
+  role: 'admin' | 'worker' | 'manager';
 }
 
 export default function DashboardPage() {

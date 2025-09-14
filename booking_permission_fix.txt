@@ -1,0 +1,5 @@
+﻿// Create a patch to fix permission checks in booking details page
+// Line 477: Change hasPermission('can_edit_bookings') to hasPermission('manageBookings') for Complete Booking button
+// Line 485: Change hasPermission('can_edit_bookings') to hasPermission('editBookings') for Edit button  
+// Line 494: Change hasPermission('can_edit_bookings') to hasPermission('manageBookings') for Extend button
+// Line 519: Change hasPermission('can_edit_bookings') to hasPermission('editBookings') for status selector

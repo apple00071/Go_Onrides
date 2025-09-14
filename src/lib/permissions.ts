@@ -6,6 +6,7 @@ export const defaultPermissions: Permission = {
   viewBookings: true,
   editBookings: false,
   deleteBookings: false,
+  manageBookings: false, // Added for booking completion and management
   
   // Customer Permissions
   createCustomer: false,
@@ -55,7 +56,8 @@ export const permissionGroups = {
     { key: 'createBooking', label: 'Create Bookings', description: 'Can create new bookings' },
     { key: 'viewBookings', label: 'View Bookings', description: 'Can view all bookings' },
     { key: 'editBookings', label: 'Edit Bookings', description: 'Can modify existing bookings' },
-    { key: 'deleteBookings', label: 'Delete Bookings', description: 'Can remove bookings' }
+    { key: 'deleteBookings', label: 'Delete Bookings', description: 'Can remove bookings' },
+    { key: 'manageBookings', label: 'Manage Bookings', description: 'Can complete bookings and manage booking lifecycle' }
   ],
   'Customers': [
     { key: 'createCustomer', label: 'Create Customers', description: 'Can add new customers' },

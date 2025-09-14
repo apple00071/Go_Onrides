@@ -7,6 +7,7 @@ export interface Permission {
   viewBookings: boolean;
   editBookings: boolean;
   deleteBookings: boolean;
+  manageBookings: boolean; // Added for booking completion and management
   
   // Customer Permissions
   createCustomer: boolean;
@@ -42,7 +43,6 @@ export interface Permission {
   viewAuditLogs: boolean;
   
   // Backward compatibility
-  manageBookings?: boolean;
   manageCustomers?: boolean;
   manageVehicles?: boolean;
   manageMaintenance?: boolean;
