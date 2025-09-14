@@ -28,7 +28,7 @@ export async function PATCH(
     }
 
     const body = await request.json();
-    const { username, role, permissions } = body;
+    const { username, role, permissions, newPassword } = body;
 
     if (!username || !role) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -48,6 +48,19 @@ export async function PATCH(
     if (updateError) {
       console.error("Error updating profile:", updateError);
       return NextResponse.json({ error: "Failed to update user" }, { status: 500 });
+    }
+
+    // Update password if provided
+    if (newPassword && newPassword.trim() !== '') {
+      const { error: passwordError } = await supabase.auth.admin.updateUserById(
+        params.id,
+        { password: newPassword }
+      );
+
+      if (passwordError) {
+        console.error("Error updating password:", passwordError);
+        return NextResponse.json({ error: "Failed to update password" }, { status: 500 });
+      }
     }
 
     return NextResponse.json({ message: "User updated successfully" });
@@ -83,6 +96,21 @@ export async function DELETE(
     // Don't allow deleting self
     if (params.id === user.id) {
       return NextResponse.json({ error: "Cannot delete your own account" }, { status: 400 });
+    }
+
+    // Check if the user being deleted is an admin
+    const { data: targetUser, error: targetUserError } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", params.id)
+      .single();
+
+    if (targetUserError || !targetUser) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+
+    if (targetUser.role === "admin") {
+      return NextResponse.json({ error: "Admin users cannot be deleted" }, { status: 400 });
     }
 
     // Delete user from auth (this will cascade to profiles due to FK constraint)

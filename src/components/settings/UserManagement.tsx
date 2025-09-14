@@ -1,7 +1,7 @@
 ﻿'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit, Trash2, User, Shield, UserCheck, X } from 'lucide-react';
+import { Plus, Edit, Trash2, User, Shield, UserCheck, X, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import type { UserProfile, Permission } from '@/types/database';
 import { permissionGroups, defaultPermissions } from '@/lib/permissions';
@@ -18,6 +18,7 @@ interface EditUserForm {
   username: string;
   role: 'admin' | 'worker' | 'manager';
   permissions: Permission;
+  newPassword?: string;
 }
 
 export default function UserManagement() {
@@ -26,6 +27,10 @@ export default function UserManagement() {
   const [error, setError] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  
+  // Password visibility states
+  const [showCreatePassword, setShowCreatePassword] = useState(false);
+  const [showEditPassword, setShowEditPassword] = useState(false);
   
   // Form states
   const [createForm, setCreateForm] = useState<CreateUserForm>({
@@ -39,7 +44,8 @@ export default function UserManagement() {
   const [editForm, setEditForm] = useState<EditUserForm>({
     username: '',
     role: 'worker',
-    permissions: { ...defaultPermissions }
+    permissions: { ...defaultPermissions },
+    newPassword: ''
   });
 
   const [isCreating, setIsCreating] = useState(false);
@@ -77,6 +83,7 @@ export default function UserManagement() {
       role: 'worker',
       permissions: { ...defaultPermissions }
     });
+    setShowCreatePassword(false);
   };
 
   const handleCreateUser = async () => {
@@ -135,6 +142,7 @@ export default function UserManagement() {
 
       toast.success('User updated successfully');
       setEditingUser(null);
+      setShowEditPassword(false);
       fetchUsers();
     } catch (err) {
       console.error('Error updating user:', err);
@@ -144,7 +152,13 @@ export default function UserManagement() {
     }
   };
 
-  const handleDeleteUser = async (userId: string, userEmail: string) => {
+  const handleDeleteUser = async (userId: string, userEmail: string, userRole: string) => {
+    // Prevent deletion of admin users
+    if (userRole === 'admin') {
+      toast.error('Admin users cannot be deleted');
+      return;
+    }
+
     const confirmMessage = `Are you sure you want to delete user ${userEmail}? This action cannot be undone.`;
     if (!confirm(confirmMessage)) {
       return;
@@ -172,9 +186,11 @@ export default function UserManagement() {
     setEditForm({
       username: user.username || '',
       role: user.role,
-      permissions: user.permissions || { ...defaultPermissions }
+      permissions: user.permissions || { ...defaultPermissions },
+      newPassword: ''
     });
     setEditingUser(user);
+    setShowEditPassword(false);
   };
 
   const handleRoleChange = (role: 'admin' | 'worker' | 'manager', isCreate: boolean = true) => {
@@ -463,9 +479,10 @@ export default function UserManagement() {
                             <Edit className='h-4 w-4' />
                           </button>
                           <button
-                            onClick={() => handleDeleteUser(user.id, user.email)}
-                            className='text-red-600 hover:text-red-900'
-                            title='Delete user'
+                            onClick={() => handleDeleteUser(user.id, user.email, user.role)}
+                            className={`${user.role === 'admin' ? 'text-gray-400 cursor-not-allowed' : 'text-red-600 hover:text-red-900'}`}
+                            title={user.role === 'admin' ? 'Admin users cannot be deleted' : 'Delete user'}
+                            disabled={user.role === 'admin'}
                           >
                             <Trash2 className='h-4 w-4' />
                           </button>
@@ -523,13 +540,26 @@ export default function UserManagement() {
                 </div>
                 <div>
                   <label className='block text-sm font-medium text-gray-700'>Password *</label>
-                  <input
-                    type='password'
-                    value={createForm.password}
-                    onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
-                    className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
-                    placeholder='password'
-                  />
+                  <div className='relative'>
+                    <input
+                      type={showCreatePassword ? 'text' : 'password'}
+                      value={createForm.password}
+                      onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+                      className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm pr-10'
+                      placeholder='password'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => setShowCreatePassword(!showCreatePassword)}
+                      className='absolute inset-y-0 right-0 pr-3 flex items-center'
+                    >
+                      {showCreatePassword ? (
+                        <EyeOff className='h-4 w-4 text-gray-400' />
+                      ) : (
+                        <Eye className='h-4 w-4 text-gray-400' />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <div>
                   <label className='block text-sm font-medium text-gray-700'>Role *</label>
@@ -609,6 +639,30 @@ export default function UserManagement() {
                     onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
                     className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
                   />
+                </div>
+                <div>
+                  <label className='block text-sm font-medium text-gray-700'>New Password (optional)</label>
+                  <div className='relative'>
+                    <input
+                      type={showEditPassword ? 'text' : 'password'}
+                      value={editForm.newPassword || ''}
+                      onChange={(e) => setEditForm(prev => ({ ...prev, newPassword: e.target.value }))}
+                      className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm pr-10'
+                      placeholder='Leave empty to keep current password'
+                    />
+                    <button
+                      type='button'
+                      onClick={() => setShowEditPassword(!showEditPassword)}
+                      className='absolute inset-y-0 right-0 pr-3 flex items-center'
+                    >
+                      {showEditPassword ? (
+                        <EyeOff className='h-4 w-4 text-gray-400' />
+                      ) : (
+                        <Eye className='h-4 w-4 text-gray-400' />
+                      )}
+                    </button>
+                  </div>
+                  <p className='mt-1 text-xs text-gray-500'>Leave empty to keep current password</p>
                 </div>
                 <div>
                   <label className='block text-sm font-medium text-gray-700'>Role *</label>
