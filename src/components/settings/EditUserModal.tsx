@@ -23,33 +23,92 @@ interface EditUserModalProps {
 // Group permissions by category
 const permissionGroups: Record<string, Array<{ key: keyof Permission; label: string }>> = {
   'Booking Permissions': [
-    { key: 'can_create_bookings', label: 'Create Bookings' },
-    { key: 'can_view_bookings', label: 'View Bookings' },
-    { key: 'can_edit_bookings', label: 'Edit Bookings' },
-    { key: 'can_delete_bookings', label: 'Delete Bookings' }
+    { key: 'createBooking', label: 'Create Bookings' },
+    { key: 'viewBookings', label: 'View Bookings' },
+    { key: 'manageBookings', label: 'Manage Bookings' }
   ],
-  'User Management': [
-    { key: 'can_manage_users', label: 'Manage Users' }
+  'Customer Management': [
+    { key: 'createCustomer', label: 'Create Customers' },
+    { key: 'viewCustomers', label: 'View Customers' },
+    { key: 'manageCustomers', label: 'Manage Customers' }
   ],
-  'Report Access': [
-    { key: 'can_view_reports', label: 'View Reports' }
+  'Vehicle Management': [
+    { key: 'createVehicle', label: 'Add Vehicles' },
+    { key: 'viewVehicles', label: 'View Vehicles' },
+    { key: 'manageVehicles', label: 'Manage Vehicles' }
+  ],
+  'Maintenance': [
+    { key: 'createMaintenance', label: 'Create Maintenance' },
+    { key: 'viewMaintenance', label: 'View Maintenance' },
+    { key: 'manageMaintenance', label: 'Manage Maintenance' }
+  ],
+  'Invoicing & Payments': [
+    { key: 'createInvoice', label: 'Create Invoices' },
+    { key: 'viewInvoices', label: 'View Invoices' },
+    { key: 'managePayments', label: 'Manage Payments' }
+  ],
+  'Reports': [
+    { key: 'accessReports', label: 'Access Reports' },
+    { key: 'exportReports', label: 'Export Reports' }
+  ],
+  'Returns': [
+    { key: 'manageReturns', label: 'Manage Returns' },
+    { key: 'viewReturns', label: 'View Returns' }
+  ],
+  'Notifications': [
+    { key: 'manageNotifications', label: 'Manage Notifications' },
+    { key: 'viewNotifications', label: 'View Notifications' }
+  ],
+  'Settings': [
+    { key: 'manageSettings', label: 'Manage Settings' }
   ]
 };
 
 const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalProps) => {
+  // Function to migrate old permission keys to new ones
+  const migratePermissions = (permissions: any): Permission => {
+    return {
+      // Initialize all permissions to false by default
+      createBooking: false,
+      viewBookings: true,
+      manageBookings: false,
+      createCustomer: false,
+      viewCustomers: true,
+      manageCustomers: false,
+      createVehicle: false,
+      viewVehicles: true,
+      manageVehicles: false,
+      createMaintenance: false,
+      viewMaintenance: true,
+      manageMaintenance: false,
+      createInvoice: false,
+      viewInvoices: true,
+      managePayments: false,
+      accessReports: false,
+      exportReports: false,
+      manageReturns: false,
+      viewReturns: true,
+      manageNotifications: false,
+      viewNotifications: true,
+      manageSettings: false,
+      // Map old permission keys to new ones
+      ...(permissions?.can_create_bookings !== undefined && { createBooking: permissions.can_create_bookings }),
+      ...(permissions?.can_view_bookings !== undefined && { viewBookings: permissions.can_view_bookings }),
+      ...(permissions?.can_edit_bookings !== undefined && { manageBookings: permissions.can_edit_bookings }),
+      ...(permissions?.can_delete_bookings !== undefined && { manageBookings: permissions.can_delete_bookings }),
+      ...(permissions?.can_manage_users !== undefined && { manageSettings: permissions.can_manage_users }),
+      ...(permissions?.can_view_reports !== undefined && { accessReports: permissions.can_view_reports }),
+      // Map new permissions if they exist
+      ...permissions
+    };
+  };
+
   const [formData, setFormData] = useState<FormData>({
     email: user.email,
     username: user.username,
     password: '',
     role: user.role as Role,
-    permissions: {
-      can_create_bookings: user.permissions?.can_create_bookings ?? false,
-      can_view_bookings: user.permissions?.can_view_bookings ?? true,
-      can_edit_bookings: user.permissions?.can_edit_bookings ?? false,
-      can_delete_bookings: user.permissions?.can_delete_bookings ?? false,
-      can_manage_users: user.permissions?.can_manage_users ?? false,
-      can_view_reports: user.permissions?.can_view_reports ?? false
-    }
+    permissions: migratePermissions(user.permissions)
   });
   
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,19 +118,12 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
   // Reset form when user changes
   useEffect(() => {
     if (isOpen) {
-      setFormData({
+setFormData({
         email: user.email,
         username: user.username,
         password: '',
         role: user.role as Role,
-        permissions: {
-          can_create_bookings: user.permissions?.can_create_bookings ?? false,
-          can_view_bookings: user.permissions?.can_view_bookings ?? true,
-          can_edit_bookings: user.permissions?.can_edit_bookings ?? false,
-          can_delete_bookings: user.permissions?.can_delete_bookings ?? false,
-          can_manage_users: user.permissions?.can_manage_users ?? false,
-          can_view_reports: user.permissions?.can_view_reports ?? false
-        }
+        permissions: migratePermissions(user.permissions)
       });
       setError(null);
       setExpandedSection(null);
@@ -133,28 +185,32 @@ const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalPr
     setError(null);
 
     try {
-      const response = await fetch(`/api/users/${user.id}`, {
+      // First update the role if it changed
+      if (formData.role !== user.role) {
+        const roleResponse = await fetch(`/api/users/${user.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ role: formData.role }),
+          cache: 'no-cache',
+        });
+
+        if (!roleResponse.ok) {
+          const errorData = await roleResponse.json().catch(() => ({}));
+          throw new Error(errorData.error || 'Failed to update user role');
+        }
+      }
+
+      // Then update permissions using the dedicated endpoint
+      const permissionsResponse = await fetch(`/api/users/${user.id}/update-permissions`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          role: formData.role,
-          permissions: formData.permissions,
-        }),
-        // Add cache control headers
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ permissions: formData.permissions }),
         cache: 'no-cache',
       });
 
-      let data;
-      try {
-        data = await response.json();
-      } catch (err) {
-        throw new Error('Failed to parse server response');
-      }
-
-      if (!response.ok) {
-        throw new Error(data?.error || `Failed to update user: ${response.statusText}`);
+      if (!permissionsResponse.ok) {
+        const errorData = await permissionsResponse.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update user permissions');
       }
 
       toast.success('User updated successfully');

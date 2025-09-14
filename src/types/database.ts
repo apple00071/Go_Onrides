@@ -1,10 +1,51 @@
 export interface Permission {
-  can_create_bookings: boolean;
-  can_view_bookings: boolean;
-  can_edit_bookings: boolean;
-  can_delete_bookings: boolean;
-  can_manage_users: boolean;
-  can_view_reports: boolean;
+  // Booking Permissions
+  createBooking: boolean;
+  viewBookings: boolean;
+  manageBookings: boolean;
+  
+  // Customer Permissions
+  createCustomer: boolean;
+  viewCustomers: boolean;
+  manageCustomers: boolean;
+  
+  // Vehicle Permissions
+  createVehicle: boolean;
+  viewVehicles: boolean;
+  manageVehicles: boolean;
+  
+  // Maintenance Permissions
+  createMaintenance: boolean;
+  viewMaintenance: boolean;
+  manageMaintenance: boolean;
+  
+  // Invoice & Payment Permissions
+  createInvoice: boolean;
+  viewInvoices: boolean;
+  managePayments: boolean;
+  
+  // Report Permissions
+  accessReports: boolean;
+  exportReports: boolean;
+  
+  // Return Permissions
+  manageReturns: boolean;
+  viewReturns: boolean;
+  
+  // Notification Permissions
+  manageNotifications: boolean;
+  viewNotifications: boolean;
+  
+  // Settings Permission
+  manageSettings: boolean;
+  
+  // Backward compatibility
+  can_create_bookings?: boolean;
+  can_view_bookings?: boolean;
+  can_edit_bookings?: boolean;
+  can_delete_bookings?: boolean;
+  can_manage_users?: boolean;
+  can_view_reports?: boolean;
 }
 
 export interface UserProfile {
