@@ -77,7 +77,7 @@ export async function PUT(
 ) {
   try {
     const adminSupabase = createAdminClient();
-    const { permissions } = await request.json();
+    const { permissions: incomingPermissions } = await request.json();
 
     // Create regular client for user session checks
     const cookieStore = cookies();
@@ -86,43 +86,66 @@ export async function PUT(
     // Check if user is authenticated and is admin
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
+      console.error('No active session');
       return NextResponse.json(
-        { error: 'Unauthorized' },
+        { error: 'Unauthorized: No active session' },
         { status: 401 }
       );
     }
 
-    // Check user role
-    const { data: profile } = await supabase
+    // Check if the target user exists
+    const { data: targetUser, error: userError } = await adminSupabase
       .from('profiles')
-      .select('role')
+      .select('id, permissions')
+      .eq('id', params.id)
+      .single();
+
+    if (userError || !targetUser) {
+      console.error('User not found:', params.id, userError);
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    // Get current user's role and permissions
+    const { data: currentUser } = await supabase
+      .from('profiles')
+      .select('role, permissions')
       .eq('id', session.user.id)
       .single();
 
-    if (!profile || profile.role !== 'admin') {
+    // Only allow admins to update permissions
+    if (currentUser?.role !== 'admin') {
+      console.error('Insufficient permissions for user:', session.user.id);
       return NextResponse.json(
-        { error: 'Unauthorized - Admin access required' },
+        { error: 'Insufficient permissions' },
         { status: 403 }
       );
     }
 
-    // Validate and prepare permissions
-    const validPermissions = { ...defaultPermissions };
+    // Validate and sanitize incoming permissions
+    const updatedPermissions: Record<string, boolean> = { ...defaultPermissions };
+    
+    // Only update permissions that exist in our default permissions
+    Object.entries(incomingPermissions).forEach(([key, value]) => {
+      if (key in updatedPermissions) {
+        updatedPermissions[key] = Boolean(value);
+      }
+    });
 
-    // Update with provided permissions
-    if (permissions && typeof permissions === 'object') {
-      Object.entries(permissions).forEach(([key, value]) => {
-        if (VALID_PERMISSIONS.includes(key as PermissionKey)) {
-          validPermissions[key as PermissionKey] = Boolean(value);
-        }
-      });
-    }
+    // Log the update for auditing
+    console.log('Updating permissions for user:', params.id, {
+      from: targetUser.permissions,
+      to: updatedPermissions,
+      updated_by: session.user.id
+    });
 
-    // Update user permissions
+    // Update the user's permissions in the database
     const { data: updatedUser, error: updateError } = await adminSupabase
       .from('profiles')
       .update({ 
-        permissions: validPermissions,
+        permissions: updatedPermissions,
         updated_at: new Date().toISOString()
       })
       .eq('id', params.id)
@@ -130,16 +153,18 @@ export async function PUT(
       .single();
 
     if (updateError) {
-      console.error('Update error:', updateError);
+      console.error('Error updating permissions:', updateError);
       return NextResponse.json(
-        { error: 'Failed to update user permissions' },
+        { error: `Failed to update permissions: ${updateError.message}` },
         { status: 500 }
       );
     }
 
+    console.log('Permissions updated successfully for user:', params.id);
     return NextResponse.json({ 
-      success: true,
-      user: updatedUser 
+      success: true, 
+      data: updatedUser,
+      message: 'Permissions updated successfully'
     });
 
   } catch (error) {

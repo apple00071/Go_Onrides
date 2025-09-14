@@ -1,45 +1,52 @@
+// User roles
+export type Role = 'admin' | 'manager' | 'worker';
+
 export interface Permission {
   // Booking Permissions
   createBooking: boolean;
   viewBookings: boolean;
-  manageBookings: boolean;
+  editBookings: boolean;
+  deleteBookings: boolean;
   
   // Customer Permissions
   createCustomer: boolean;
   viewCustomers: boolean;
-  manageCustomers: boolean;
+  editCustomers: boolean;
+  deleteCustomers: boolean;
   
   // Vehicle Permissions
   createVehicle: boolean;
   viewVehicles: boolean;
-  manageVehicles: boolean;
+  editVehicles: boolean;
+  deleteVehicles: boolean;
   
   // Maintenance Permissions
   createMaintenance: boolean;
   viewMaintenance: boolean;
-  manageMaintenance: boolean;
+  editMaintenance: boolean;
+  deleteMaintenance: boolean;
   
   // Invoice & Payment Permissions
   createInvoice: boolean;
   viewInvoices: boolean;
+  editInvoices: boolean;
   managePayments: boolean;
   
   // Report Permissions
-  accessReports: boolean;
+  viewReports: boolean;
   exportReports: boolean;
   
-  // Return Permissions
-  manageReturns: boolean;
-  viewReturns: boolean;
-  
-  // Notification Permissions
-  manageNotifications: boolean;
-  viewNotifications: boolean;
-  
-  // Settings Permission
+  // System Permissions
+  manageUsers: boolean;
   manageSettings: boolean;
+  viewAuditLogs: boolean;
   
   // Backward compatibility
+  manageBookings?: boolean;
+  manageCustomers?: boolean;
+  manageVehicles?: boolean;
+  manageMaintenance?: boolean;
+  accessReports?: boolean;
   can_create_bookings?: boolean;
   can_view_bookings?: boolean;
   can_edit_bookings?: boolean;
@@ -51,12 +58,16 @@ export interface Permission {
 export interface UserProfile {
   id: string;
   email: string;
-  username: string;
-  role: 'admin' | 'worker';
+  username?: string;
+  full_name?: string;
+  phone?: string;
+  role: Role;
   permissions: Permission;
   created_at?: string;
   updated_at?: string;
   created_by?: string;
+  last_login_at?: string;
+  is_active?: boolean;
 }
 
 export type Customer = {
