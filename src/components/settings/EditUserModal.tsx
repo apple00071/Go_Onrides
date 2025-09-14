@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { X, ChevronDown, ChevronUp } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import type { Permission, UserProfile } from '@/types/database';
+import { defaultPermissions, permissionGroups } from '@/lib/permissions';
 
 type Role = 'admin' | 'worker';
 
@@ -20,49 +21,13 @@ interface EditUserModalProps {
   onUserUpdated: () => void;
 }
 
-// Group permissions by category
-const permissionGroups: Record<string, Array<{ key: keyof Permission; label: string }>> = {
-  'Booking Permissions': [
-    { key: 'createBooking', label: 'Create Bookings' },
-    { key: 'viewBookings', label: 'View Bookings' },
-    { key: 'manageBookings', label: 'Manage Bookings' }
-  ],
-  'Customer Management': [
-    { key: 'createCustomer', label: 'Create Customers' },
-    { key: 'viewCustomers', label: 'View Customers' },
-    { key: 'manageCustomers', label: 'Manage Customers' }
-  ],
-  'Vehicle Management': [
-    { key: 'createVehicle', label: 'Add Vehicles' },
-    { key: 'viewVehicles', label: 'View Vehicles' },
-    { key: 'manageVehicles', label: 'Manage Vehicles' }
-  ],
-  'Maintenance': [
-    { key: 'createMaintenance', label: 'Create Maintenance' },
-    { key: 'viewMaintenance', label: 'View Maintenance' },
-    { key: 'manageMaintenance', label: 'Manage Maintenance' }
-  ],
-  'Invoicing & Payments': [
-    { key: 'createInvoice', label: 'Create Invoices' },
-    { key: 'viewInvoices', label: 'View Invoices' },
-    { key: 'managePayments', label: 'Manage Payments' }
-  ],
-  'Reports': [
-    { key: 'accessReports', label: 'Access Reports' },
-    { key: 'exportReports', label: 'Export Reports' }
-  ],
-  'Returns': [
-    { key: 'manageReturns', label: 'Manage Returns' },
-    { key: 'viewReturns', label: 'View Returns' }
-  ],
-  'Notifications': [
-    { key: 'manageNotifications', label: 'Manage Notifications' },
-    { key: 'viewNotifications', label: 'View Notifications' }
-  ],
-  'Settings': [
-    { key: 'manageSettings', label: 'Manage Settings' }
-  ]
-};
+// Create a mutable copy of permissionGroups to work around readonly constraint
+const mutablePermissionGroups = Object.fromEntries(
+  Object.entries(permissionGroups).map(([key, value]) => [
+    key,
+    [...value] // Create a new array to make it mutable
+  ])
+);
 
 const EditUserModal = ({ isOpen, onClose, user, onUserUpdated }: EditUserModalProps) => {
   // Function to migrate old permission keys to new ones
@@ -275,7 +240,7 @@ setFormData({
           <div className="mb-4">
             <label className="block text-sm font-medium text-gray-700 mb-2">Permissions</label>
             <div className="space-y-2">
-              {Object.entries(permissionGroups).map(([title, permissions]) => (
+              {Object.entries(mutablePermissionGroups).map(([title, permissions]) => (
                 renderPermissionSection(title, permissions)
               ))}
             </div>

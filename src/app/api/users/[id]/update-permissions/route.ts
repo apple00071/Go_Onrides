@@ -22,6 +22,9 @@ function createAdminClient() {
   });
 }
 
+// Define all valid permission keys
+type PermissionKey = keyof typeof defaultPermissions;
+
 // Define all valid permission keys with their default values
 const defaultPermissions = {
   // Booking Permissions
@@ -65,6 +68,9 @@ const defaultPermissions = {
   manageSettings: false
 };
 
+// Create an array of all valid permission keys
+const VALID_PERMISSIONS = Object.keys(defaultPermissions) as PermissionKey[];
+
 export async function PUT(
   request: Request,
   { params }: { params: { id: string } }
@@ -101,18 +107,13 @@ export async function PUT(
     }
 
     // Validate and prepare permissions
-    const validPermissions: Record<string, boolean> = {};
-    
-    // Initialize all permissions to false
-    VALID_PERMISSIONS.forEach(permission => {
-      validPermissions[permission] = false;
-    });
+    const validPermissions = { ...defaultPermissions };
 
     // Update with provided permissions
     if (permissions && typeof permissions === 'object') {
       Object.entries(permissions).forEach(([key, value]) => {
-        if (VALID_PERMISSIONS.includes(key)) {
-          validPermissions[key] = Boolean(value);
+        if (VALID_PERMISSIONS.includes(key as PermissionKey)) {
+          validPermissions[key as PermissionKey] = Boolean(value);
         }
       });
     }

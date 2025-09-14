@@ -9,7 +9,30 @@ interface FormData {
   email: string;
   password: string;
   role: 'admin' | 'worker';
-  permissions: Permission;
+  permissions: {
+    createBooking: boolean;
+    viewBookings: boolean;
+    manageBookings: boolean;
+    createCustomer: boolean;
+    viewCustomers: boolean;
+    manageCustomers: boolean;
+    createVehicle: boolean;
+    viewVehicles: boolean;
+    manageVehicles: boolean;
+    createMaintenance: boolean;
+    viewMaintenance: boolean;
+    manageMaintenance: boolean;
+    createInvoice: boolean;
+    viewInvoices: boolean;
+    managePayments: boolean;
+    accessReports: boolean;
+    exportReports: boolean;
+    manageReturns: boolean;
+    viewReturns: boolean;
+    manageNotifications: boolean;
+    viewNotifications: boolean;
+    manageSettings: boolean;
+  };
 }
 
 export default function CreateUserForm() {
@@ -20,12 +43,28 @@ export default function CreateUserForm() {
     password: '',
     role: 'worker',
     permissions: {
-      can_create_bookings: false,
-      can_view_bookings: true,
-      can_edit_bookings: false,
-      can_delete_bookings: false,
-      can_manage_users: false,
-      can_view_reports: false
+      createBooking: false,
+      viewBookings: true,
+      manageBookings: false,
+      createCustomer: false,
+      viewCustomers: true,
+      manageCustomers: false,
+      createVehicle: false,
+      viewVehicles: true,
+      manageVehicles: false,
+      createMaintenance: false,
+      viewMaintenance: true,
+      manageMaintenance: false,
+      createInvoice: false,
+      viewInvoices: true,
+      managePayments: false,
+      accessReports: false,
+      exportReports: false,
+      manageReturns: false,
+      viewReturns: true,
+      manageNotifications: false,
+      viewNotifications: true,
+      manageSettings: false
     }
   });
 
@@ -36,12 +75,12 @@ export default function CreateUserForm() {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handlePermissionChange = (permission: keyof Permission) => {
+  const handlePermissionChange = (permission: keyof FormData['permissions']) => {
     setFormData(prev => ({
       ...prev,
       permissions: {
         ...prev.permissions,
-        [permission]: !prev.permissions[permission]
+        [permission]: !(prev.permissions[permission])
       }
     }));
   };
@@ -106,12 +145,28 @@ export default function CreateUserForm() {
         password: '',
         role: 'worker',
         permissions: {
-          can_create_bookings: false,
-          can_view_bookings: true,
-          can_edit_bookings: false,
-          can_delete_bookings: false,
-          can_manage_users: false,
-          can_view_reports: false
+          createBooking: false,
+          viewBookings: true,
+          manageBookings: false,
+          createCustomer: false,
+          viewCustomers: true,
+          manageCustomers: false,
+          createVehicle: false,
+          viewVehicles: true,
+          manageVehicles: false,
+          createMaintenance: false,
+          viewMaintenance: true,
+          manageMaintenance: false,
+          createInvoice: false,
+          viewInvoices: true,
+          managePayments: false,
+          accessReports: false,
+          exportReports: false,
+          manageReturns: false,
+          viewReturns: true,
+          manageNotifications: false,
+          viewNotifications: true,
+          manageSettings: false
         }
       });
     } catch (error) {
@@ -206,8 +261,8 @@ export default function CreateUserForm() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={formData.permissions.can_create_bookings}
-                  onChange={() => handlePermissionChange('can_create_bookings')}
+                  checked={formData.permissions.createBooking}
+                  onChange={() => handlePermissionChange('createBooking')}
                   className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                 />
                 <span className="ml-2 text-sm text-gray-700">Create Bookings</span>
@@ -215,8 +270,8 @@ export default function CreateUserForm() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={formData.permissions.can_view_bookings}
-                  onChange={() => handlePermissionChange('can_view_bookings')}
+                  checked={formData.permissions.viewBookings}
+                  onChange={() => handlePermissionChange('viewBookings')}
                   className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                 />
                 <span className="ml-2 text-sm text-gray-700">View Bookings</span>
@@ -224,8 +279,8 @@ export default function CreateUserForm() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={formData.permissions.can_edit_bookings}
-                  onChange={() => handlePermissionChange('can_edit_bookings')}
+                  checked={formData.permissions.manageBookings}
+                  onChange={() => handlePermissionChange('manageBookings')}
                   className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                 />
                 <span className="ml-2 text-sm text-gray-700">Edit Bookings</span>
@@ -233,8 +288,8 @@ export default function CreateUserForm() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={formData.permissions.can_delete_bookings}
-                  onChange={() => handlePermissionChange('can_delete_bookings')}
+                  checked={formData.permissions.manageBookings}
+                  onChange={() => handlePermissionChange('manageBookings')}
                   className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                 />
                 <span className="ml-2 text-sm text-gray-700">Delete Bookings</span>
@@ -249,8 +304,8 @@ export default function CreateUserForm() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={formData.permissions.can_manage_users}
-                  onChange={() => handlePermissionChange('can_manage_users')}
+                  checked={formData.permissions.manageCustomers}
+                  onChange={() => handlePermissionChange('manageCustomers')}
                   className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                 />
                 <span className="ml-2 text-sm text-gray-700">Manage Users</span>
@@ -265,8 +320,8 @@ export default function CreateUserForm() {
               <label className="flex items-center">
                 <input
                   type="checkbox"
-                  checked={formData.permissions.can_view_reports}
-                  onChange={() => handlePermissionChange('can_view_reports')}
+                  checked={formData.permissions.accessReports}
+                  onChange={() => handlePermissionChange('accessReports')}
                   className="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
                 />
                 <span className="ml-2 text-sm text-gray-700">View Reports</span>

@@ -1,12 +1,21 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, FormEvent, ChangeEvent } from 'react';
 import { format } from 'date-fns';
 import Image from 'next/image';
 import { getSupabaseClient } from '@/lib/supabase';
 import { generateInvoice } from '@/lib/generateInvoice';
 import { toast } from 'react-hot-toast';
 import { formatDateForDisplay, formatDateForInput } from '@/lib/utils';
+
+// Add JSX namespace declaration
+declare global {
+  namespace JSX {
+    interface IntrinsicElements {
+      [elemName: string]: any;
+    }
+  }
+}
 
 interface InvoiceFormData {
   customerName: string;
@@ -63,9 +72,38 @@ export default function InvoicesPage() {
 
   // Helper function to handle date changes
   const handleDateChange = (field: 'invoiceDate' | 'pickupDate' | 'dropoffDate', value: string) => {
-    setFormData(prev => ({
+    setFormData((prev: InvoiceFormData) => ({
       ...prev,
       [field]: value || getTodayDate() // Fallback to today's date if empty
+    }));
+  };
+
+  // Helper function to handle vehicle details changes
+  const handleVehicleDetailChange = (field: keyof InvoiceFormData['vehicleDetails'], value: string) => {
+    setFormData((prev: InvoiceFormData) => ({
+      ...prev,
+      vehicleDetails: {
+        ...prev.vehicleDetails,
+        [field]: value
+      }
+    }));
+  };
+
+  // Helper function to handle item changes
+  const handleItemChange = (index: number, field: keyof InvoiceFormData['items'][number], value: string | number) => {
+    const newItems = [...formData.items];
+    newItems[index] = { ...newItems[index], [field]: value };
+    setFormData((prev: InvoiceFormData) => ({ ...prev, items: newItems }));
+  };
+
+  // Helper function to add new item
+  const addItem = () => {
+    setFormData((prev: InvoiceFormData) => ({
+      ...prev,
+      items: [
+        ...prev.items,
+        { description: '', quantity: 1, pricePerUnit: 0, tax: 0 }
+      ]
     }));
   };
 
@@ -233,10 +271,7 @@ export default function InvoicesPage() {
                     type="text"
                     required
                     value={formData.vehicleDetails.model}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      vehicleDetails: { ...prev.vehicleDetails, model: e.target.value }
-                    }))}
+                    onChange={(e) => handleVehicleDetailChange('model', e.target.value)}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
                 </div>
@@ -249,10 +284,7 @@ export default function InvoicesPage() {
                     type="text"
                     required
                     value={formData.vehicleDetails.registration}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      vehicleDetails: { ...prev.vehicleDetails, registration: e.target.value.toUpperCase() }
-                    }))}
+                    onChange={(e) => handleVehicleDetailChange('registration', e.target.value.toUpperCase())}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm uppercase"
                   />
                 </div>
@@ -318,11 +350,7 @@ export default function InvoicesPage() {
                       <input
                         type="text"
                         value={item.description}
-                        onChange={(e) => {
-                          const newItems = [...formData.items];
-                          newItems[index].description = e.target.value;
-                          setFormData(prev => ({ ...prev, items: newItems }));
-                        }}
+                        onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                         className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         placeholder="Item description"
                       />
@@ -332,11 +360,7 @@ export default function InvoicesPage() {
                         type="number"
                         min="1"
                         value={item.quantity}
-                        onChange={(e) => {
-                          const newItems = [...formData.items];
-                          newItems[index].quantity = parseInt(e.target.value) || 0;
-                          setFormData(prev => ({ ...prev, items: newItems }));
-                        }}
+                        onChange={(e) => handleItemChange(index, 'quantity', parseInt(e.target.value) || 0)}
                         className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         placeholder="Qty"
                       />
@@ -347,11 +371,7 @@ export default function InvoicesPage() {
                         min="0"
                         step="0.01"
                         value={item.pricePerUnit}
-                        onChange={(e) => {
-                          const newItems = [...formData.items];
-                          newItems[index].pricePerUnit = parseFloat(e.target.value) || 0;
-                          setFormData(prev => ({ ...prev, items: newItems }));
-                        }}
+                        onChange={(e) => handleItemChange(index, 'pricePerUnit', parseFloat(e.target.value) || 0)}
                         className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         placeholder="Price"
                       />
@@ -362,29 +382,22 @@ export default function InvoicesPage() {
                         min="0"
                         max="100"
                         value={item.tax}
-                        onChange={(e) => {
-                          const newItems = [...formData.items];
-                          newItems[index].tax = parseFloat(e.target.value) || 0;
-                          setFormData(prev => ({ ...prev, items: newItems }));
-                        }}
+                        onChange={(e) => handleItemChange(index, 'tax', parseFloat(e.target.value) || 0)}
                         className="block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         placeholder="Tax %"
                       />
                     </div>
                   </div>
                 ))}
-        </div>
-        <button
+              </div>
+              <button
                 type="button"
-                onClick={() => setFormData(prev => ({
-                  ...prev,
-                  items: [...prev.items, { description: '', quantity: 1, pricePerUnit: 0, tax: 0 }]
-                }))}
+                onClick={addItem}
                 className="mt-4 text-sm text-blue-600 hover:text-blue-500"
               >
                 + Add Another Item
-        </button>
-      </div>
+              </button>
+            </div>
 
             <div className="mt-6">
               <div className="border-t border-gray-200 pt-4">
