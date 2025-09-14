@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { Plus, Edit, Trash2, User, Shield, UserCheck } from 'lucide-react';
@@ -257,33 +257,107 @@ export default function UserManagement() {
         </div>
       </div>
 
-      {/* Placeholder for modals - will add later */}
+      {/* Create User Modal */}
       {isCreateModalOpen && (
         <div className='fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50'>
           <div className='bg-white rounded-lg p-6 max-w-md w-full'>
-            <h3 className='text-lg font-medium mb-4'>Create User</h3>
-            <p className='text-gray-600 mb-4'>User creation modal will be implemented here.</p>
-            <button
-              onClick={() => setIsCreateModalOpen(false)}
-              className='w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700'
-            >
-              Close
-            </button>
+            <h3 className='text-lg font-medium mb-4'>Create New User</h3>
+            <div className='space-y-4'>
+              <div>
+                <label className='block text-sm font-medium text-gray-700'>Email</label>
+                <input
+                  type='email'
+                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                  placeholder='user@example.com'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700'>Username</label>
+                <input
+                  type='text'
+                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                  placeholder='username'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700'>Password</label>
+                <input
+                  type='password'
+                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                  placeholder='password'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700'>Role</label>
+                <select className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'>
+                  <option value='worker'>Worker</option>
+                  <option value='admin'>Admin</option>
+                </select>
+              </div>
+            </div>
+            <div className='mt-6 flex space-x-3'>
+              <button
+                onClick={() => setIsCreateModalOpen(false)}
+                className='flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400'
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  toast.success('User creation functionality will be implemented');
+                  setIsCreateModalOpen(false);
+                }}
+                className='flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700'
+              >
+                Create User
+              </button>
+            </div>
           </div>
         </div>
       )}
 
+      {/* Edit User Modal */}
       {editingUser && (
         <div className='fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50'>
           <div className='bg-white rounded-lg p-6 max-w-md w-full'>
             <h3 className='text-lg font-medium mb-4'>Edit User: {editingUser.email}</h3>
-            <p className='text-gray-600 mb-4'>User edit modal will be implemented here.</p>
-            <button
-              onClick={() => setEditingUser(null)}
-              className='w-full bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700'
-            >
-              Close
-            </button>
+            <div className='space-y-4'>
+              <div>
+                <label className='block text-sm font-medium text-gray-700'>Username</label>
+                <input
+                  type='text'
+                  defaultValue={editingUser.username || ''}
+                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                />
+              </div>
+              <div>
+                <label className='block text-sm font-medium text-gray-700'>Role</label>
+                <select 
+                  defaultValue={editingUser.role}
+                  className='mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm'
+                >
+                  <option value='worker'>Worker</option>
+                  <option value='admin'>Admin</option>
+                </select>
+              </div>
+            </div>
+            <div className='mt-6 flex space-x-3'>
+              <button
+                onClick={() => setEditingUser(null)}
+                className='flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded hover:bg-gray-400'
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  toast.success('User update functionality will be implemented');
+                  setEditingUser(null);
+                }}
+                className='flex-1 bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700'
+              >
+                Update User
+              </button>
+            </div>
           </div>
         </div>
       )}

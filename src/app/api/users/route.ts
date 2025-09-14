@@ -2,6 +2,9 @@
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import type { UserProfile } from '@/types/database';
 
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const supabase = await getSupabaseServerClient();
