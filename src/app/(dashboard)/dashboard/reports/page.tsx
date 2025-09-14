@@ -71,19 +71,8 @@ const formatCurrency = (amount: number) => {
 };
 
 export default function ReportsPage() {
+  // All hooks must be called at the top, before any conditional returns
   const { hasPermission, isAdmin } = usePermissions();
-  // Check permissions
-  if (!hasPermission('can_view_reports') && !isAdmin) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center p-8 bg-white rounded-lg shadow-md">
-          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h2>
-          <p className="text-gray-600">You don't have permission to view this page.</p>
-        </div>
-      </div>
-    );
-  }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [revenueData, setRevenueData] = useState<RevenueData[]>([]);
@@ -461,6 +450,19 @@ export default function ReportsPage() {
       changeType: 'positive'
     }
   ];
+
+  // Now handle permission check AFTER all hooks are declared
+  if (!hasPermission('can_view_reports') && !isAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center p-8 bg-white rounded-lg shadow-md">
+          <AlertTriangle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Access Denied</h2>
+          <p className="text-gray-600">You don't have permission to view this page.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 p-8">
