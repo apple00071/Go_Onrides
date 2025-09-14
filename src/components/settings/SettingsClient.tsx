@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -6,6 +6,7 @@ import { getSupabaseClient } from '@/lib/supabase';
 import FeeSettings from '@/components/admin/FeeSettings';
 import { toast } from 'react-hot-toast';
 import LogoUploader from '@/components/settings/LogoUploader';
+import UserManagement from '@/components/settings/UserManagement';
 
 export default function SettingsClient() {
   const router = useRouter();
@@ -97,6 +98,11 @@ export default function SettingsClient() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="w-full max-w-[100vw] overflow-x-hidden space-y-8">
+        {/* User Management Section */}
+        <div>
+          <UserManagement />
+        </div>
+
         {/* Company Logo Section */}
         <div>
           <h2 className="text-2xl font-semibold text-gray-900 mb-6">Company Logo</h2>
