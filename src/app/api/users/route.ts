@@ -77,8 +77,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Create user in auth.users
-    const { data: newUser, error: signUpError } = await supabase.auth.admin.createUser({
+    // Create a service role client to bypass RLS and have admin privileges
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
+    // Create user in auth.users with admin client
+    const { data: newUser, error: signUpError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
       email_confirm: true
@@ -89,8 +102,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: signUpError.message }, { status: 400 });
     }
 
-    // Create profile with permissions
-    const { error: profileCreateError } = await supabase
+    // Create profile with permissions using admin client
+    const { error: profileCreateError } = await supabaseAdmin
       .from('profiles')
       .insert([
         {
@@ -106,7 +119,7 @@ export async function POST(request: NextRequest) {
     if (profileCreateError) {
       console.error('Error creating profile:', profileCreateError);
       // Clean up the auth user if profile creation fails
-      await supabase.auth.admin.deleteUser(newUser.user.id);
+      await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
       return NextResponse.json({ error: 'Failed to create user profile' }, { status: 500 });
     }
 
