@@ -48,7 +48,8 @@
     "signature_pad": "^4.1.7",
     "sonner": "^2.0.5",
     "tailwind-merge": "^2.6.0",
-    "tailwindcss-animate": "^1.0.7"
+    "tailwindcss-animate": "^1.0.7",
+    "wasenderapi": "^0.1.5"
   },
   "devDependencies": {
     "@supabase/supabase-js": "^2.50.2",

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServerClient } from '@/lib/supabase/server';
 import { requirePermission } from '@/lib/permission-checker';
+import { sendTripCompletion } from '@/lib/whatsapp-utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -11,7 +12,7 @@ export async function POST(
 ) {
   try {
     const supabase = await getSupabaseServerClient();
-    
+
     // Check if user is authenticated
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
@@ -20,13 +21,13 @@ export async function POST(
 
     // Check if user has manageBookings permission
     const { hasPermission, error: permissionError } = await requirePermission(
-      user.id, 
+      user.id,
       'manageBookings'
     );
 
     if (!hasPermission) {
-      return NextResponse.json({ 
-        error: permissionError || 'Insufficient permissions to complete bookings' 
+      return NextResponse.json({
+        error: permissionError || 'Insufficient permissions to complete bookings'
       }, { status: 403 });
     }
 
@@ -44,6 +45,24 @@ export async function POST(
       paymentMethod,
       notes
     } = body;
+
+    // Get the booking details first to access customer information
+    const { data: booking, error: fetchError } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        customer:customer_id (
+          contact,
+          name
+        )
+      `)
+      .eq('booking_id', params.id)
+      .single();
+
+    if (fetchError || !booking) {
+      console.error('Error fetching booking:', fetchError);
+      return NextResponse.json({ error: 'Booking not found' }, { status: 404 });
+    }
 
     // Update booking with completion details
     const { data: updatedBooking, error: updateError } = await supabase
@@ -74,12 +93,31 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to complete booking' }, { status: 500 });
     }
 
-    return NextResponse.json({ 
-      message: 'Booking completed successfully', 
-      booking: updatedBooking 
+    // Send WhatsApp completion notification to customer
+    try {
+      const customerPhone = booking.customer?.contact;
+      if (customerPhone) {
+        const tripDetails = {
+          totalFare: parseFloat(paymentAmount) || booking.total_amount || 0,
+          distance: booking.vehicle_details?.distance || 'N/A',
+          duration: `${Math.ceil((new Date(booking.end_date).getTime() - new Date(booking.start_date).getTime()) / (1000 * 60 * 60 * 24))} days`,
+          paymentMethod: paymentMethod || 'cash'
+        };
+
+        await sendTripCompletion(customerPhone, tripDetails);
+        console.log('WhatsApp completion notification sent to:', customerPhone);
+      }
+    } catch (whatsappError) {
+      console.error('Error sending WhatsApp notification:', whatsappError);
+      // Don't fail the booking completion if WhatsApp fails
+    }
+
+    return NextResponse.json({
+      message: 'Booking completed successfully',
+      booking: updatedBooking
     });
   } catch (error) {
     console.error('Error in POST /api/bookings/[id]/complete:', error);
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
-} 
+}

@@ -15,9 +15,7 @@ import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRot
 import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
 import { type FormEvent } from 'react';
 import { RefreshCw, Upload, Camera, X } from 'lucide-react';
-import { generateInvoice } from '@/lib/generateInvoice';
-import { CheckCircleIcon, XCircleIcon } from '@heroicons/react/24/outline';
-// OTP disabled: verification component removed
+import { sendBookingConfirmation } from '@/lib/whatsapp-utils';
 
 interface BookingFormData {
   customer_name: string;
@@ -925,6 +923,23 @@ export default function NewBookingPage() {
       // Clear backup data on successful submission
       sessionStorage.removeItem('booking_form_backup');
       localStorage.removeItem('booking_form_backup');
+
+      // Send WhatsApp booking confirmation to customer
+      try {
+        const bookingDetails = {
+          bookingId: newBooking.booking_id,
+          pickupLocation: 'Go-On Rides Garage', // Default pickup location
+          dropLocation: 'Go-On Rides Garage', // Default drop location
+          scheduledTime: `${formData.start_date} ${formData.pickup_time}`,
+          vehicleType: formData.vehicle_details.model
+        };
+
+        await sendBookingConfirmation(formData.customer_contact, bookingDetails);
+        console.log('WhatsApp booking confirmation sent to:', formData.customer_contact);
+      } catch (whatsappError) {
+        console.error('Error sending WhatsApp notification:', whatsappError);
+        // Don't fail the booking creation if WhatsApp fails
+      }
 
       // Show success toast and redirect
       toast.success('Booking created successfully!');

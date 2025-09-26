@@ -3,11 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft } from 'lucide-react';
-import { toast } from 'sonner';
 import { getSupabaseClient } from '@/lib/supabase';
 import { calculateReturnFees } from '@/lib/fee-calculator';
 import { CurrencyInput } from '@/components/ui/currency-input';
-import { sendBookingUpdateMessage } from '@/lib/whatsapp';
+import { sendTripCompletion } from '@/lib/whatsapp-utils';
+import { toast } from 'sonner';
 
 interface BookingDetails {
   id: string;
@@ -24,6 +24,13 @@ interface BookingDetails {
   payment_status: string;
   security_deposit_amount: number;
   customer_contact: string;
+  start_date: string;
+  end_date: string;
+  vehicle_details: {
+    model: string;
+    registration: string;
+    distance?: string;
+  };
 }
 
 interface FormData {
@@ -235,7 +242,7 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
       };
 
       // Only add odometer_reading and fuel_level for outstation bookings
-      if (booking?.rental_purpose === 'outstation') {
+      if (booking && booking.rental_purpose === 'outstation') {
         updateData.odometer_reading = formData.odometer_reading;
         updateData.fuel_level = formData.fuel_level;
       }
@@ -277,21 +284,24 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
       }
       if (extensionFee > 0) {
         additionalInfo += `Extension fee: ₹${extensionFee}. `;
-      }
-      if (remainingAmount > 0) {
         additionalInfo += `Remaining amount: ₹${remainingAmount}. `;
       }
 
       // Send WhatsApp notification
       try {
         const customerPhone = currentBooking.customer?.contact || currentBooking.customer?.phone;
-        if (customerPhone) {
-          await sendBookingUpdateMessage(
-            customerPhone,
-            booking?.booking_id || '',
-            'completed',
-            additionalInfo
-          );
+        if (customerPhone && booking) {
+          const tripDetails = {
+            totalFare: finalTotalAmount,
+            distance: booking.vehicle_details?.distance || 'N/A',
+            duration: `${Math.ceil((new Date(booking.end_date).getTime() - new Date(booking.start_date).getTime()) / (1000 * 60 * 60 * 24))} days`,
+            paymentMethod: formData.paymentMethod || 'cash',
+            bookingId: booking.booking_id,
+            vehicleModel: booking.vehicle_details?.model,
+            registrationNumber: booking.vehicle_details?.registration
+          };
+
+          await sendTripCompletion(customerPhone, tripDetails);
         }
       } catch (notificationError) {
         console.error('Failed to send WhatsApp notification:', notificationError);
@@ -300,7 +310,7 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
 
       toast.success('Booking completed successfully');
       router.push('/dashboard/bookings');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error completing booking:', error);
       setError(error instanceof Error ? error.message : 'An unexpected error occurred');
     } finally {
@@ -318,7 +328,7 @@ export default function CompleteBookingPage({ params }: { params: { id: string }
     );
   }
 
-  const termsAndConditions = booking.security_deposit_amount > 0 
+  const termsAndConditions = booking && booking.security_deposit_amount > 0 
     ? (() => {
         const damageChargesAmount = parseFloat(formData.damageCharges) || 0;
         const lateFeeAmount = parseFloat(formData.lateFee) || 0;
