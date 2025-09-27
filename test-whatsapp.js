@@ -28,7 +28,7 @@ async function testWhatsAppAPI() {
       text: message
     }, {
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'Authorization': `Bearer token ${apiKey}`,
         'Content-Type': 'application/json'
       },
       timeout: 10000

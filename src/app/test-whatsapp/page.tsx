@@ -7,7 +7,7 @@ export default function TestWhatsApp() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [response, setResponse] = useState<any>(null);
-  const [phoneNumber, setPhoneNumber] = useState('8247494622');
+  const [phoneNumber, setPhoneNumber] = useState('');
 
   const sendTestMessage = async () => {
     try {
@@ -15,6 +15,13 @@ export default function TestWhatsApp() {
       setError(null);
       setSuccess(false);
       setResponse(null);
+
+      // Validate phone number
+      if (!phoneNumber.trim()) {
+        throw new Error('Please enter a phone number');
+      }
+
+      console.log('Sending test message to:', phoneNumber);
 
       const response = await fetch('/api/test-whatsapp', {
         method: 'POST',
@@ -60,7 +67,7 @@ export default function TestWhatsApp() {
               value={phoneNumber}
               onChange={(e) => setPhoneNumber(e.target.value)}
               className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-              placeholder="Enter phone number"
+              placeholder="Enter phone number (e.g., 918247494622 for testing)"
             />
           </div>
 

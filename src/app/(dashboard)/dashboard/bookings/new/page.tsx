@@ -15,7 +15,7 @@ import SignaturePadWithRotation from '@/components/signature/SignaturePadWithRot
 import type { UploadedDocuments, SubmittedDocuments } from '@/types/bookings';
 import { type FormEvent } from 'react';
 import { RefreshCw, Upload, Camera, X } from 'lucide-react';
-import { sendBookingConfirmation } from '@/lib/whatsapp-utils';
+import { sendBookingProcessed } from '@/lib/whatsapp-utils';
 
 interface BookingFormData {
   customer_name: string;
@@ -931,11 +931,16 @@ export default function NewBookingPage() {
           pickupLocation: 'Go-On Rides Garage', // Default pickup location
           dropLocation: 'Go-On Rides Garage', // Default drop location
           scheduledTime: `${formData.start_date} ${formData.pickup_time}`,
-          vehicleType: formData.vehicle_details.model
+          dropoffTime: `${formData.end_date} ${formData.dropoff_time}`,
+          vehicleType: formData.vehicle_details.model,
+          registrationNumber: formData.vehicle_details.registration,
+          bookingAmount: formData.booking_amount.toString(),
+          securityDeposit: formData.security_deposit_amount.toString(),
+          totalAmount: formData.total_amount.toString()
         };
 
-        await sendBookingConfirmation(formData.customer_contact, bookingDetails);
-        console.log('WhatsApp booking confirmation sent to:', formData.customer_contact);
+        await sendBookingProcessed(formData.customer_contact, bookingDetails);
+        console.log('WhatsApp booking processed notification sent to:', formData.customer_contact);
       } catch (whatsappError) {
         console.error('Error sending WhatsApp notification:', whatsappError);
         // Don't fail the booking creation if WhatsApp fails
@@ -1553,49 +1558,35 @@ export default function NewBookingPage() {
                     <label htmlFor="start_date" className="block text-sm font-medium text-gray-700 mb-1">
                       Start Date *
                     </label>
-                    <div className="relative">
-                      <input
-                        id="start_date"
-                        type="date"
-                        name="start_date"
-                        required
-                        min={formatDateForInput(new Date())}
-                        max={formatDateForInput(maxStartDate)}
-                        value={formData.start_date}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                      {formData.start_date && (
-                        <div className="absolute right-0 top-0 h-full flex items-center pr-2">
-                          <span className="text-xs text-gray-500">{formatDateForDisplay(formData.start_date)}</span>
-                        </div>
-                      )}
-                    </div>
+                    <input
+                      id="start_date"
+                      type="date"
+                      name="start_date"
+                      required
+                      min={formatDateForInput(new Date())}
+                      max={formatDateForInput(maxStartDate)}
+                      value={formData.start_date}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
                   </div>
                   <div>
                     <label htmlFor="end_date" className="block text-sm font-medium text-gray-700 mb-1">
                       End Date *
                     </label>
-                    <div className="relative">
-                      <input
-                        id="end_date"
-                        type="date"
-                        name="end_date"
-                        required
-                        min={formatDateForInput(minEndDate)}
-                        max={formatDateForInput(maxEndDate)}
-                        value={formData.end_date}
-                        onChange={handleInputChange}
-                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        aria-required="true"
-                      />
-                      {formData.end_date && (
-                        <div className="absolute right-0 top-0 h-full flex items-center pr-2">
-                          <span className="text-xs text-gray-500">{formatDateForDisplay(formData.end_date)}</span>
-                        </div>
-                      )}
-                    </div>
+                    <input
+                      id="end_date"
+                      type="date"
+                      name="end_date"
+                      required
+                      min={formatDateForInput(minEndDate)}
+                      max={formatDateForInput(maxEndDate)}
+                      value={formData.end_date}
+                      onChange={handleInputChange}
+                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                      aria-required="true"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">

@@ -21,9 +21,9 @@ export async function sendWhatsAppOTP(phoneNumber: string, otp: string): Promise
 }
 
 /**
- * Send booking confirmation via WhatsApp
+ * Send booking processed notification via WhatsApp (when customer arrives and booking is created)
  */
-export async function sendBookingConfirmation(
+export async function sendBookingProcessed(
   phoneNumber: string,
   bookingDetails: {
     bookingId: string;
@@ -37,13 +37,13 @@ export async function sendBookingConfirmation(
   }
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    await WhatsAppService.sendBookingConfirmation(phoneNumber, bookingDetails);
+    await WhatsAppService.sendBookingProcessed(phoneNumber, bookingDetails);
     return { success: true };
   } catch (error) {
-    console.error('Error sending booking confirmation:', error);
+    console.error('Error sending booking processed notification:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to send booking confirmation'
+      error: error instanceof Error ? error.message : 'Failed to send booking processed notification'
     };
   }
 }
@@ -213,16 +213,108 @@ export function formatCurrency(amount: number): string {
 }
 
 /**
- * Format date and time for WhatsApp messages
+ * Format date and time for WhatsApp messages in DD/MM/YYYY 12-hour format
  */
-export function formatDateTime(date: Date): string {
-  return date.toLocaleString('en-IN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
-  });
+export function formatWhatsAppDateTime(dateTimeStr: string): string {
+  if (!dateTimeStr) return '';
+
+  try {
+    // Handle different input formats
+    let date: Date;
+    if (dateTimeStr.includes(' ')) {
+      // Format: "YYYY-MM-DD HH:mm"
+      const [datePart, timePart] = dateTimeStr.split(' ');
+      const [year, month, day] = datePart.split('-').map(Number);
+      const [hours, minutes] = timePart.split(':').map(Number);
+      date = new Date(year, month - 1, day, hours, minutes);
+    } else {
+      // Try to parse as ISO string or other format
+      date = new Date(dateTimeStr);
+    }
+
+    if (isNaN(date.getTime())) {
+      return dateTimeStr; // Return original if parsing fails
+    }
+
+    // Format date as DD/MM/YYYY
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+
+    // Format time as 12-hour with AM/PM
+    let hours = date.getHours();
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    const period = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12; // Convert 0 to 12
+
+    return `${day}/${month}/${year} ${hours}:${minutes} ${period}`;
+  } catch (error) {
+    console.error('Error formatting date time:', error);
+    return dateTimeStr; // Return original on error
+  }
+}
+
+/**
+ * Format date only for WhatsApp messages in DD/MM/YYYY format
+ */
+export function formatWhatsAppDate(dateStr: string): string {
+  if (!dateStr) return '';
+
+  try {
+    let date: Date;
+    if (dateStr.includes('-')) {
+      // Format: "YYYY-MM-DD"
+      const [year, month, day] = dateStr.split('-').map(Number);
+      date = new Date(year, month - 1, day);
+    } else {
+      date = new Date(dateStr);
+    }
+
+    if (isNaN(date.getTime())) {
+      return dateStr;
+    }
+
+    const day = date.getDate().toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const year = date.getFullYear();
+
+    return `${day}/${month}/${year}`;
+  } catch (error) {
+    console.error('Error formatting date:', error);
+    return dateStr;
+  }
+}
+
+/**
+ * Format time only for WhatsApp messages in 12-hour format
+ */
+export function formatWhatsAppTime(timeStr: string): string {
+  if (!timeStr) return '';
+
+  try {
+    let hours: number, minutes: number;
+
+    if (timeStr.includes(':')) {
+      [hours, minutes] = timeStr.split(':').map(Number);
+    } else {
+      // If only hours, assume minutes are 0
+      hours = parseInt(timeStr, 10);
+      minutes = 0;
+    }
+
+    if (isNaN(hours) || isNaN(minutes)) {
+      return timeStr;
+    }
+
+    const period = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12; // Convert 0 to 12
+    const formattedMinutes = minutes.toString().padStart(2, '0');
+
+    return `${hours}:${formattedMinutes} ${period}`;
+  } catch (error) {
+    console.error('Error formatting time:', error);
+    return timeStr;
+  }
 }
 
 /**
@@ -233,36 +325,31 @@ export function createBookingConfirmationMessage(bookingDetails: {
   pickupLocation: string;
   dropLocation: string;
   scheduledTime: string;
+  dropoffTime?: string;
   vehicleType?: string;
+  registrationNumber?: string;
   bookingAmount?: string;
   securityDeposit?: string;
   totalAmount?: string;
 }): string {
-  return `🎉 *BOOKING CONFIRMED!*
+  return `🛵 Go-On Rides – Booking Processed
 
-━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 *Booking ID:* ${bookingDetails.bookingId}
-🚗 *Vehicle:* ${bookingDetails.vehicleType || 'Vehicle details will be shared'}
-⏰ *Pickup:* ${bookingDetails.scheduledTime}
+🆔 Booking ID: ${bookingDetails.bookingId}
+🚘 Vehicle: ${bookingDetails.vehicleType || 'Vehicle details will be shared'}
+🔖 Reg. No.: ${bookingDetails.registrationNumber || 'TBD'}
+📅 Pickup: ${formatWhatsAppDateTime(bookingDetails.scheduledTime)}
+📅 Drop-off: ${bookingDetails.dropoffTime ? formatWhatsAppDateTime(bookingDetails.dropoffTime) : 'TBD'}
+💰 Amount Collected: ₹${bookingDetails.totalAmount || 'TBD'} (₹${bookingDetails.bookingAmount || 'TBD'} booking + ₹${bookingDetails.securityDeposit || 'TBD'} security)
 
-💰 *Payment Details:*
-• Booking Amount: ₹${bookingDetails.bookingAmount || 'TBD'}
-• Security Deposit: ₹${bookingDetails.securityDeposit || 'TBD'}
-• Total Amount: ₹${bookingDetails.totalAmount || 'TBD'}
+📌 Terms & Conditions:
+• Carry a valid Driving License during the ride
+• Fuel is not included in the booking amount
+• Vehicle must be returned on time; late returns may attract extra charges
+• Any damage or traffic fines will be deducted from the security deposit
+• Please check vehicle condition before taking delivery
+• Note fuel level and odometer reading
 
-📍 *Pickup Location:* ${bookingDetails.pickupLocation}
-📍 *Return Location:* ${bookingDetails.dropLocation}
-
-✅ *Next Steps:*
-• Arrive 15 minutes early
-• Bring valid driving license
-• Check vehicle condition
-• Note fuel level on pickup
-
-🆘 *Emergency:* Call +91-8247494622
-
-Thank you for choosing Go-On Rides!
-Safe travels! 🛣️✨`;
+🙏 Thank you for choosing Go-On Rides! Have a safe ride.`;
 }
 
 /**
@@ -281,22 +368,21 @@ export function createPickupReminderMessage(rentalDetails: {
 📋 *Booking ID:* ${rentalDetails.bookingId}
 🚗 *Vehicle:* ${rentalDetails.vehicleModel}
 ${rentalDetails.registrationNumber ? `🔢 *Reg. No:* ${rentalDetails.registrationNumber}` : ''}
-⏰ *Pickup Time:* ${rentalDetails.pickupTime}
+⏰ *Pickup Time:* ${formatWhatsAppTime(rentalDetails.pickupTime)}
 
 📍 *Location:* ${rentalDetails.pickupLocation}
 
-⚠️ *Important Reminders:*
-• Arrive 15 minutes early
-• Bring valid driving license
-• Bring original Aadhar card
-• Check vehicle condition
-• Note current fuel level
+⚠️ *Vehicle Handover Instructions:*
+• Please complete document verification
+• Check vehicle condition before taking
+• Note current fuel level and odometer
 • Take photos of any existing damage
+• Ensure all documents are in order
 
 🆘 *Need Help?* Call +91-8247494622
 
-Ready for your journey?
-Go-On Rides awaits! 🏍️🚗`;
+Your vehicle is ready for handover!
+Go-On Rides team is waiting to serve you! 🏍️🚗`;
 }
 
 /**
@@ -315,7 +401,7 @@ export function createReturnReminderMessage(rentalDetails: {
 📋 *Booking ID:* ${rentalDetails.bookingId}
 🚗 *Vehicle:* ${rentalDetails.vehicleModel}
 ${rentalDetails.registrationNumber ? `🔢 *Reg. No:* ${rentalDetails.registrationNumber}` : ''}
-⏰ *Return Time:* ${rentalDetails.returnTime}
+⏰ *Return Time:* ${formatWhatsAppTime(rentalDetails.returnTime)}
 
 📍 *Return Location:* ${rentalDetails.returnLocation}
 

@@ -13,36 +13,26 @@ export async function POST(request: Request) {
       );
     }
 
-    console.log('Testing WhatsApp API connection...');
-
-    // Test the API connection first
-    const connectionTest = await WhatsAppService.testConnection();
-    if (!connectionTest.success) {
-      console.error('API connection test failed:', connectionTest.error);
-      return NextResponse.json(
-        {
-          success: false,
-          error: `API Connection Failed: ${connectionTest.error}`
-        },
-        { status: 400 }
-      );
-    }
+    console.log('API received phone number:', phone_number);
 
     // Test data for the booking confirmation template
     const testBookingDetails = {
       bookingId: "TEST123",
       pickupLocation: "Go-On Rides Garage",
       dropLocation: "Go-On Rides Garage",
-      scheduledTime: "2024-01-15 10:00 AM",
+      scheduledTime: "2024-01-15 10:00",
+      dropoffTime: "2024-01-16 10:00",
       vehicleType: "Honda Activa",
+      registrationNumber: "TS09AB1234",
       bookingAmount: "500",
       securityDeposit: "1000",
       totalAmount: "1500"
     };
 
-    console.log('Sending test WhatsApp booking confirmation to:', phone_number);
+    console.log('Test booking details:', testBookingDetails);
+    console.log('Sending test WhatsApp booking processed notification to:', phone_number);
 
-    const result = await WhatsAppService.sendBookingConfirmation(phone_number, testBookingDetails);
+    const result = await WhatsAppService.sendBookingProcessed(phone_number, testBookingDetails);
 
     console.log('WhatsApp message sent successfully:', result);
 

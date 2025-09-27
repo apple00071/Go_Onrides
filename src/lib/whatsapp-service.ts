@@ -16,20 +16,9 @@ interface WhatsAppMessage {
 class WhatsAppService {
   private config: WhatsAppConfig;
 
-  /**
-   * Clean message content by removing problematic characters and formatting
-   */
-  private cleanMessageContent(message: string): string {
-    // Replace newlines with spaces and trim extra whitespace
-    return message
-      .replace(/\n/g, ' ')  // Replace newlines with spaces
-      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-      .trim();
-  }
-
   constructor() {
     this.config = {
-      apiKey: process.env.WASENDER_API_KEY || '',
+      apiKey: process.env.NEXT_PUBLIC_WASENDER_API_KEY || '',
       baseUrl: 'https://www.wasenderapi.com' // Correct WasenderAPI domain
     };
   }
@@ -54,82 +43,32 @@ class WhatsAppService {
         throw new Error(`Invalid phone number format: ${messageData.to}. Expected format: 10 digits or 12 digits with country code.`);
       }
 
-      // Clean the message content
-      const cleanMessage = this.cleanMessageContent(messageData.message);
+      // Keep the original message formatting for WhatsApp
+      const message = messageData.message;
 
       console.log('Sending WhatsApp message to:', formattedPhone);
-      console.log('Cleaned message:', cleanMessage);
+      console.log('Message:', message);
 
-      // Try different authentication methods and endpoints
-      let response;
-      const endpoints = [
-        `${this.config.baseUrl}/api/send-message`,
-        `${this.config.baseUrl}/send-message`,
-        `${this.config.baseUrl}/v1/send-message`
-      ];
+      // Use only the working WasenderAPI endpoint with correct Bearer authentication
+      const url = `${this.config.baseUrl}/api/send-message`;
 
-      for (const endpoint of endpoints) {
-        try {
-          // Method 1: Bearer token in header (correct WasenderAPI format)
-          console.log(`Trying endpoint: ${endpoint} with Bearer token auth`);
-          response = await axios.post(endpoint, {
-            to: formattedPhone,
-            text: cleanMessage, // Use cleaned message
-            type: messageData.type || 'text'
-          }, {
-            headers: {
-              'Authorization': `Bearer ${this.config.apiKey}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 10000
-          });
-          console.log(`Success with ${endpoint} and Bearer token auth`);
-          break;
-        } catch (headerError) {
-          try {
-            console.log(`Bearer token failed, trying ${endpoint} with API key header`);
-            // Method 2: API key as plain header
-            response = await axios.post(endpoint, {
-              to: formattedPhone,
-              text: cleanMessage,
-              type: messageData.type || 'text'
-            }, {
-              headers: {
-                'X-API-Key': this.config.apiKey,
-                'Content-Type': 'application/json'
-              },
-              timeout: 10000
-            });
-            console.log(`Success with ${endpoint} and API key header`);
-            break;
-          } catch (apiKeyHeaderError) {
-            try {
-              console.log(`API key header failed, trying ${endpoint} with body auth`);
-              // Method 3: API key in body (legacy method)
-              response = await axios.post(endpoint, {
-                to: formattedPhone,
-                text: cleanMessage,
-                type: messageData.type || 'text',
-                api_key: this.config.apiKey
-              }, {
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                timeout: 10000
-              });
-              console.log(`Success with ${endpoint} and body auth`);
-              break;
-            } catch (bodyError) {
-              console.log(`All auth methods failed for ${endpoint}, trying next endpoint...`);
-              continue;
-            }
-          }
+      console.log('Sending WhatsApp message to:', formattedPhone);
+      console.log('Message:', message);
+
+      // Use the correct authentication format that we know works
+      const response = await axios.post(url,
+        {
+          to: formattedPhone,
+          text: message
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.config.apiKey}`,
+            'Content-Type': 'application/json'
+          },
+          timeout: 15000
         }
-      }
-
-      if (!response) {
-        throw new Error('All API endpoints and authentication methods failed');
-      }
+      );
 
       console.log('WhatsApp API response:', response.data);
       return response.data;
@@ -187,25 +126,145 @@ Thank you for choosing Go Onrides!`;
   }
 
   /**
-   * Send booking confirmation via WhatsApp
+   * Format date and time for WhatsApp messages in DD/MM/YYYY 12-hour format
    */
-  async sendBookingConfirmation(phoneNumber: string, bookingDetails: {
+  formatDateTime(dateTimeStr: string): string {
+    if (!dateTimeStr) return '';
+
+    try {
+      // Handle different input formats
+      let date: Date;
+      if (dateTimeStr.includes(' ')) {
+        // Format: "YYYY-MM-DD HH:mm"
+        const [datePart, timePart] = dateTimeStr.split(' ');
+        const [year, month, day] = datePart.split('-').map(Number);
+        const [hours, minutes] = timePart.split(':').map(Number);
+        date = new Date(year, month - 1, day, hours, minutes);
+      } else {
+        // Try to parse as ISO string or other format
+        date = new Date(dateTimeStr);
+      }
+
+      if (isNaN(date.getTime())) {
+        return dateTimeStr; // Return original if parsing fails
+      }
+
+      // Format date as DD/MM/YYYY
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+
+      // Format time as 12-hour with AM/PM
+      let hours = date.getHours();
+      const minutes = date.getMinutes().toString().padStart(2, '0');
+      const period = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12; // Convert 0 to 12
+
+      return `${day}/${month}/${year} ${hours}:${minutes} ${period}`;
+    } catch (error) {
+      console.error('Error formatting date time:', error);
+      return dateTimeStr; // Return original on error
+    }
+  }
+
+  /**
+   * Format date only for WhatsApp messages in DD/MM/YYYY format
+   */
+  formatDate(dateStr: string): string {
+    if (!dateStr) return '';
+
+    try {
+      let date: Date;
+      if (dateStr.includes('-')) {
+        // Format: "YYYY-MM-DD"
+        const [year, month, day] = dateStr.split('-').map(Number);
+        date = new Date(year, month - 1, day);
+      } else {
+        date = new Date(dateStr);
+      }
+
+      if (isNaN(date.getTime())) {
+        return dateStr;
+      }
+
+      const day = date.getDate().toString().padStart(2, '0');
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const year = date.getFullYear();
+
+      return `${day}/${month}/${year}`;
+    } catch (error) {
+      console.error('Error formatting date:', error);
+      return dateStr;
+    }
+  }
+
+  /**
+   * Format time only for WhatsApp messages in 12-hour format
+   */
+  formatTime(timeStr: string): string {
+    if (!timeStr) return '';
+
+    try {
+      let hours: number, minutes: number;
+
+      if (timeStr.includes(':')) {
+        [hours, minutes] = timeStr.split(':').map(Number);
+      } else {
+        // If only hours, assume minutes are 0
+        hours = parseInt(timeStr, 10);
+        minutes = 0;
+      }
+
+      if (isNaN(hours) || isNaN(minutes)) {
+        return timeStr;
+      }
+
+      const period = hours >= 12 ? 'PM' : 'AM';
+      hours = hours % 12 || 12; // Convert 0 to 12
+      const formattedMinutes = minutes.toString().padStart(2, '0');
+
+      return `${hours}:${formattedMinutes} ${period}`;
+    } catch (error) {
+      console.error('Error formatting time:', error);
+      return timeStr;
+    }
+  }
+  async sendBookingProcessed(phoneNumber: string, bookingDetails: {
     bookingId: string;
     pickupLocation: string;
     dropLocation: string;
     scheduledTime: string;
+    dropoffTime?: string;
     driverName?: string;
     vehicleType?: string;
+    registrationNumber?: string;
     bookingAmount?: string;
     securityDeposit?: string;
     totalAmount?: string;
   }): Promise<any> {
-    // Simplified message format without emojis and special characters
-    const message = `BOOKING CONFIRMED! Booking ID: ${bookingDetails.bookingId}. Vehicle: ${bookingDetails.vehicleType || 'Vehicle details will be shared'}. ` +
-      `Pickup: ${bookingDetails.scheduledTime}. ` +
-      `Location: ${bookingDetails.pickupLocation}. ` +
-      `Total Amount: Rs.${bookingDetails.totalAmount || 'TBD'} (Booking: Rs.${bookingDetails.bookingAmount || 'TBD'} + Security: Rs.${bookingDetails.securityDeposit || 'TBD'}). ` +
-      `Please arrive 15 minutes early with your driving license. Thank you for choosing Go-On Rides!`;
+    console.log('sendBookingProcessed called with phone number:', phoneNumber);
+
+    // Professional booking processed message template
+    const message = `🛵 Go-On Rides – Booking Processed
+
+🆔 Booking ID: ${bookingDetails.bookingId}
+🚘 Vehicle: ${bookingDetails.vehicleType || 'Vehicle details will be shared'}
+🔖 Reg. No.: ${bookingDetails.registrationNumber || 'TBD'}
+📅 Pickup: ${this.formatDateTime(bookingDetails.scheduledTime)}
+📅 Drop-off: ${bookingDetails.dropoffTime ? this.formatDateTime(bookingDetails.dropoffTime) : 'TBD'}
+💰 Amount Collected: ₹${bookingDetails.totalAmount || 'TBD'} (₹${bookingDetails.bookingAmount || 'TBD'} booking + ₹${bookingDetails.securityDeposit || 'TBD'} security)
+
+📌 Terms & Conditions:
+• Carry a valid Driving License during the ride
+• Fuel is not included in the booking amount
+• Vehicle must be returned on time; late returns may attract extra charges
+• Any damage or traffic fines will be deducted from the security deposit
+• Please check vehicle condition before taking delivery
+• Note fuel level and odometer reading
+
+🙏 Thank you for choosing Go-On Rides! Have a safe ride.`;
+
+    console.log('Booking processed message:', message);
 
     return this.sendMessage({
       to: phoneNumber,
@@ -230,22 +289,21 @@ Thank you for choosing Go Onrides!`;
 📋 *Booking ID:* ${rentalDetails.bookingId}
 🚗 *Vehicle:* ${rentalDetails.vehicleModel}
 ${rentalDetails.registrationNumber ? `🔢 *Reg. No:* ${rentalDetails.registrationNumber}` : ''}
-⏰ *Pickup Time:* ${rentalDetails.pickupTime}
+⏰ *Pickup Time:* ${this.formatTime(rentalDetails.pickupTime)}
 
 📍 *Location:* ${rentalDetails.pickupLocation}
 
-⚠️ *Important Reminders:*
-• Arrive 15 minutes early
-• Bring valid driving license
-• Bring original Aadhar card
-• Check vehicle condition
-• Note current fuel level
+⚠️ *Vehicle Handover Instructions:*
+• Please complete document verification
+• Check vehicle condition before taking
+• Note current fuel level and odometer
 • Take photos of any existing damage
+• Ensure all documents are in order
 
 🆘 *Need Help?* Call +91-8247494622
 
-Ready for your journey? 
-Go-On Rides awaits! 🏍️🚗`;
+Your vehicle is ready for handover!
+Go-On Rides team is waiting to serve you! 🏍️🚗`;
 
     return this.sendMessage({
       to: phoneNumber,
@@ -270,7 +328,7 @@ Go-On Rides awaits! 🏍️🚗`;
 📋 *Booking ID:* ${rentalDetails.bookingId}
 🚗 *Vehicle:* ${rentalDetails.vehicleModel}
 ${rentalDetails.registrationNumber ? `🔢 *Reg. No:* ${rentalDetails.registrationNumber}` : ''}
-⏰ *Return Time:* ${rentalDetails.returnTime}
+⏰ *Return Time:* ${this.formatTime(rentalDetails.returnTime)}
 
 📍 *Return Location:* ${rentalDetails.returnLocation}
 
@@ -357,7 +415,7 @@ ${promotion.title}
 ${promotion.description}
 
 ${promotion.code ? `Use code: ${promotion.code}` : ''}
-Valid until: ${promotion.validUntil}
+Valid until: ${this.formatDate(promotion.validUntil)}
 
 Book now with Go Onrides!`;
 
@@ -369,141 +427,108 @@ Book now with Go Onrides!`;
   }
 
   /**
-   * Validate phone number format
+   * Validate phone number format in E.164 format
+   * Accepts: +919876543210, 919876543210, 9876543210
    */
   validatePhoneNumber(phoneNumber: string): boolean {
-    // Remove all non-digit characters
+    // Remove all non-digit characters and any leading plus
     const cleaned = phoneNumber.replace(/\D/g, '');
-
-    // Check if it starts with country code (assuming India)
-    if (cleaned.startsWith('91') && cleaned.length === 12) {
-      return true;
-    }
-
+    
     // Check if it's a 10-digit number (without country code)
     if (cleaned.length === 10) {
       return true;
     }
-
+    
+    // Check if it's a 12-digit number with country code (91 for India)
+    if (cleaned.startsWith('91') && cleaned.length === 12) {
+      return true;
+    }
+    
+    // Check if it's a 13-digit number with +91 country code
+    if (phoneNumber.startsWith('+91') && cleaned.length === 12) {
+      return true;
+    }
+    
     return false;
   }
 
-  /**
-   * Format phone number for WhatsApp API
+    /**
+   * Format phone number for WhatsApp API in E.164 format
+   * Example: +919876543210
    */
   formatPhoneNumber(phoneNumber: string): string {
+    // Remove all non-digit characters
     const cleaned = phoneNumber.replace(/\D/g, '');
 
-    // If it's a 10-digit number, add country code
+    // If it's a 10-digit number, add country code with plus sign
     if (cleaned.length === 10) {
-      return `91${cleaned}`;
+      return `+91${cleaned}`;
     }
 
-    // If it already has country code, return as is
-    return cleaned;
+    // If it already has country code but no plus, add it
+    if (cleaned.startsWith('91') && cleaned.length === 12) {
+      return `+${cleaned}`;
+    }
+
+    // If it already has country code with plus, return as is
+    if (phoneNumber.startsWith('+91') && cleaned.length === 12) {
+      return phoneNumber;
+    }
+
+    // For any other format, just add the plus sign if missing
+    return phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber}`;
   }
 
   /**
    * Test API connection
    */
-  async testConnection(): Promise<{ success: boolean; error?: string }> {
+  async testConnection(): Promise<{ success: boolean; error?: string; message?: string; messageId?: string }> {
     try {
       if (!this.config.apiKey) {
-        return { success: false, error: 'API key not configured' };
+        return { success: false, error: 'WhatsApp API key is not configured. Please check your environment variables.' };
       }
 
-      // Simple test message
       const testMessage = 'API Connection Test - Go-On Rides';
+      const testNumber = '918247494622'; // Test number with country code
 
-      const payload = {
-        to: '918247494622', // Test with your own number
-        text: testMessage  // WasenderAPI uses 'text' not 'message'
-      };
+      console.log('Testing WhatsApp API connection...');
+      
+      try {
+        const response = await this.sendMessage({
+          to: testNumber,
+          message: testMessage,
+          type: 'text'
+        });
 
-      // Try different authentication methods and endpoints
-      let response;
-      const endpoints = [
-        `${this.config.baseUrl}/api/send-message`, // Correct WasenderAPI endpoint
-        `${this.config.baseUrl}/send-message`,
-        `${this.config.baseUrl}/v1/send-message`
-      ];
-
-      for (const endpoint of endpoints) {
-        try {
-          // Method 1: Bearer token in header (correct WasenderAPI format)
-          console.log(`Testing endpoint: ${endpoint} with Bearer token auth`);
-          response = await axios.post(endpoint, payload, {
-            headers: {
-              'Authorization': `Bearer ${this.config.apiKey}`,
-              'Content-Type': 'application/json'
-            },
-            timeout: 10000
-          });
-          console.log(`Test successful with ${endpoint} and Bearer token auth`);
-          break;
-        } catch (headerError) {
-          try {
-            console.log(`Bearer token failed, trying ${endpoint} with API key header`);
-            // Method 2: API key as plain header
-            response = await axios.post(endpoint, payload, {
-              headers: {
-                'X-API-Key': this.config.apiKey,
-                'Content-Type': 'application/json'
-              },
-              timeout: 10000
-            });
-            console.log(`Test successful with ${endpoint} and API key header`);
-            break;
-          } catch (apiKeyHeaderError) {
-            try {
-              console.log(`API key header failed, trying ${endpoint} with body auth`);
-              // Method 3: API key in body (legacy method)
-              response = await axios.post(endpoint, {
-                ...payload,
-                api_key: this.config.apiKey
-              }, {
-                headers: {
-                  'Content-Type': 'application/json'
-                },
-                timeout: 10000
-              });
-              console.log(`Test successful with ${endpoint} and body auth`);
-              break;
-            } catch (bodyError) {
-              console.log(`All auth methods failed for ${endpoint}, trying next endpoint...`);
-              continue;
-            }
-          }
-        }
-      }
-
-      if (!response) {
-        throw new Error('All API endpoints and authentication methods failed');
-      }
-
-      console.log('API connection test successful:', response.data);
-      return { success: true };
-    } catch (error) {
-      console.error('API connection test failed:', error);
-      if (axios.isAxiosError(error)) {
-        if (error.response) {
-          console.error('Test API Error Response:', error.response.data);
-          console.error('Test API Error Status:', error.response.status);
-          console.error('Test API Error Headers:', error.response.headers);
+        console.log('WhatsApp API response:', response);
+        
+        // If we get a response object, consider it a success
+        if (response) {
           return {
-            success: false,
-            error: `API Error: ${error.response.data?.message || error.response.data?.error || error.response.data?.error_description || 'Unknown error'} (Status: ${error.response.status})`
+            success: true,
+            message: 'Test message sent successfully',
+            messageId: response.data?.msgId || 'unknown'
           };
-        } else if (error.request) {
-          console.error('No response from test API');
-          return { success: false, error: 'API not responding. Check internet connection.' };
-        } else {
-          console.error('Test request setup error:', error.message);
-          return { success: false, error: `Request error: ${error.message}` };
         }
+        
+        return {
+          success: false,
+          error: 'Unexpected response format from WhatsApp API'
+        };
+      } catch (error) {
+        console.error('Test connection failed:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+        return {
+          success: false,
+          error: `Failed to send test message: ${errorMessage}`
+        };
       }
-      console.error('Non-Axios test error:', error);
-      return { success: false, error: 'Unknown error occurred' };
+    } catch (error) {
+      console.error('Unexpected error in testConnection:', error);
+      return {
+        success: false,
+        error: 'An unexpected error occurred while testing the WhatsApp API connection'
+      };
     }
   }
 }
