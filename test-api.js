@@ -1,7 +1,7 @@
 const axios = require('axios');
 
 async function testWhatsAppAPI() {
-  const apiKey = '013749ffcc592bf230c93317fa65ee1222567f68dbb53212667e19ae1f07ee4f';
+  const apiKey = 'fd21af20c09ef9b44ae89ee45c28f89020ebe9ea2a3d42b678bddc7209a5c83d';
   const baseUrl = 'https://www.wasenderapi.com';
   const phoneNumber = '918247494622';
   const message = 'API Test - Go-On Rides';
