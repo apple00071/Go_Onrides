@@ -300,7 +300,7 @@ ${rentalDetails.registrationNumber ? `🔢 *Reg. No:* ${rentalDetails.registrati
 • Take photos of any existing damage
 • Ensure all documents are in order
 
-🆘 *Need Help?* Call +91-8247494622
+🆘 *Need Help?* Call +91 891 993 6547
 
 Your vehicle is ready for handover!
 Go-On Rides team is waiting to serve you! 🏍️🚗`;
@@ -343,7 +343,7 @@ ${rentalDetails.registrationNumber ? `🔢 *Reg. No:* ${rentalDetails.registrati
 • ₹500/hour after grace period
 • Maximum 3 hours grace period
 
-🆘 *Running Late?* Call +91-8247494622
+🆘 *Running Late?* Call +91 891 993 6547
 
 Thank you for riding with Go-On Rides!
 Hope you had a great experience! 🌟`;
@@ -376,20 +376,15 @@ ${tripDetails.registrationNumber ? `🔢 *Reg. No:* ${tripDetails.registrationNu
 
 📊 *Trip Summary:*
 ⏱️ *Duration:* ${tripDetails.duration}
-📏 *Distance:* ${tripDetails.distance}
 💰 *Total Amount:* ₹${tripDetails.totalFare}
 💳 *Payment:* ${tripDetails.paymentMethod}
 
 🎉 *Thank You!*
 We hope you enjoyed your journey with Go-On Rides!
 
-📝 *Feedback:* 
-Rate your experience and help us improve!
+🌟 Review us: https://g.page/r/CXyJePBx7gClEBE/review
 
-🔄 *Next Rental:* 
-Get 10% off on your next booking with code: GOR10
-
-🆘 *Questions?* Call +91-8247494622
+🆘 *Questions?* Call +91 891 993 6547
 
 Drive safe! See you again soon! 🚗✨`;
 
@@ -489,7 +484,7 @@ Book now with Go Onrides!`;
       }
 
       const testMessage = 'API Connection Test - Go-On Rides';
-      const testNumber = '918247494622'; // Test number with country code
+      const testNumber = '918919936547'; // Test number with country code
 
       console.log('Testing WhatsApp API connection...');
       

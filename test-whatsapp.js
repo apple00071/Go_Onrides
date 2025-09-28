@@ -3,7 +3,7 @@ const axios = require('axios');
 async function testWhatsAppAPI() {
   const apiKey = 'fd21af20c09ef9b44ae89ee45c28f89020ebe9ea2a3d42b678bddc7209a5c83d';
   const baseUrl = 'https://www.wasenderapi.com';
-  const phoneNumber = '918247494622';
+  const phoneNumber = '918919936547';
   const message = '🧪 API Test - Go-On Rides';
 
   console.log('Testing WasenderAPI...');
