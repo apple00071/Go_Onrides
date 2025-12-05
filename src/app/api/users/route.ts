@@ -26,8 +26,21 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    // Fetch all users - only select existing columns
-    const { data: users, error: usersError } = await supabase
+    // Create admin client with service role to bypass RLS
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+
+    // Fetch all users from profiles table using admin client
+    const { data: users, error: usersError } = await supabaseAdmin
       .from('profiles')
       .select('id, email, username, role, permissions, created_at, updated_at')
       .order('created_at', { ascending: false });
@@ -102,10 +115,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: signUpError.message }, { status: 400 });
     }
 
-    // Create profile with permissions using admin client
+    // Wait a bit for the trigger to create the basic profile
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    // Update the profile with full details (trigger may have created a basic profile)
+    // Use upsert to handle both cases: trigger created profile or not
     const { error: profileCreateError } = await supabaseAdmin
       .from('profiles')
-      .insert([
+      .upsert(
         {
           id: newUser.user.id,
           email,
@@ -113,8 +130,11 @@ export async function POST(request: NextRequest) {
           role,
           permissions: permissions || defaultPermissions,
           created_by: user.id
+        },
+        {
+          onConflict: 'id'
         }
-      ]);
+      );
 
     if (profileCreateError) {
       console.error('Error creating profile:', profileCreateError);

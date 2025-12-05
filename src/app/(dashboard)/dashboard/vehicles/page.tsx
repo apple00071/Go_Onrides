@@ -91,9 +91,9 @@ export default function VehiclesPage() {
         const totalRevenue = vehicleBookings.reduce((sum, booking) => {
           // Include all fees in revenue calculation
           const revenue = (booking.booking_amount || 0) +
-                         (booking.damage_charges || 0) +
-                         (booking.late_fee || 0) +
-                         (booking.extension_fee || 0);
+            (booking.damage_charges || 0) +
+            (booking.late_fee || 0) +
+            (booking.extension_fee || 0);
           return sum + revenue;
         }, 0);
 
@@ -235,10 +235,10 @@ export default function VehiclesPage() {
   };
 
   const filteredVehicles = vehicles.filter(vehicle => {
-    const matchesSearch = 
+    const matchesSearch =
       vehicle.model.toLowerCase().includes(searchTerm.toLowerCase()) ||
       vehicle.registration.toLowerCase().includes(searchTerm.toLowerCase());
-    
+
     const matchesStatus = statusFilter === 'all' || vehicle.status === statusFilter;
 
     return matchesSearch && matchesStatus;
@@ -334,74 +334,74 @@ export default function VehiclesPage() {
 
         {/* Table Section */}
         <div className="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="max-h-[calc(100vh-16rem)] overflow-y-auto overflow-x-auto">
             <table className="w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration</th>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added Date</th>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Maintenance</th>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Bookings</th>
-                      <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
-                      <th scope="col" className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
-                    {filteredVehicles.map((vehicle) => (
-                      <tr 
-                        key={vehicle.id} 
-                        onClick={() => handleRowClick(vehicle)}
-                        className="hover:bg-gray-50 cursor-pointer"
-                      >
-                        <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{vehicle.model}</td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{vehicle.registration}</td>
-                        <td className="px-4 py-2 whitespace-nowrap">
-                          {(() => {
-                            const statusInfo = getVehicleDisplayStatus(vehicle);
-                            return (
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusInfo.classes}`}>
-                                <span className={`w-2 h-2 mr-1.5 rounded-full ${statusInfo.dotClass}`} />
-                                {statusInfo.label}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{formatDate(vehicle.added_date)}</td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
-                          {vehicle.next_maintenance_date ? formatDate(vehicle.next_maintenance_date) : 'Not scheduled'}
-                        </td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{vehicle.total_bookings}</td>
-                        <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{formatCurrency(vehicle.total_revenue)}</td>
-                        <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-medium">
-                          <div className="flex justify-end items-center space-x-3">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleEditVehicle(vehicle);
-                              }}
-                              className="text-blue-600 hover:text-blue-900"
-                            >
-                              <Edit2 className="h-5 w-5" />
-                              <span className="sr-only">Edit</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteVehicle(vehicle);
-                              }}
-                              className="text-red-600 hover:text-red-900"
-                            >
-                              <Trash2 className="h-5 w-5" />
-                              <span className="sr-only">Delete</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <thead className="bg-gray-50">
+                <tr>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Model</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Registration</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Added Date</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Next Maintenance</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Bookings</th>
+                  <th scope="col" className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Revenue</th>
+                  <th scope="col" className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {filteredVehicles.map((vehicle) => (
+                  <tr
+                    key={vehicle.id}
+                    onClick={() => handleRowClick(vehicle)}
+                    className="hover:bg-gray-50 cursor-pointer"
+                  >
+                    <td className="px-4 py-2 whitespace-nowrap text-sm font-medium text-gray-900">{vehicle.model}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{vehicle.registration}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">
+                      {(() => {
+                        const statusInfo = getVehicleDisplayStatus(vehicle);
+                        return (
+                          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${statusInfo.classes}`}>
+                            <span className={`w-2 h-2 mr-1.5 rounded-full ${statusInfo.dotClass}`} />
+                            {statusInfo.label}
+                          </span>
+                        );
+                      })()}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{formatDate(vehicle.added_date)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">
+                      {vehicle.next_maintenance_date ? formatDate(vehicle.next_maintenance_date) : 'Not scheduled'}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{vehicle.total_bookings}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-500">{formatCurrency(vehicle.total_revenue)}</td>
+                    <td className="px-4 py-2 whitespace-nowrap text-right text-sm font-medium">
+                      <div className="flex justify-end items-center space-x-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleEditVehicle(vehicle);
+                          }}
+                          className="text-blue-600 hover:text-blue-900"
+                        >
+                          <Edit2 className="h-5 w-5" />
+                          <span className="sr-only">Edit</span>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteVehicle(vehicle);
+                          }}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          <Trash2 className="h-5 w-5" />
+                          <span className="sr-only">Delete</span>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
 

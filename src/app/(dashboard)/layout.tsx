@@ -29,10 +29,10 @@ export default function DashboardLayout({
     const fetchUserProfile = async () => {
       try {
         setLoading(true);
-        
+
         // Get current session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
+
         if (sessionError) {
           console.error('Session error:', sessionError);
           throw new Error('Failed to get session');
@@ -72,7 +72,7 @@ export default function DashboardLayout({
         if (mounted) {
           setError(error instanceof Error ? error.message : 'An unexpected error occurred');
           setLoading(false);
-          
+
           // Redirect to login after a delay if error persists
           setTimeout(() => {
             if (mounted && error) {
@@ -141,7 +141,7 @@ export default function DashboardLayout({
       <Sidebar user={user} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       {isSidebarOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-gray-600 bg-opacity-75 transition-opacity md:hidden z-20"
           onClick={() => setIsSidebarOpen(false)}
           aria-hidden="true"
@@ -151,7 +151,7 @@ export default function DashboardLayout({
       <div className="flex-1 flex flex-col overflow-hidden">
         <Header user={user} onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
 
-        <main className="flex-1 overflow-y-auto bg-gray-100">
+        <main className="flex-1 overflow-hidden bg-gray-100">
           {children}
         </main>
       </div>
